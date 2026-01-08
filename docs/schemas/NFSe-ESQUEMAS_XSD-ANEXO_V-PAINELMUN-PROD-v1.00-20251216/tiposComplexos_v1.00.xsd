@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" targetNamespace="http://www.sped.fazenda.gov.br/param" xmlns="http://www.sped.fazenda.gov.br/param" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="xmldsig-core-schema_v1.00.xsd"/>
+  <xs:include schemaLocation="tiposSimples_v1.00.xsd"/>
+  <!--TIPO COMPLEXO PARAM-->
+  <xs:complexType name="TCPARAM">
+    <xs:sequence>
+      <xs:element name="infPARAM" type="TCinfPARAM"/>
+      <xs:element ref="ds:Signature"/>
+    </xs:sequence>
+    <xs:attribute name="versao" type="TVerPARAM" use="required"/>
+  </xs:complexType>
+  <!--GRUPO DE INFORMAÇÕES PARA MANUTENÇÃO DOS BENEFICIÁRIOS -->
+  <xs:complexType name="TCinfPARAM">
+    <xs:sequence>
+	 <xs:element minOccurs="1" maxOccurs="1" name="cMun" type="TSCodMunIBGE">
+	  <xs:annotation>
+	   <xs:documentation>Código do município, conforme Tabela do IBGE</xs:documentation>
+	  </xs:annotation>
+	 </xs:element>	 
+	 <xs:element minOccurs="1" maxOccurs="1" name="CNPJ" type="TSCNPJ">
+	  <xs:annotation>
+	   <xs:documentation>CNPJ do Município</xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1"  name="CPFAgTrib" type="TSCPF">
+	  <xs:annotation>
+	   <xs:documentation>
+		CPF do agente da administração tributária municipal quer enviou o registro
+		do contribuinte do município.
+	   </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="idPar" type="TSIdParManut">
+	  <xs:annotation>
+	   <xs:documentation>ID do parâmetro para manutenção </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="tpAmb" type="TSTipoAmbiente">
+	  <xs:annotation>
+	   <xs:documentation>Tipo de ambiente: 1 - Produção; 2 - Homologação;</xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="dhEmi" type="TSDateTimeUTC">
+	  <xs:annotation>
+	   <xs:documentation>Data e hora da emissão. Data e hora no formato UTC (Universal Coordinated Time): AAAA-MM-DDThh:mm:ssTZD</xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="verAplic" type="TSVerAplic">
+	  <xs:annotation>
+	   <xs:documentation>Versão do aplicativo que gerou os dados da manutenção de beneficiários</xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element name="contribuintes" type="TCListaContribuintes">
+	  <xs:annotation>
+	   <xs:documentation>
+		Grupo de informações do Contribuinte
+	   </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>	 
+	</xs:sequence>
+    <xs:attribute name="Id" type="TSIdPARAM" use="required"/>
+  </xs:complexType>
+  <!--TIPO COMPLEXO GRUPO DE INFORMAÇÕES DOS CONTRIBUINTE BENEFICIÁRIOS-->
+  <xs:complexType name="TCListaContribuintes">
+   <xs:sequence>
+	<xs:element minOccurs="1" maxOccurs="1000"  name="infContrib" type="TCContribuinte">
+	 <xs:annotation>
+	  <xs:documentation>
+	   Grupo dos contribuintes
+	  </xs:documentation>
+	 </xs:annotation>
+	</xs:element>
+   </xs:sequence>
+  </xs:complexType>
+ <!--TIPO COMPLEXO PARA INFORMAÇÕES DO CONTRIBUINTE BENEFICIÁRIO --> 
+  <xs:complexType name="TCContribuinte">
+    <xs:sequence>
+      <xs:choice>
+        <xs:element minOccurs="1" maxOccurs="1" name="CNPJ" type="TSCNPJ">
+          <xs:annotation>
+            <xs:documentation>
+			 Número da inscrição federal (CNPJ) do contribuinte da NFS-e.
+			</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element minOccurs="1" maxOccurs="1" name="CPF" type="TSCPF">
+          <xs:annotation>
+            <xs:documentation>
+			 Número da inscrição federal (CPF) do contribuinte da NFS-e.
+			</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:choice>
+	 <xs:element minOccurs="1" maxOccurs="1" name="cManut" type="TScManut">
+	  <xs:annotation>
+	   <xs:documentation>
+		Manutenção da parametrização a ser realizada:
+		0 - Finalizar Vigência;
+		1 - Iniciar Vigência;
+	   </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="dtVig" type="TSData">
+	  <xs:annotation>
+	   <xs:documentation>
+		Data informada para iniciar ou finalizar vigência de um registro na parametrização.
+	   </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	 <xs:element minOccurs="1" maxOccurs="1" name="idLeg" type="TSIdLeg">
+	  <xs:annotation>
+	   <xs:documentation>
+		Identificador da legislação já cadastrada do munícipio.
+	   </xs:documentation>
+	  </xs:annotation>
+	 </xs:element>
+	</xs:sequence>
+  </xs:complexType>
+</xs:schema>
