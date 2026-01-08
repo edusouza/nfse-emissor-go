@@ -1,0 +1,542 @@
+openapi: 3.1.0
+info:
+  title: NFS-e Emission API
+  description: |
+    Backend REST API for NFS-e (Brazilian electronic service invoice) emission.
+    Focused on SIMPLES NACIONAL contributors (MEI and ME/EPP) providing services.
+
+    ## Authentication
+    All endpoints require an API key passed in the `X-API-Key` header.
+
+    ## Async Processing
+    Emission requests are processed asynchronously. The API returns HTTP 202 with a
+    request ID, and results are delivered via webhook callback.
+
+    ## Rate Limiting
+    Default: 100 requests/minute per API key. Returns HTTP 429 when exceeded.
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: https://api.nfse.example.com/v1
+    description: Production
+  - url: https://api.homolog.nfse.example.com/v1
+    description: Homologation
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Emission
+    description: NFS-e emission endpoints
+  - name: Status
+    description: Request status tracking
+  - name: Health
+    description: Service health
+
+paths:
+  /nfse:
+    post:
+      operationId: createEmission
+      summary: Submit NFS-e emission request
+      description: |
+        Submit a service invoice for emission. The request is validated synchronously
+        and queued for async processing. Results are delivered via webhook.
+
+        Supports two modes:
+        - **Service-signed**: Provide certificate in request, service handles signing
+        - **Pre-signed**: Use `/nfse/xml` endpoint instead
+      tags:
+        - Emission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmissionRequest'
+      responses:
+        '202':
+          description: Request accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmissionAccepted'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds until rate limit resets
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /nfse/xml:
+    post:
+      operationId: createEmissionXml
+      summary: Submit pre-signed DPS XML
+      description: |
+        Submit a pre-signed DPS XML for emission. Use this endpoint if you handle
+        XML signing in your system.
+      tags:
+        - Emission
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              description: Signed DPS XML document
+          application/json:
+            schema:
+              type: object
+              required:
+                - xml
+              properties:
+                xml:
+                  type: string
+                  description: Base64-encoded signed DPS XML
+                webhook_url:
+                  type: string
+                  format: uri
+                  description: Override default webhook URL
+      responses:
+        '202':
+          description: Request accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmissionAccepted'
+        '400':
+          description: Invalid XML or signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /nfse/status/{requestId}:
+    get:
+      operationId: getEmissionStatus
+      summary: Get emission request status
+      description: Query the current status of an emission request
+      tags:
+        - Status
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Request ID returned from emission endpoint
+      responses:
+        '200':
+          description: Request status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '404':
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Service health and readiness status
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    EmissionRequest:
+      type: object
+      required:
+        - provider
+        - service
+        - values
+        - dps
+      properties:
+        provider:
+          $ref: '#/components/schemas/Provider'
+        taker:
+          $ref: '#/components/schemas/Taker'
+        service:
+          $ref: '#/components/schemas/Service'
+        values:
+          $ref: '#/components/schemas/Values'
+        dps:
+          $ref: '#/components/schemas/DpsInfo'
+        certificate:
+          $ref: '#/components/schemas/Certificate'
+        webhook_url:
+          type: string
+          format: uri
+          description: Override default webhook URL
+
+    Provider:
+      type: object
+      required:
+        - cnpj
+        - tax_regime
+        - name
+      properties:
+        cnpj:
+          type: string
+          pattern: '^\d{14}$'
+          description: CNPJ without formatting (14 digits)
+          example: "12345678000199"
+        tax_regime:
+          type: string
+          enum: [mei, me_epp]
+          description: SIMPLES NACIONAL regime (MEI or ME/EPP)
+        name:
+          type: string
+          maxLength: 300
+          description: Legal name
+        municipal_registration:
+          type: string
+          maxLength: 15
+          description: Municipal registration (Inscrição Municipal)
+        address:
+          $ref: '#/components/schemas/Address'
+
+    Taker:
+      type: object
+      required:
+        - name
+      properties:
+        cnpj:
+          type: string
+          pattern: '^\d{14}$'
+          description: CNPJ (mutually exclusive with cpf/nif)
+        cpf:
+          type: string
+          pattern: '^\d{11}$'
+          description: CPF (mutually exclusive with cnpj/nif)
+        nif:
+          type: string
+          maxLength: 40
+          description: Foreign tax ID (mutually exclusive with cnpj/cpf)
+        name:
+          type: string
+          maxLength: 300
+        address:
+          $ref: '#/components/schemas/Address'
+
+    Service:
+      type: object
+      required:
+        - national_code
+        - description
+        - municipality_code
+      properties:
+        national_code:
+          type: string
+          pattern: '^\d{6}$'
+          description: National tax code (cTribNac) per LC 116/2003
+          example: "010101"
+        municipal_code:
+          type: string
+          pattern: '^\d{1,3}$'
+          description: Municipal tax code (optional)
+        description:
+          type: string
+          maxLength: 2000
+          description: Service description
+        municipality_code:
+          type: string
+          pattern: '^\d{7}$'
+          description: IBGE municipality code where service was provided
+          example: "3550308"
+        country_code:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          description: ISO country code for service exports (instead of municipality_code)
+
+    Values:
+      type: object
+      required:
+        - service_value
+      properties:
+        service_value:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Total service value in BRL
+          example: 1500.00
+        unconditional_discount:
+          type: number
+          format: double
+          minimum: 0
+          description: Unconditional discount (reduces tax base)
+        conditional_discount:
+          type: number
+          format: double
+          minimum: 0
+          description: Conditional discount (does NOT reduce tax base)
+        deductions:
+          type: number
+          format: double
+          minimum: 0
+          description: Deductions per government rules
+
+    DpsInfo:
+      type: object
+      required:
+        - series
+        - number
+      properties:
+        series:
+          type: string
+          pattern: '^\d{5}$'
+          description: DPS series (5 digits)
+          example: "00001"
+        number:
+          type: string
+          pattern: '^\d{1,15}$'
+          description: DPS number (1-15 digits)
+          example: "1"
+
+    Certificate:
+      type: object
+      required:
+        - pfx_base64
+        - password
+      properties:
+        pfx_base64:
+          type: string
+          format: byte
+          description: Base64-encoded PFX/P12 certificate file
+        password:
+          type: string
+          description: Certificate password
+
+    Address:
+      type: object
+      required:
+        - street
+        - number
+        - neighborhood
+        - municipality_code
+        - postal_code
+      properties:
+        street:
+          type: string
+          maxLength: 255
+        number:
+          type: string
+          maxLength: 60
+        complement:
+          type: string
+          maxLength: 156
+        neighborhood:
+          type: string
+          maxLength: 60
+        municipality_code:
+          type: string
+          pattern: '^\d{7}$'
+          description: IBGE code
+        postal_code:
+          type: string
+          pattern: '^\d{8}$'
+          description: CEP without formatting
+        country_code:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          description: ISO country code (for foreign addresses)
+
+    EmissionAccepted:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Unique request identifier for tracking
+        status:
+          type: string
+          enum: [pending]
+        message:
+          type: string
+          example: "Request queued for processing"
+        status_url:
+          type: string
+          format: uri
+          description: URL to check request status
+
+    StatusResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, success, failed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        result:
+          type: object
+          description: Present only on success
+          properties:
+            nfse_access_key:
+              type: string
+              description: NFS-e access key (chaveAcesso)
+            nfse_number:
+              type: string
+            nfse_xml_url:
+              type: string
+              format: uri
+              description: Temporary signed URL to download XML
+        error:
+          type: object
+          description: Present only on failure
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            government_code:
+              type: string
+            details:
+              type: string
+
+    ValidationError:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://api.nfse.example.com/errors/validation"
+        title:
+          type: string
+          example: "Validation Error"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+
+    Error:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+  # Webhook callback schema (for documentation)
+  x-webhooks:
+    emissionResult:
+      post:
+        summary: Emission result webhook
+        description: |
+          Called when emission completes (success or failure).
+
+          **Signature verification**: The `X-Webhook-Signature` header contains
+          `sha256=<HMAC-SHA256 of body>` using your webhook secret.
+        requestBody:
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - event
+                  - request_id
+                  - timestamp
+                properties:
+                  event:
+                    type: string
+                    enum: [emission.success, emission.failed]
+                  request_id:
+                    type: string
+                    format: uuid
+                  timestamp:
+                    type: string
+                    format: date-time
+                  data:
+                    type: object
+                    description: Present on emission.success
+                    properties:
+                      nfse_access_key:
+                        type: string
+                      nfse_number:
+                        type: string
+                      nfse_xml:
+                        type: string
+                        description: Complete NFS-e XML
+                  error:
+                    type: object
+                    description: Present on emission.failed
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      government_code:
+                        type: string
+        responses:
+          '200':
+            description: Webhook received successfully

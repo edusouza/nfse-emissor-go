@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # MongoDB database for NFS-e document storage
+  mongodb:
+    image: mongo:7
+    container_name: nfse-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-nfse}
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - nfse-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis for job queue (Asynq) and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: nfse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - nfse-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NFS-e API server
+  api:
+    build:
+      context: .
+      dockerfile: cmd/api/Dockerfile
+    container_name: nfse-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ENV=${ENV:-development}
+      - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017
+      - MONGO_DATABASE=${MONGO_DATABASE:-nfse}
+      - REDIS_URL=redis://redis:6379
+      - SEFIN_API_URL=${SEFIN_API_URL:-https://www.nfse.gov.br/api}
+      - SEFIN_ENVIRONMENT=${SEFIN_ENVIRONMENT:-homologacao}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nfse-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # NFS-e async job worker
+  worker:
+    build:
+      context: .
+      dockerfile: cmd/worker/Dockerfile
+    container_name: nfse-worker
+    restart: unless-stopped
+    environment:
+      - ENV=${ENV:-development}
+      - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017
+      - MONGO_DATABASE=${MONGO_DATABASE:-nfse}
+      - REDIS_URL=redis://redis:6379
+      - SEFIN_API_URL=${SEFIN_API_URL:-https://www.nfse.gov.br/api}
+      - SEFIN_ENVIRONMENT=${SEFIN_ENVIRONMENT:-homologacao}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-10}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nfse-network
+
+networks:
+  nfse-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
