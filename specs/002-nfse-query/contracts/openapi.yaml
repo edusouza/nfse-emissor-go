@@ -1,0 +1,569 @@
+openapi: 3.1.0
+info:
+  title: NFS-e Query API
+  description: |
+    API for querying and retrieving NFS-e (Nota Fiscal de Serviço Eletrônica) documents
+    from the Sistema Nacional NFS-e.
+
+    This API extends the NFS-e Emission API (001-nfse-emission-core) with read operations.
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production
+  - url: https://api.staging.example.com/v1
+    description: Staging
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: NFS-e Query
+    description: Query NFS-e documents by access key
+  - name: DPS Lookup
+    description: Lookup NFS-e access key by DPS identifier
+  - name: Events
+    description: Query events linked to NFS-e
+  - name: Status
+    description: Query emission request status
+
+paths:
+  /nfse/{chaveAcesso}:
+    get:
+      tags:
+        - NFS-e Query
+      summary: Query NFS-e by access key
+      description: |
+        Retrieves a complete NFS-e document using its 50-character access key (chaveAcesso).
+        Returns parsed JSON data and the complete signed XML.
+      operationId: queryNFSe
+      parameters:
+        - name: chaveAcesso
+          in: path
+          required: true
+          description: 50-character NFS-e access key
+          schema:
+            type: string
+            pattern: '^NFSe[A-Za-z0-9]{46}$'
+            minLength: 50
+            maxLength: 50
+          example: "NFSe3550308202601081123456789012300000000000012310"
+      responses:
+        '200':
+          description: NFS-e found and returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NFSeQueryResponse'
+        '400':
+          description: Invalid access key format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: "INVALID_ACCESS_KEY"
+                  message: "Access key must be exactly 50 alphanumeric characters starting with 'NFSe'"
+        '404':
+          description: NFS-e not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: "NFSE_NOT_FOUND"
+                  message: "No NFS-e found for the given access key"
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until rate limit resets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Government API unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Suggested retry delay in seconds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /nfse/{chaveAcesso}/eventos:
+    get:
+      tags:
+        - Events
+      summary: Query events for NFS-e
+      description: |
+        Retrieves all events linked to an NFS-e (cancellations, manifestations, etc.).
+        Optionally filter by event type.
+      operationId: queryNFSeEvents
+      parameters:
+        - name: chaveAcesso
+          in: path
+          required: true
+          description: 50-character NFS-e access key
+          schema:
+            type: string
+            pattern: '^NFSe[A-Za-z0-9]{46}$'
+            minLength: 50
+            maxLength: 50
+        - name: tipo
+          in: query
+          required: false
+          description: Filter by event type code
+          schema:
+            type: string
+          example: "e101101"
+      responses:
+        '200':
+          description: Events list returned (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsQueryResponse'
+        '400':
+          description: Invalid access key format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: NFS-e not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dps/{id}:
+    get:
+      tags:
+        - DPS Lookup
+      summary: Lookup access key by DPS identifier
+      description: |
+        Retrieves the NFS-e access key for a given DPS identifier.
+
+        **Requires digital certificate**: Due to fiscal secrecy rules, only authorized
+        actors (Provider, Taker, or Intermediary named in the NFS-e) can access this endpoint.
+        The certificate must be provided in the request body.
+      operationId: lookupDPS
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            42-character DPS identifier composed of:
+            - Municipality code (7 digits)
+            - Registration type (1 digit: 1=CNPJ, 2=CPF)
+            - Federal registration (14 digits)
+            - Series (5 digits)
+            - Number (15 digits)
+          schema:
+            type: string
+            pattern: '^\d{42}$'
+            minLength: 42
+            maxLength: 42
+          example: "3550308112345678000199000010000000000000001"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CertificateRequest'
+      responses:
+        '200':
+          description: Access key found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DPSLookupResponse'
+        '400':
+          description: Invalid DPS ID format or certificate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Requester not authorized (fiscal secrecy)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: "FORBIDDEN_ACCESS"
+                  message: "Requester is not an authorized actor for this NFS-e"
+        '404':
+          description: No NFS-e exists for this DPS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    head:
+      tags:
+        - DPS Lookup
+      summary: Check if NFS-e exists for DPS
+      description: |
+        Checks if an NFS-e was generated for the given DPS identifier.
+        Returns only HTTP status (no body).
+
+        **Requires certificate but no actor restriction**: Any valid certificate
+        can check existence, but cannot retrieve the access key.
+      operationId: checkDPSExists
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 42-character DPS identifier
+          schema:
+            type: string
+            pattern: '^\d{42}$'
+            minLength: 42
+            maxLength: 42
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CertificateRequest'
+      responses:
+        '200':
+          description: NFS-e exists for this DPS
+        '400':
+          description: Invalid DPS ID format or certificate
+        '404':
+          description: No NFS-e exists for this DPS
+
+  /nfse/status/{requestId}:
+    get:
+      tags:
+        - Status
+      summary: Query emission request status
+      description: |
+        Retrieves the current status of an emission request submitted via the
+        emission API. Returns NFS-e details on success, error details on failure.
+      operationId: queryStatus
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID returned from emission endpoint
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Request status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '404':
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    NFSeQueryResponse:
+      type: object
+      required:
+        - chave_acesso
+        - numero
+        - data_emissao
+        - status
+        - prestador
+        - servico
+        - valores
+        - xml
+      properties:
+        chave_acesso:
+          type: string
+          description: 50-character access key
+          example: "NFSe3550308202601081123456789012300000000000012310"
+        numero:
+          type: string
+          description: NFS-e number
+          example: "000000123"
+        data_emissao:
+          type: string
+          format: date-time
+          description: Emission date/time (ISO 8601)
+          example: "2026-01-08T10:30:00-03:00"
+        status:
+          type: string
+          description: NFS-e status code
+          example: "100"
+        prestador:
+          type: object
+          required:
+            - documento
+            - nome
+            - municipio
+          properties:
+            documento:
+              type: string
+              description: CNPJ or CPF
+              example: "12345678000199"
+            nome:
+              type: string
+              description: Provider name
+              example: "Empresa Exemplo LTDA"
+            municipio:
+              type: string
+              description: Municipality name
+              example: "São Paulo"
+        tomador:
+          type: object
+          nullable: true
+          properties:
+            documento:
+              type: string
+              nullable: true
+              description: CNPJ or CPF (optional for consumer sales)
+            nome:
+              type: string
+              description: Taker name
+        servico:
+          type: object
+          required:
+            - codigo_nacional
+            - descricao
+            - local_prestacao
+          properties:
+            codigo_nacional:
+              type: string
+              description: National tax code (cTribNac)
+              example: "010101"
+            descricao:
+              type: string
+              description: Service description
+            local_prestacao:
+              type: string
+              description: Service location
+        valores:
+          type: object
+          required:
+            - valor_servico
+            - base_calculo
+            - valor_liquido
+          properties:
+            valor_servico:
+              type: number
+              format: double
+              description: Service value
+              example: 1000.00
+            base_calculo:
+              type: number
+              format: double
+              description: Tax base
+              example: 1000.00
+            aliquota:
+              type: number
+              format: double
+              nullable: true
+              description: ISSQN rate (%)
+              example: 5.00
+            valor_issqn:
+              type: number
+              format: double
+              nullable: true
+              description: ISSQN value
+              example: 50.00
+            valor_liquido:
+              type: number
+              format: double
+              description: Net value
+              example: 950.00
+        xml:
+          type: string
+          description: Complete signed NFS-e XML
+
+    DPSLookupResponse:
+      type: object
+      required:
+        - dps_id
+        - chave_acesso
+        - nfse_url
+      properties:
+        dps_id:
+          type: string
+          description: The DPS identifier that was queried
+          example: "3550308112345678000199000010000000000000001"
+        chave_acesso:
+          type: string
+          description: The NFS-e access key
+          example: "NFSe3550308202601081123456789012300000000000012310"
+        nfse_url:
+          type: string
+          format: uri
+          description: URL to query the full NFS-e
+          example: "/v1/nfse/NFSe3550308202601081123456789012300000000000012310"
+
+    EventsQueryResponse:
+      type: object
+      required:
+        - chave_acesso
+        - total
+        - eventos
+      properties:
+        chave_acesso:
+          type: string
+          description: The NFS-e access key
+        total:
+          type: integer
+          description: Total number of events
+          example: 1
+        eventos:
+          type: array
+          items:
+            type: object
+            required:
+              - tipo
+              - descricao
+              - sequencia
+              - data
+              - xml
+            properties:
+              tipo:
+                type: string
+                description: Event type code
+                example: "e101101"
+              descricao:
+                type: string
+                description: Event description
+                example: "Cancelamento de NFS-e"
+              sequencia:
+                type: integer
+                description: Sequential number
+                example: 1
+              data:
+                type: string
+                format: date-time
+                description: Event date/time
+              xml:
+                type: string
+                description: Complete signed event XML
+
+    StatusResponse:
+      type: object
+      required:
+        - request_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Request identifier
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - success
+            - failed
+          description: Current request status
+        created_at:
+          type: string
+          format: date-time
+          description: Request creation time
+        updated_at:
+          type: string
+          format: date-time
+          description: Last status update time
+        result:
+          type: object
+          nullable: true
+          description: Present only when status is "success"
+          properties:
+            nfse_access_key:
+              type: string
+              description: The generated NFS-e access key
+            nfse_number:
+              type: string
+              description: The NFS-e number
+            nfse_xml_url:
+              type: string
+              format: uri
+              description: URL to retrieve the NFS-e XML
+        error:
+          type: object
+          nullable: true
+          description: Present only when status is "failed"
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Error message
+            details:
+              type: string
+              nullable: true
+              description: Additional error details
+
+    CertificateRequest:
+      type: object
+      required:
+        - certificate
+        - certificate_password
+      properties:
+        certificate:
+          type: string
+          format: binary
+          description: PFX/P12 certificate file
+        certificate_password:
+          type: string
+          format: password
+          description: Certificate password
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: "NFSE_NOT_FOUND"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "No NFS-e found for the given access key"
+            details:
+              type: string
+              nullable: true
+              description: Additional error context
+            field:
+              type: string
+              nullable: true
+              description: Field name for validation errors
