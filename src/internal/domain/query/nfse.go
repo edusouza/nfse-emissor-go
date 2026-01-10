@@ -4,6 +4,7 @@ package query
 import (
 	"encoding/xml"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -256,8 +257,9 @@ func ParseNFSeXML(xmlContent string) (*NFSeData, error) {
 	// Parse emission date
 	dataEmissao, err := parseDateTime(info.DhEmi)
 	if err != nil {
-		// Try alternative formats
-		dataEmissao = time.Time{} // Use zero time if parsing fails
+		// Log parsing failure and use zero time
+		log.Printf("WARN: Failed to parse emission date '%s': %v", info.DhEmi, err)
+		dataEmissao = time.Time{}
 	}
 
 	// Extract access key from ID attribute or chNFSe element
@@ -421,11 +423,11 @@ func (n *NFSeData) ToQueryResponse(xml string) *NFSeQueryResponse {
 	return response
 }
 
-// formatDateTimeISO formats a time.Time to ISO 8601 string with timezone offset.
+// formatDateTimeISO formats a time.Time to ISO 8601 string with Brazil timezone offset (-03:00).
+// Note: This always uses the Brazil timezone offset regardless of the input time's location.
 func formatDateTimeISO(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	// Use Brazil timezone offset (-03:00) by default
 	return t.Format("2006-01-02T15:04:05-03:00")
 }

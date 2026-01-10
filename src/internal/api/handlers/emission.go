@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -188,8 +189,7 @@ func (h *EmissionHandler) Create(c *gin.Context) {
 	task, err := jobs.NewEmissionTask(requestID)
 	if err != nil {
 		// Log error but don't fail - request is saved and can be retried
-		// In production, this should be logged with proper structured logging
-		fmt.Printf("Warning: Failed to create emission task: %v\n", err)
+		log.Printf("ERROR: Failed to create emission task: requestID=%s error=%v", requestID, err)
 	} else {
 		_, err = h.jobClient.Enqueue(c.Request.Context(), task, &infraredis.EnqueueOptions{
 			Queue:    infraredis.QueueDefault,
@@ -197,7 +197,7 @@ func (h *EmissionHandler) Create(c *gin.Context) {
 		})
 		if err != nil {
 			// Log error but don't fail - request is saved and can be processed later
-			fmt.Printf("Warning: Failed to enqueue emission task: %v\n", err)
+			log.Printf("ERROR: Failed to enqueue emission task: requestID=%s error=%v", requestID, err)
 		}
 	}
 

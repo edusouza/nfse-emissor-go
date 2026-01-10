@@ -4,6 +4,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -64,6 +65,7 @@ func (m *RateLimitMiddleware) RateLimit() gin.HandlerFunc {
 		if err != nil {
 			// On rate limiter error, log and allow the request (fail open for availability)
 			// In production, you might want to fail closed for security-sensitive endpoints
+			log.Printf("WARN: Rate limiter failed (fail-open): key=%s error=%v", key, err)
 			c.Next()
 			return
 		}
@@ -142,7 +144,8 @@ func (m *RateLimitMiddleware) IPRateLimit(rpm int) gin.HandlerFunc {
 
 		result, err := m.limiter.Allow(c.Request.Context(), key, redis_rate.PerMinute(rpm))
 		if err != nil {
-			// Fail open on error
+			// Fail open on error - log for visibility
+			log.Printf("WARN: Rate limiter failed (fail-open): key=%s error=%v", key, err)
 			c.Next()
 			return
 		}
@@ -194,6 +197,7 @@ func (m *RateLimitMiddleware) RateLimitWithConfig(rpm int) gin.HandlerFunc {
 		result, err := m.limiter.Allow(c.Request.Context(), key, redis_rate.PerMinute(rpm))
 		if err != nil {
 			// On rate limiter error, log and allow the request (fail open for availability)
+			log.Printf("WARN: Rate limiter failed (fail-open): key=%s error=%v", key, err)
 			c.Next()
 			return
 		}

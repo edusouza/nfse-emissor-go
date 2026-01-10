@@ -221,12 +221,12 @@ func (h *QueryHandler) mapToQueryResponse(result *sefin.NFSeQueryResult) *query.
 	return response
 }
 
-// formatDateTime formats a time.Time to ISO 8601 string with timezone offset.
+// formatDateTime formats a time.Time to ISO 8601 string with Brazil timezone offset (-03:00).
+// Note: This always uses the Brazil timezone offset regardless of the input time's location.
 func formatDateTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	// Use the time's timezone or default to Brazil timezone (-03:00)
 	return t.Format("2006-01-02T15:04:05-03:00")
 }
 

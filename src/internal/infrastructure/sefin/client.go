@@ -76,7 +76,7 @@ type SefinResponse struct {
 	// Success indicates whether the submission was successful.
 	Success bool
 
-	// ChaveAcesso is the 66-character access key for the NFS-e (only on success).
+	// ChaveAcesso is the 50-character access key for the NFS-e (only on success).
 	ChaveAcesso string
 
 	// NFSeNumber is the official NFS-e number assigned by SEFIN (only on success).
@@ -509,7 +509,7 @@ type ResultadoDPS struct {
 
 // NFSeResult represents the generated NFS-e.
 type NFSeResult struct {
-	// ChaveAcesso is the 66-character access key.
+	// ChaveAcesso is the 50-character access key.
 	ChaveAcesso string `xml:"chaveAcesso"`
 
 	// Numero is the NFS-e number.
@@ -1144,7 +1144,7 @@ func generateMockNFSeNumber() string {
 	return fmt.Sprintf("%09d", n.Int64()+1)
 }
 
-// generateMockChaveAcesso generates a mock 66-character access key.
+// generateMockChaveAcesso generates a mock 50-character access key.
 func generateMockChaveAcesso(environment string) string {
 	// Format: NFSe + UF(2) + AAMM(4) + CNPJ(14) + Mod(2) + Serie(5) + Num(15) + CodVer(9) + CodNum(9) + DV(1)
 	// This is a simplified mock format

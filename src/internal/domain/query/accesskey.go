@@ -111,12 +111,3 @@ func ParseAccessKey(key string) (*AccessKeyInfo, error) {
 		Body:   key[AccessKeyPrefixLength:],
 	}, nil
 }
-
-// min returns the smaller of two integers.
-// This is a helper for Go versions before 1.21.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
