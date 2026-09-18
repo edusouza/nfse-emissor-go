@@ -1,4 +1,4 @@
-# 0008 — Dois defeitos que só a emissão real revelou
+# 0008 — Três defeitos que só a emissão real revelou
 
 **Status:** Aceita
 **Data:** 2026-09-18
@@ -118,7 +118,34 @@ Vale notar o formato do defeito. Não era uma regra sutil nem um canto escuro da
 especificação: era uma linha de documentação, em português, na planilha que já
 estava no repositório. O custo de não tê-la lido foi uma rejeição do governo.
 
+## Um terceiro, no mesmo dia
+
+Com o identificador aceito, a emissão seguinte parou em
+`[E0121] O nome ou razão social do prestador não deve ser informado quando o
+emitente da DPS for o próprio prestador`.
+
+A planilha enuncia o par:
+
+```
+tpEmit = 1 (o prestador emite)  → xNome NÃO deve ser informado
+tpEmit = 2 ou 3                 → xNome DEVE ser informado
+```
+
+O governo já sabe o nome pelo CNPJ quando é o próprio prestador que emite.
+Mandá-lo é rejeição, não redundância — uma inversão da intuição de que
+informação a mais não faz mal.
+
+A correção ficou no construtor do XML, não numa validação. Um campo que só pode
+existir sob uma condição é melhor não ser montado fora dela: o documento passa a
+não poder ser construído errado, e não sobra nada para conferir depois.
+
 ## Aprendizado
+
+Os três defeitos têm a mesma assinatura: o código era **internamente
+consistente** e discordava de um documento. O digest concordava com o
+verificador; o identificador concordava com os campos do próprio XML; o `xNome`
+era um campo válido, preenchido com o valor certo. Nenhum teste podia falhar,
+porque nenhum teste tinha por onde discordar.
 
 O ADR 0004 disse que faltava um teste de ida e volta. Estava certo e era
 insuficiente. Um teste de ida e volta prova **consistência interna**: que o

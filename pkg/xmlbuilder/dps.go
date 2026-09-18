@@ -29,7 +29,8 @@ type DPSConfig struct {
 	// CompetenceDate is the date of service competence
 	CompetenceDate time.Time
 
-	// EmitterType: 1 = service provider, 2 = service taker
+	// EmitterType is tpEmit: who is sending the declaration. It decides
+	// whether the provider's name travels with it — see buildProvider.
 	EmitterType int
 
 	// MunicipalityCode is the 7-digit IBGE code where the DPS is emitted
@@ -165,6 +166,19 @@ type DPSBuildResult struct {
 	XMLBytes []byte
 }
 
+// Emitter types, as tpEmit carries them in the DPS.
+const (
+	// EmitterTypeProvider is 1: the provider of the service sends the
+	// declaration. The only case this CLI emits.
+	EmitterTypeProvider = 1
+
+	// EmitterTypeTaker is 2: the taker of the service sends it.
+	EmitterTypeTaker = 2
+
+	// EmitterTypeIntermediary is 3: the intermediary sends it.
+	EmitterTypeIntermediary = 3
+)
+
 // DPSBuilder builds DPS XML documents according to the Sistema Nacional NFS-e specification.
 type DPSBuilder struct {
 	config DPSConfig
@@ -188,7 +202,7 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 		b.config.ApplicationVersion = "1.0.0"
 	}
 	if b.config.EmitterType == 0 {
-		b.config.EmitterType = 1 // Default to provider
+		b.config.EmitterType = EmitterTypeProvider
 	}
 	// A nil Substitution means an ordinary emission and omits <subst> entirely.
 
@@ -259,8 +273,7 @@ func (b *DPSBuilder) buildProvider() prestXML {
 	}
 
 	prest := prestXML{
-		CNPJ:  cleanTaxID(b.config.Provider.CNPJ),
-		XNome: b.config.Provider.Name,
+		CNPJ: cleanTaxID(b.config.Provider.CNPJ),
 		RegTrib: regTribXML{
 			OpSimpNac:   opSimpNac,
 			RegApTribSN: regApTribSN,
@@ -271,6 +284,19 @@ func (b *DPSBuilder) buildProvider() prestXML {
 
 	if b.config.Provider.MunicipalRegistration != "" {
 		prest.IM = b.config.Provider.MunicipalRegistration
+	}
+
+	// The name is the government's to fill in when it already knows who is
+	// emitting. Rules E0121 and E0122 of the business-rules spreadsheet:
+	//
+	//	tpEmit = 1 (the provider emits)  → xNome must NOT be informed
+	//	tpEmit = 2 or 3                  → xNome MUST be informed
+	//
+	// Sending it as the provider is a rejection, not a redundancy, so the
+	// condition belongs here rather than in a validation: a document that
+	// cannot be built wrong needs nothing checking it afterwards.
+	if b.config.EmitterType != EmitterTypeProvider {
+		prest.XNome = b.config.Provider.Name
 	}
 
 	return prest

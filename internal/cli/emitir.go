@@ -347,7 +347,7 @@ func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult,
 		Series:             cfg.DPS.Serie,
 		Number:             nota.Numero,
 		CompetenceDate:     competencia,
-		EmitterType:        1, // service provider
+		EmitterType:        xmlbuilder.EmitterTypeProvider,
 		MunicipalityCode:   cfg.Prestador.Municipio,
 		// Substitution stays nil: this is an ordinary emission, not a replacement.
 		Provider: xmlbuilder.DPSProvider{

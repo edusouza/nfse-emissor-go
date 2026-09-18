@@ -15,11 +15,30 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.5.2] - 2026-09-18
 
-Duas correções que, juntas, eram tudo que impedia uma emissão de atravessar.
-Cada uma foi encontrada por uma rejeição real do governo, e nenhuma teria sido
-encontrada por inspeção ou por cobertura de testes.
+Três correções que, juntas, eram tudo que impedia uma emissão de atravessar.
+Cada uma foi encontrada por uma rejeição real do governo, uma depois da outra, e
+nenhuma teria sido encontrada por inspeção ou por cobertura de testes.
 
 ### Corrigido
+
+- **A razão social do prestador era enviada quando não devia.** A Sefin recusava
+  com `[E0121] O nome ou razão social do prestador não deve ser informado quando
+  o emitente da DPS for o próprio prestador`.
+
+  As regras E0121 e E0122 formam um par:
+
+  ```
+  tpEmit = 1 (o prestador emite)  → xNome NÃO deve ser informado
+  tpEmit = 2 ou 3                 → xNome DEVE ser informado
+  ```
+
+  O governo já sabe o nome pelo CNPJ quando é o próprio prestador que emite;
+  mandá-lo mesmo assim é rejeição, não redundância. Como este CLI sempre emite
+  como prestador, o `xNome` simplesmente deixa de ser montado — a condição fica
+  no construtor do XML, não numa validação: um documento que não pode ser
+  montado errado dispensa quem o confira depois.
+
+  O `pkg/xmlbuilder` continua servindo os casos 2 e 3, e aí informa o nome.
 
 - **O tipo de inscrição federal no identificador da DPS estava invertido.** A
   Sefin recusava com `[E0004] Conteúdo do identificador informado na DPS difere
@@ -67,6 +86,9 @@ encontrada por inspeção ou por cobertura de testes.
 
 ### Adicionado
 
+- Testes que amarram o `xNome` ao `tpEmit` nos três valores possíveis, citando o
+  texto das regras E0121 e E0122, e que conferem que o prestador continua
+  identificado pelo CNPJ.
 - Testes que ancoram os códigos de tipo de inscrição no texto da regra E0004, e
   que verificam cada fatia do identificador — município, tipo, inscrição, série
   e número — na posição que a regra define.
@@ -114,6 +136,20 @@ encontrada por inspeção ou por cobertura de testes.
   titular do certificado. A ICP-Brasil escreve o portador de um e-CNPJ como
   `RAZÃO SOCIAL:CNPJ` no *common name*. Os dígitos verificadores são
   conferidos: um CN terminado em quatorze dígitos não é evidência suficiente.
+
+### Atenção: a inscrição municipal pode ser a próxima
+
+A regra **E0120** diz que, quando o prestador emite (`tpEmit = 1`) e **não** há
+registro complementar do contribuinte no CNC do município, a inscrição municipal
+**não deve** ser informada na DPS.
+
+Não dá para saber isso localmente — depende do cadastro do município. E não há
+regra nenhuma que **exija** o IM: informá-lo é condicionalmente um erro, omiti-lo
+nunca é. Por isso o emissor continua respeitando o que estiver configurado, em
+vez de decidir por conta própria.
+
+Se a sua emissão parar em E0120, esvazie `prestador.inscricao_municipal` no
+`nfse.yaml` — o campo é opcional.
 
 ### Nota sobre a verificação
 
