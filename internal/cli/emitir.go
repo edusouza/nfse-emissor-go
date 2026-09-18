@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,9 +10,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/validation"
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 	"github.com/edusouza/nfse-emissor-go/pkg/xmlbuilder"
 )
@@ -40,6 +44,8 @@ type emitirFlags struct {
 	tomadorEmail string
 
 	semAssinar bool
+	enviar     bool
+	confirmar  bool
 }
 
 func newEmitirCommand() *cobra.Command {
@@ -61,7 +67,11 @@ Assim, quem sempre emite o mesmo tipo de servico so precisa informar o valor:
 
   nfse emitir --numero 42 --valor 1500 --descricao "Consultoria - agosto/2026"
 
-Este comando nao envia nada para a Sefin Nacional. O envio chega na v0.2.`,
+Por padrao o comando para na assinatura, gravando o XML. Com --enviar ele
+transmite a DPS para a Sefin Nacional e grava a NFS-e autorizada.
+
+Emitir com ambiente "producao" gera uma nota com valor fiscal e pede
+confirmacao no terminal; use --confirmar para dispensa-la em scripts.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runEmitir(cmd, &f)
@@ -92,6 +102,8 @@ Este comando nao envia nada para a Sefin Nacional. O envio chega na v0.2.`,
 	fl.StringVar(&f.tomadorEmail, "tomador-email", "", "e-mail do tomador")
 
 	fl.BoolVar(&f.semAssinar, "sem-assinar", false, "gera o XML sem assinar (para inspecao; nao serve para envio)")
+	fl.BoolVar(&f.enviar, "enviar", false, "envia a DPS assinada para a Sefin Nacional e grava a NFS-e")
+	fl.BoolVar(&f.confirmar, "confirmar", false, "dispensa a confirmacao interativa ao emitir em producao")
 
 	return cmd
 }
@@ -103,6 +115,10 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 	}
 	if err := cfg.Validate(); err != nil {
 		return err
+	}
+
+	if f.enviar && f.semAssinar {
+		return fmt.Errorf("--enviar e --sem-assinar se excluem: a Sefin so aceita uma DPS assinada")
 	}
 
 	nota, err := resolveNota(cmd, cfg, f)
@@ -129,23 +145,81 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return fmt.Errorf("%s", b.String())
 	}
 
-	xmlContent := built.XML
-	signed := false
-
-	if !f.semAssinar {
-		xmlContent, err = signDPS(cmd, cfg, f, built.XML)
+	if f.semAssinar {
+		path, err := writeDPS(cfg, f, built.DPSID, built.XML, false)
 		if err != nil {
 			return err
 		}
-		signed = true
+		return report(cmd, cfg, nota, built.DPSID, path, false)
 	}
 
-	path, err := writeDPS(cfg, f, built.DPSID, xmlContent, signed)
+	certInfo, err := loadCertificate(cmd, cfg, f)
 	if err != nil {
 		return err
 	}
 
-	return report(cmd, cfg, nota, built.DPSID, path, signed)
+	signedXML, err := signDPS(certInfo, built.XML)
+	if err != nil {
+		return err
+	}
+
+	dpsPath, err := writeDPS(cfg, f, built.DPSID, signedXML, true)
+	if err != nil {
+		return err
+	}
+
+	if !f.enviar {
+		return report(cmd, cfg, nota, built.DPSID, dpsPath, true)
+	}
+
+	// Issuing in production creates a document with fiscal value, which can
+	// only be undone through a cancellation procedure. Ask first.
+	if err := confirmProduction(cmd, cfg, f, nota); err != nil {
+		return err
+	}
+
+	result, err := transmit(cmd.Context(), cfg, certInfo, signedXML)
+	if err != nil {
+		return err
+	}
+
+	nfsePath, err := writeNFSe(cfg, f, result)
+	if err != nil {
+		return err
+	}
+
+	return reportEmission(cmd, nota, built.DPSID, dpsPath, nfsePath, result)
+}
+
+// confirmProduction asks the user to confirm an emission that carries fiscal
+// value, unless --confirmar was given or there is no terminal to ask on.
+func confirmProduction(cmd *cobra.Command, cfg *config.Config, f *emitirFlags, nota config.Nota) error {
+	if cfg.Ambiente != config.EnvProducao || f.confirmar {
+		return nil
+	}
+
+	in, ok := cmd.InOrStdin().(*os.File)
+	if !ok || !term.IsTerminal(int(in.Fd())) {
+		return fmt.Errorf("emissao em producao sem terminal para confirmar: use --confirmar se e isso mesmo que voce quer")
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "\nVoce esta prestes a emitir uma NFS-e COM VALOR FISCAL.\n")
+	fmt.Fprintf(out, "  Prestador  %s\n", cfg.Prestador.Nome)
+	fmt.Fprintf(out, "  Valor      R$ %.2f\n", nota.Valores.ValorServico)
+	fmt.Fprintf(out, "  Servico    %s\n", nota.Servico.Descricao)
+	fmt.Fprintf(out, "\nCancelar uma nota emitida exige um pedido de evento. Confirmar? [s/N] ")
+
+	answer, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("falha ao ler a confirmacao: %w", err)
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "s", "sim":
+		return nil
+	default:
+		return fmt.Errorf("emissao cancelada")
+	}
 }
 
 // resolveNota layers the config defaults, the --yaml file and the flags.
@@ -276,39 +350,70 @@ func takerFor(nota config.Nota) *xmlbuilder.DPSTaker {
 	}
 }
 
-func signDPS(cmd *cobra.Command, cfg *config.Config, f *emitirFlags, dpsXML string) (string, error) {
+// loadCertificate reads and validates the A1 certificate.
+func loadCertificate(cmd *cobra.Command, cfg *config.Config, f *emitirFlags) (*xmlsigner.CertificateInfo, error) {
 	certPath := f.certPath
 	if certPath == "" {
 		certPath = cfg.Certificado.Arquivo
 	}
 	if certPath == "" {
-		return "", fmt.Errorf("certificado nao informado: preencha certificado.arquivo no %s ou use --cert", f.configPath)
+		return nil, fmt.Errorf("certificado nao informado: preencha certificado.arquivo no %s ou use --cert", f.configPath)
 	}
 
 	pass, err := resolveCertPassword(f.password, cmd.Flags().Changed("senha"), cmd.ErrOrStderr())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	data, err := os.ReadFile(certPath)
 	if err != nil {
-		return "", fmt.Errorf("nao foi possivel ler o certificado: %w", err)
+		return nil, fmt.Errorf("nao foi possivel ler o certificado: %w", err)
 	}
 
 	certInfo, err := xmlsigner.ParsePFX(data, pass)
 	if err != nil {
-		return "", fmt.Errorf("nao foi possivel abrir o certificado (senha incorreta ou arquivo invalido): %w", err)
+		return nil, fmt.Errorf("nao foi possivel abrir o certificado (senha incorreta ou arquivo invalido): %w", err)
 	}
 
 	if err := xmlsigner.NewCertificateValidator().ValidateForSigning(certInfo); err != nil {
-		return "", fmt.Errorf("o certificado nao pode assinar: %w", err)
+		return nil, fmt.Errorf("o certificado nao pode assinar: %w", err)
 	}
 
+	return certInfo, nil
+}
+
+// signDPS applies the XMLDSig signature.
+func signDPS(certInfo *xmlsigner.CertificateInfo, dpsXML string) (string, error) {
 	signedXML, err := xmlsigner.NewXMLSigner(certInfo).SignDPS(dpsXML)
 	if err != nil {
 		return "", fmt.Errorf("falha ao assinar a DPS: %w", err)
 	}
 	return signedXML, nil
+}
+
+// newSefinClient is a seam: tests replace it to reach a stub server instead of
+// the government.
+var newSefinClient = sefin.New
+
+// transmit sends the signed DPS and returns the authorised invoice.
+//
+// The same certificate signs the document and authenticates the connection:
+// the national system identifies the issuer by the client certificate.
+func transmit(ctx context.Context, cfg *config.Config, certInfo *xmlsigner.CertificateInfo, signedDPS string) (*sefin.EmissionResult, error) {
+	tlsCert, err := certInfo.TLSCertificate()
+	if err != nil {
+		return nil, fmt.Errorf("certificado nao pode ser usado na conexao: %w", err)
+	}
+
+	client, err := newSefinClient(sefin.Config{
+		Environment: cfg.Ambiente,
+		Certificate: tlsCert,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Emit(ctx, []byte(signedDPS))
 }
 
 func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed bool) (string, error) {
@@ -351,5 +456,55 @@ func report(cmd *cobra.Command, cfg *config.Config, nota config.Nota, dpsID, pat
 	}
 	fmt.Fprintf(out, "\nO envio a Sefin Nacional ainda nao esta disponivel (v0.2).\n")
 
+	return nil
+}
+
+// writeNFSe stores the authorised invoice next to the declaration that produced
+// it, named by the access key so the two can be matched later.
+func writeNFSe(cfg *config.Config, f *emitirFlags, result *sefin.EmissionResult) (string, error) {
+	dir := f.outputDir
+	if dir == "" {
+		dir = cfg.Saida.Diretorio
+	}
+
+	name := result.AccessKey
+	if name == "" {
+		// Never lose an authorised invoice to a missing field.
+		name = result.DPSID
+	}
+
+	path := filepath.Join(dir, name+"-nfse.xml")
+	if err := os.WriteFile(path, result.NFSeXML, 0o644); err != nil {
+		return "", fmt.Errorf("a NFS-e foi emitida mas nao pode ser gravada em %q: %w", path, err)
+	}
+	return path, nil
+}
+
+// reportEmission prints the outcome of a transmitted emission.
+func reportEmission(cmd *cobra.Command, nota config.Nota, dpsID, dpsPath, nfsePath string, result *sefin.EmissionResult) error {
+	out := cmd.OutOrStdout()
+	env := sefin.EnvironmentName(result.EnvironmentCode)
+
+	fmt.Fprintf(out, "NFS-e emitida\n")
+	fmt.Fprintf(out, "  Chave de acesso  %s\n", result.AccessKey)
+	fmt.Fprintf(out, "  DPS              %s\n", dpsID)
+	fmt.Fprintf(out, "  Ambiente         %s\n", env)
+	fmt.Fprintf(out, "  Valor            R$ %.2f\n", nota.Valores.ValorServico)
+	fmt.Fprintf(out, "  Processada em    %s\n", result.ProcessedAt.Local().Format("02/01/2006 15:04:05"))
+	fmt.Fprintf(out, "  DPS assinada     %s\n", dpsPath)
+	fmt.Fprintf(out, "  NFS-e            %s\n", nfsePath)
+
+	for _, w := range result.Warnings {
+		fmt.Fprintf(out, "\naviso: %s", w)
+	}
+	if len(result.Warnings) > 0 {
+		fmt.Fprintln(out)
+	}
+
+	// The government's own account of the environment is what decides this, not
+	// the local configuration.
+	if !result.HasFiscalValue() {
+		fmt.Fprintf(out, "\nAmbiente de producao restrita: esta nota NAO tem valor fiscal.\n")
+	}
 	return nil
 }

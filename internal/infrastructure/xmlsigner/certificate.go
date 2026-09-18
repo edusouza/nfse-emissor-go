@@ -5,6 +5,7 @@ package xmlsigner
 
 import (
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -183,4 +184,30 @@ func (c *CertificateInfo) GetSerialNumber() string {
 		return ""
 	}
 	return c.Certificate.SerialNumber.String()
+}
+
+// TLSCertificate adapts the parsed A1 certificate for use as a mutual-TLS
+// client certificate.
+//
+// The Sistema Nacional NFS-e identifies the caller by this certificate; there
+// are no API keys. The intermediate chain is included so that servers which
+// require the full path can build it.
+func (c *CertificateInfo) TLSCertificate() (*tls.Certificate, error) {
+	if c == nil || c.Certificate == nil {
+		return nil, ErrNoCertificate
+	}
+	if c.PrivateKey == nil {
+		return nil, ErrNoPrivateKey
+	}
+
+	chain := [][]byte{c.Certificate.Raw}
+	for _, intermediate := range c.Chain {
+		chain = append(chain, intermediate.Raw)
+	}
+
+	return &tls.Certificate{
+		Certificate: chain,
+		PrivateKey:  c.PrivateKey,
+		Leaf:        c.Certificate,
+	}, nil
 }

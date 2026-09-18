@@ -9,6 +9,17 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **`nfse emitir --enviar`** — transmite a DPS assinada para a Sefin Nacional e
+  grava a NFS-e autorizada, nomeada pela chave de acesso. A emissão é síncrona:
+  o governo valida e devolve a nota ou a rejeição na mesma requisição.
+- Rejeições trazem **todos** os motivos de uma vez, com código, descrição e
+  complemento. Reportar um por vez custaria uma ida à rede por problema.
+- Emitir em ambiente de produção pede confirmação no terminal, já que desfazer
+  exige um pedido de evento de cancelamento. `--confirmar` dispensa a pergunta
+  em scripts; sem terminal e sem a flag, o comando recusa.
+- O ambiente reportado pelo governo na resposta é exibido: quem decide se a nota
+  tem valor fiscal é ele, não o arquivo de configuração local.
+- Especificações OpenAPI oficiais versionadas em [`docs/api/`](docs/api/).
 - **CLI `nfse`** — binário único, sem `cgo`, instalável com
   `go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest`.
 - `nfse versao` — versão, plataforma e versão do Go.
@@ -32,6 +43,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Registro de decisões de arquitetura em [`docs/decisoes/`](docs/decisoes/).
 
 ### Corrigido
+
+- **O cliente da Sefin falava um protocolo inexistente.** Era SOAP, com um
+  envelope que o próprio código admitia ter inventado; a API é REST/JSON.
+  Reescrito a partir da especificação oficial. A especificação corrigiu duas
+  suposições que teriam quebrado tudo: `basePath` é `/SefinNacional` (sensível a
+  maiúsculas) e `tipoAmbiente` é inteiro, não string. Revelou também que os
+  erros vêm em duas formas — `erros` (array) na emissão e `erro` (objeto) nas
+  consultas —, e um cliente que lesse só uma perderia o motivo da falha na
+  outra. Ver [ADR 0005](docs/decisoes/0005-contrato-da-sefin-verificado.md).
 
 - **A assinatura digital nunca verificou.** Três defeitos somados faziam com que
   toda DPS assinada fosse rejeitada: o documento era reindentado depois de
@@ -80,6 +100,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Removido
 
+- Cliente SOAP da Sefin e seus 2.561 testes, que passavam porque validavam o
+  cliente contra um mock do mesmo contrato inventado.
+- `internal/domain/query`, exceto a validação da chave de acesso: o restante
+  eram DTOs e mapeamento de erros HTTP da API REST removida.
+
 - API REST (Gin), worker assíncrono (Asynq), MongoDB, Redis, envio de webhooks,
   autenticação por chave de API, *rate limiting*, métricas Prometheus,
   health checks e `docker-compose.yml`.
@@ -89,9 +114,10 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Problemas conhecidos
 
-- O cliente da Sefin Nacional implementa um contrato **SOAP incorreto**; a API
-  real é REST/JSON. Nenhuma emissão real funciona até isso ser corrigido.
-  Ver [#3](https://github.com/edusouza/nfse-emissor-go/issues/3).
+- O envio nunca foi exercitado contra o ambiente real do governo: este ambiente
+  de desenvolvimento não alcança `gov.br`. O cliente segue a especificação
+  oficial e é coberto por testes, mas a primeira emissão de verdade em produção
+  restrita ainda é uma verificação pendente.
 - A validação chamada de "XSD" é estrutural e não lê os schemas oficiais. O tipo
   foi renomeado para `StructuralValidator` e o parâmetro `schemaDir`, que era
   ignorado, foi removido.

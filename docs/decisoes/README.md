@@ -13,3 +13,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0002](0002-parser-pkcs12.md) | Troca do parser de PKCS#12 | Aceita |
 | [0003](0003-xml-conforme-o-xsd.md) | Ancorar o gerador de XML no XSD oficial | Aceita |
 | [0004](0004-assinatura-que-nao-verificava.md) | A assinatura digital nunca verificou | Aceita |
+| [0005](0005-contrato-da-sefin-verificado.md) | Cliente da Sefin reescrito contra a especificação oficial | Aceita |

@@ -7,8 +7,9 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual:** o CLI monta, valida e assina a DPS. O envio à Sefin Nacional
-> ainda **não** está disponível — veja o [roadmap](#roadmap).
+> **Estado atual:** o CLI monta, valida, assina e envia a DPS à Sefin Nacional.
+> O envio segue a especificação oficial do governo e é coberto por testes, mas
+> ainda não foi exercitado contra o ambiente real — veja o [roadmap](#roadmap).
 
 ## Instalação
 
@@ -117,6 +118,44 @@ arquivo de `--yaml`, depois as flags. Cada uma sobrescreve a anterior, então
 `--sem-assinar` gera o XML sem assinatura, para inspecionar antes de gastar o
 certificado.
 
+### Enviar para a Sefin Nacional
+
+```bash
+nfse emitir --numero 42 --valor 1500 --descricao "Consultoria" --enviar
+```
+
+```
+NFS-e emitida
+  Chave de acesso  41069021123456780001990000100000000000004212345
+  DPS              DPS410690211234567800019900001000000000000042
+  Ambiente         producao-restrita
+  Valor            R$ 1500.00
+  Processada em    18/09/2026 09:57:36
+  DPS assinada     notas/DPS4106902...042-dps.xml
+  NFS-e            notas/4106902...4212345-nfse.xml
+
+Ambiente de producao restrita: esta nota NAO tem valor fiscal.
+```
+
+A emissão é **síncrona**: o governo valida e devolve a nota autorizada ou a
+rejeição na mesma requisição. Rejeições vêm com todos os motivos de uma vez:
+
+```
+erro: documento rejeitado pela Sefin Nacional
+  - [E001] Municipio nao conveniado ao Sistema Nacional
+  - [E042] cTribNac invalido (010101)
+```
+
+O ambiente vem do `nfse.yaml`. Com `ambiente: producao` a nota tem **valor
+fiscal** e o comando pede confirmação no terminal antes de enviar — cancelar uma
+nota emitida exige um pedido de evento. Use `--confirmar` para dispensar a
+pergunta em scripts.
+
+O envio **não é repetido automaticamente** em caso de falha de rede. Emissão não
+é idempotente: uma requisição que chegou ao governo e falhou na volta geraria uma
+segunda nota numa retentativa. Se acontecer, consulte pelo identificador da DPS
+antes de tentar de novo.
+
 ### A senha do certificado
 
 Há três formas de informá-la, nesta ordem de precedência:
@@ -134,7 +173,7 @@ sistema, e costumam ficar gravados no histórico do shell.
 | Versão | Entrega | Estado |
 |--------|---------|--------|
 | v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
-| v0.2.0 | Envio à Sefin Nacional | planejado |
+| v0.2.0 | Envio à Sefin Nacional | pronto |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | planejado |
 | v0.4.0 | Cancelamento e substituição | planejado |
 
@@ -155,6 +194,7 @@ pkg/
   cnpjcpf/         validação de CNPJ e CPF
   dpsid/           identificador da DPS (42 caracteres)
 docs/
+  api/             especificações OpenAPI oficiais do governo
   decisoes/        registro de decisões de arquitetura (ADRs)
   markdown/        manuais oficiais convertidos para markdown
   schemas/         XSDs oficiais
