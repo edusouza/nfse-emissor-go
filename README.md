@@ -7,12 +7,12 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.5.0**, a primeira versão publicada
-> ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida, assina e envia a DPS à
-> Sefin Nacional. A conexão com o ambiente real já foi exercitada — foi assim
-> que apareceu o defeito de renegociação TLS corrigido nesta versão. O que
-> ainda falta confirmar é uma emissão completa, do `POST` até a NFS-e
-> autorizada; é por isso que a numeração segue em `0.x`. Veja o
+> **Estado atual — v0.6.0** ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida,
+> assina e envia a DPS à Sefin Nacional, e agora se configura sozinho a partir
+> do certificado (`nfse onboard`). A conexão com o ambiente real já foi
+> exercitada — foi assim que apareceu o defeito de renegociação TLS corrigido
+> na v0.5.0. O que ainda falta confirmar é uma emissão completa, do `POST` até
+> a NFS-e autorizada; é por isso que a numeração segue em `0.x`. Veja o
 > [roadmap](#roadmap).
 
 ## Instalação
@@ -21,7 +21,7 @@ depender de portal web.
 go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
 ```
 
-Para fixar a versão, troque `@latest` por `@v0.5.0`. O `nfse versao` mostra o
+Para fixar a versão, troque `@latest` por `@v0.6.0`. O `nfse versao` mostra o
 que está instalado — e é o mesmo identificador que vai no `verAplic` de cada
 declaração.
 
@@ -47,7 +47,8 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 
 | Comando | O que faz |
 |---------|-----------|
-| `nfse config init` / `check` | cria o `nfse.yaml` e confere o que está preenchido |
+| `nfse onboard` | cria o `nfse.yaml` já preenchido, a partir do certificado |
+| `nfse config init` / `check` | cria um `nfse.yaml` em branco e confere o que está preenchido |
 | `nfse cert info` | inspeciona o certificado A1 |
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
@@ -56,6 +57,63 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
 
 Todos aceitam `--help`.
+
+### Configurar em um comando
+
+O `nfse onboard` monta a configuração a partir do que já se sabe sobre você. O
+CNPJ sai do próprio certificado — o ICP-Brasil grava o titular como
+`RAZÃO SOCIAL:CNPJ` no A1 — e o resto vem do cadastro público da Receita
+Federal:
+
+```bash
+export NFSE_CERT_SENHA='sua-senha'
+nfse onboard --certificado certificado.pfx
+```
+
+```
+Certificado  certificado.pfx
+  Titular     EMPRESA EXEMPLO LTDA:12345678000195
+  Valido ate  10/03/2027
+
+Consultando o CNPJ 12.345.678/0001-95 no cadastro publico da Receita Federal, via brasilapi.com.br...
+  Razao social  EMPRESA EXEMPLO LTDA
+  Municipio     CURITIBA/PR (IBGE 4106902)
+  Regime        mei
+  Situacao      ATIVA
+
+nfse.yaml criado.
+
+Falta preencher em nfse.yaml:
+  - padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional (LC 116/2003)
+  - padroes.servico.descricao — o que voce presta
+
+Depois:
+  nfse config check
+  nfse emitir --valor 100,00
+```
+
+O código IBGE do município — sete dígitos que ninguém sabe de cabeça — e a
+razão social exata vêm prontos. Sobra o código do serviço, que depende do que
+você presta ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)).
+
+Sem o certificado em mãos, `--cnpj 12345678000195` faz o mesmo caminho. E a
+consulta é opcional:
+
+```bash
+nfse onboard --certificado certificado.pfx --sem-rede
+```
+
+A consulta manda **só o seu CNPJ** para um serviço de terceiros
+([BrasilAPI](https://brasilapi.com.br), que serve os dados abertos da Receita) —
+nada do certificado sai da máquina. O comando avisa antes de sair para a rede,
+`--sem-rede` desliga a consulta, e `--fonte` aponta para outro servidor, para
+quem roda a própria instância do
+[minhareceita](https://docs.minhareceita.org). Se a consulta falhar, o arquivo
+é gravado assim mesmo com o que o certificado informou. Por quê:
+[ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
+
+Quem prefere preencher tudo à mão continua com `nfse config init`, que escreve
+o mesmo arquivo em branco e comentado.
 
 ### Verificar o certificado
 
@@ -85,10 +143,10 @@ uma DPS — útil para usar em script.
 
 ### Emitir uma nota
 
-Crie a configuração e preencha os campos obrigatórios:
+Com o `nfse.yaml` no lugar (veja [Configurar em um comando](#configurar-em-um-comando)),
+confira o que ficou faltando:
 
 ```bash
-nfse config init     # gera um nfse.yaml comentado
 $EDITOR nfse.yaml
 nfse config check    # confere se está completo
 ```
@@ -349,8 +407,10 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.2.0 | Envio à Sefin Nacional | pronto |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
 | v0.4.0 | Cancelamento de NFS-e | pronto |
-| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | **lançada** |
-| v0.6.0 | Substituição de NFS-e | planejado |
+| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
+| v0.6.0 | `nfse onboard`: configuração preenchida a partir do certificado | **lançada** |
+| v0.7.0 | Busca do código do serviço ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | planejado |
+| v0.8.0 | Substituição de NFS-e | planejado |
 | v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
@@ -365,6 +425,7 @@ internal/
   infrastructure/
     xmlsigner/     assinatura XMLDSig e leitura do certificado A1
     sefin/         cliente da API do governo
+    brasilapi/     consulta do cadastro publico de CNPJ (so no `onboard`)
 pkg/
   xmlbuilder/      montagem do XML da DPS
   cnpjcpf/         validação de CNPJ e CPF

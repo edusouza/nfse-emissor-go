@@ -13,6 +13,55 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.6.0] - 2026-09-18
+
+Menos digitação para começar. O emissor passa a montar a própria configuração a
+partir do certificado A1 e do cadastro público de CNPJ, em vez de entregar um
+arquivo em branco com cinco campos obrigatórios.
+
+### Adicionado
+
+- **`nfse onboard`** — grava um `nfse.yaml` já preenchido. O CNPJ e a razão
+  social saem do certificado A1, que o ICP-Brasil emite com o titular no formato
+  `RAZÃO SOCIAL:CNPJ`; o código IBGE do município e o regime tributário
+  (MEI ou ME/EPP) vêm de uma consulta ao cadastro público da Receita Federal,
+  servido pela [BrasilAPI](https://brasilapi.com.br). Sem o certificado em mãos,
+  `--cnpj` faz o mesmo caminho. O que a máquina não descobre fica em branco e é
+  listado no fim, com o campo e onde procurar.
+  Ver [ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
+- **`--sem-rede`**, para gerar a configuração sem consultar serviço nenhum, e
+  **`--fonte`**, para apontar a consulta a outro servidor — quem roda a própria
+  instância do [minhareceita](https://docs.minhareceita.org) não precisa falar
+  com terceiros. A consulta manda apenas o CNPJ, é anunciada na tela antes de
+  acontecer, e o arquivo gerado registra no cabeçalho de onde veio cada valor.
+- Uma falha na consulta **não interrompe** o comando: o arquivo é gravado com o
+  que o certificado informou e o resto entra na lista de pendências. Uma
+  indisponibilidade de terceiro não pode virar um beco sem saída para quem só
+  quer começar.
+- `xmlsigner.CertificateInfo.SubjectCNPJ` e `SubjectHolderName`, que leem o
+  titular do certificado. Os dígitos verificadores do CNPJ são conferidos: um
+  *common name* que termina em quatorze dígitos não é evidência suficiente para
+  preencher um documento fiscal.
+
+### Alterado
+
+- O erro de configuração ausente passa a sugerir `nfse onboard` antes de
+  `nfse config init`.
+- `nfse config init` continua como está, para quem prefere o modelo em branco.
+
+### Problemas conhecidos
+
+- O regime tributário só é preenchido quando o cadastro responde com certeza.
+  Um "não é MEI" sem informação sobre o Simples deixa o campo em branco, com
+  aviso: chutar poria um `opSimpNac` errado em toda nota emitida.
+- O mapeamento dos campos da resposta do cadastro de CNPJ ainda não foi
+  exercitado contra a API real — o ambiente de desenvolvimento não alcança
+  `brasilapi.com.br`. Ver
+  [#12](https://github.com/edusouza/nfse-emissor-go/issues/12).
+- Sobra um campo obrigatório que nenhuma consulta responde:
+  `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
+  Ver [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+
 ## [0.5.0] - 2026-09-18
 
 Primeira versão publicada do emissor em linha de comando. Entrega o ciclo
