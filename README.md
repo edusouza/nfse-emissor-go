@@ -32,7 +32,8 @@ dependência de serviço externo.
 
 Há um passo a passo completo em [`exemplos/`](exemplos/), com configuração
 pronta e um script que gera um certificado descartável — dá para ver o emissor
-funcionando sem ter um A1 em mãos.
+funcionando sem ter um A1 em mãos. Em duas versões:
+[Linux/macOS](exemplos/README.md) e [Windows/PowerShell](exemplos/README-windows.md).
 
 ## Uso
 

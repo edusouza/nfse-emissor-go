@@ -1,34 +1,48 @@
-# Exemplo de emissão local
+# Exemplo de emissão local — Windows / PowerShell
 
-> Usa Windows? Veja [README-windows.md](README-windows.md), com os mesmos
-> passos em PowerShell.
-
-Um passo a passo completo para você ver o emissor funcionando na sua máquina,
-sem precisar de certificado real nem de acesso à Sefin.
+O mesmo passo a passo do [README.md](README.md), com os comandos em PowerShell.
+Se você usa Linux ou macOS, siga aquele.
 
 Os arquivos aqui descrevem um **MEI de desenvolvimento de software em
 Curitiba**. Os dados são fictícios mas consistentes: o CNPJ tem dígitos
 verificadores válidos, `4106902` é o código de Curitiba na tabela do IBGE
-(`docs/anexos/ANEXO_A-...`) e `010101` é "Análise e desenvolvimento de
-sistemas" na lista nacional de serviços (`docs/anexos/ANEXO_B-...`).
+(`docs\anexos\ANEXO_A-...`) e `010101` é "Análise e desenvolvimento de
+sistemas" na lista nacional de serviços (`docs\anexos\ANEXO_B-...`).
+
+Funciona tanto no **Windows PowerShell 5.1** (o que já vem no Windows) quanto
+no **PowerShell 7+**.
 
 ## Antes de começar
 
-```bash
-go build -o nfse ./cmd/nfse    # a partir da raiz do repositório
-cd exemplos
-export PATH="$PWD/..:$PATH"
+```powershell
+# a partir da raiz do repositório
+go build -o nfse.exe .\cmd\nfse
+Set-Location exemplos
+$env:PATH = "$PWD\..;$env:PATH"
 ```
+
+> Se o PowerShell recusar rodar o `.ps1` com uma mensagem sobre *execution
+> policy*, libere apenas para esta janela:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+>
+> Isso vale só para o processo atual e não muda a configuração da máquina.
 
 ## 1. Gerar um certificado descartável
 
-Assinar uma DPS exige um certificado. Para experimentar localmente, este script
-cria um autoassinado:
+Assinar uma DPS exige um certificado. Para experimentar localmente:
 
-```bash
-export NFSE_CERT_SENHA='senha-de-teste'
-./gerar-certificado-teste.sh
+```powershell
+$env:NFSE_CERT_SENHA = 'senha-de-teste'
+.\gerar-certificado-teste.ps1
 ```
+
+O script usa os cmdlets nativos do Windows (`New-SelfSignedCertificate` e
+`Export-PfxCertificate`), então **não é preciso instalar o OpenSSL**. Ele também
+remove o certificado do seu repositório pessoal depois de exportar o arquivo,
+para não acumular lixo de teste em `Cert:\CurrentUser\My`.
 
 > **Este certificado não serve para emitir de verdade.** Ele é autoassinado; a
 > Sefin Nacional só aceita um A1 emitido por uma Autoridade Certificadora da
@@ -36,24 +50,35 @@ export NFSE_CERT_SENHA='senha-de-teste'
 
 ## 2. Conferir o certificado
 
-```console
-$ nfse cert info --arquivo certificado-teste.pfx
+```powershell
+nfse cert info --arquivo certificado-teste.pfx
+```
+
+```
 Titular                 EMPRESA EXEMPLO LTDA:12345678000195
 Emissor                 EMPRESA EXEMPLO LTDA:12345678000195
-Valido ate              18/09/2027 13:12
+Valido ate              18/09/2027 13:23
 Dias restantes          364
 Tamanho da chave        2048 bits
 
 Certificado apto a assinar uma DPS.
 ```
 
-O comando sai com código diferente de zero se o certificado não puder assinar —
-útil para usar em script.
+O comando sai com código diferente de zero se o certificado não puder assinar.
+Em script, verifique com `$LASTEXITCODE`:
+
+```powershell
+nfse cert info --arquivo certificado-teste.pfx
+if ($LASTEXITCODE -ne 0) { throw 'certificado inapto' }
+```
 
 ## 3. Conferir a configuração
 
-```console
-$ nfse config check
+```powershell
+nfse config check
+```
+
+```
 nfse.yaml esta valido.
 
   Ambiente    producao-restrita
@@ -72,8 +97,11 @@ Como o `nfse.yaml` já traz código do serviço, alíquota e "tomador não
 identificado" na seção `padroes`, uma nota para o público em geral precisa só
 de número, valor e descrição:
 
-```console
-$ nfse emitir --numero 1 --valor 1500 --descricao "Consultoria - agosto/2026"
+```powershell
+nfse emitir --numero 1 --valor 1500 --descricao "Consultoria - agosto/2026"
+```
+
+```
 DPS DPS410690211234567800019500001000000000000001
   Ambiente       producao-restrita
   Valor          R$ 1500.00
@@ -90,8 +118,11 @@ A DPS foi assinada mas nao enviada. Use --enviar para transmiti-la.
 
 Para o caso B2B, um arquivo por nota é mais confortável — e versionável:
 
-```console
-$ nfse emitir --yaml nota-consultoria.yaml
+```powershell
+nfse emitir --yaml nota-consultoria.yaml
+```
+
+```
 DPS DPS410690211234567800019500001000000000000002
   Valor          R$ 8500.00
   Servico        Consultoria tecnica em arquitetura de software - agosto/2026
@@ -104,8 +135,11 @@ dos `padroes` da configuração. As três camadas se combinam nesta ordem —
 
 ## 6. O que acontece se você repetir um número
 
-```console
-$ nfse emitir --numero 1 --valor 99 --descricao "Repetida"
+```powershell
+nfse emitir --numero 1 --valor 99 --descricao "Repetida"
+```
+
+```
 erro: "notas/DPS4106902...001-dps.xml" ja existe: o numero da DPS
 provavelmente ja foi usado.
 Use outro --numero, ou --sobrescrever se for mesmo para substituir o arquivo
@@ -120,14 +154,30 @@ A numeração automática está na
 
 ## 7. Inspecionar o XML gerado
 
-```bash
-xmllint --format notas/*-dps.xml | less    # ou apenas cat
+O PowerShell formata XML sem precisar de ferramenta externa:
+
+```powershell
+$xml = [xml](Get-Content .\notas\*001-dps.xml -Raw)
+$xml.Save([Console]::Out)
 ```
 
-Vale olhar a estrutura: `serv/cServ/cTribNac`, `valores/vServPrest/vServ`, e o
-bloco `<Signature>` no final. Para gerar sem assinar e comparar:
+Ou, para olhar campos específicos:
 
-```bash
+```powershell
+$xml.DPS.infDPS.serv.cServ.cTribNac
+$xml.DPS.infDPS.valores.vServPrest.vServ
+```
+
+> **Só para ver.** `[xml]` reserializa o documento, mudando espaços em branco e
+> a declaração de encoding. XML canônico é sensível a isso: gravar o resultado
+> por cima do arquivo assinado **invalida a assinatura**, porque os digests
+> foram calculados sobre os bytes originais. Se precisar guardar, guarde em
+> outro nome.
+
+Vale conferir também o bloco `<Signature>` no fim do documento. Para gerar sem
+assinar e comparar:
+
+```powershell
 nfse emitir --numero 99 --valor 100 --descricao "Sem assinatura" --sem-assinar
 ```
 
@@ -136,7 +186,7 @@ nfse emitir --numero 99 --valor 100 --descricao "Sem assinatura" --sem-assinar
 Com um A1 da ICP-Brasil, aponte `certificado.arquivo` para ele e acrescente
 `--enviar`:
 
-```bash
+```powershell
 nfse emitir --numero 1 --valor 1500 --descricao "Consultoria" --enviar
 ```
 
@@ -145,8 +195,19 @@ fiscal** — é o lugar certo para o primeiro teste. Para emitir com valor fisca
 mude `ambiente` para `producao` no `nfse.yaml`; o comando vai pedir confirmação
 no terminal antes de transmitir.
 
+Se o seu certificado já está instalado no Windows em vez de estar em arquivo,
+exporte-o para `.pfx` primeiro:
+
+```powershell
+$cert = Get-ChildItem Cert:\CurrentUser\My |
+    Where-Object { $_.Subject -like '*SEU CNPJ*' }
+
+$senha = Read-Host -AsSecureString -Prompt 'Senha para o arquivo'
+Export-PfxCertificate -Cert $cert -FilePath .\meu-certificado.pfx -Password $senha
+```
+
 ## Limpando
 
-```bash
-rm -rf notas certificado-teste.pfx
+```powershell
+Remove-Item -Recurse -Force .\notas, .\certificado-teste.pfx
 ```
