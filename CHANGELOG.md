@@ -9,6 +9,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **`nfse cancelar <chave-de-acesso>`** — monta o pedido de registro de evento
+  de cancelamento, assina e envia. Motivos: `erro-emissao`, `nao-prestado` e
+  `outros`, correspondendo aos códigos 1, 2 e 9 de `TSCodJustCanc`.
+  A justificativa precisa ter de 15 a 255 caracteres, como `TSMotivo` exige.
+  Cancelar em produção pede confirmação no terminal.
+- O assinador deixou de ser específico de DPS: `SignDocument` assina qualquer
+  documento do sistema nacional pelo par elemento-raiz/elemento-com-Id.
 - **`nfse consultar <chave-de-acesso>`** — busca a NFS-e na Sefin Nacional e
   grava o XML.
 - **`nfse consultar --dps <id>`** — recupera a chave de acesso pelo

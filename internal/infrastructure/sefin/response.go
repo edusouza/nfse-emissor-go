@@ -238,3 +238,35 @@ func looksLikeSefinBody(body []byte) bool {
 	}
 	return env.VersaoAplicativo != "" || !env.DataHoraProcessamento.IsZero() || env.TipoAmbiente != 0
 }
+
+// eventResponse is EventosPostResponseSucesso.
+type eventResponse struct {
+	envelope
+
+	EventoGZipB64 string `json:"eventoXmlGZipB64"`
+}
+
+func parseEvent(body []byte) (*EventResult, error) {
+	var resp eventResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("resposta da Sefin nao e um JSON reconhecido: %w", err)
+	}
+	if rejections := resp.rejections(); len(rejections) > 0 {
+		return nil, &RejectionError{Rejections: rejections, Warnings: resp.Alertas}
+	}
+	if resp.EventoGZipB64 == "" {
+		return nil, fmt.Errorf("a Sefin respondeu sem erros e sem o campo %q", "eventoXmlGZipB64")
+	}
+
+	eventXML, err := decodeGzipBase64(resp.EventoGZipB64)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel ler o evento retornado: %w", err)
+	}
+
+	return &EventResult{
+		EventXML:        eventXML,
+		EnvironmentCode: resp.TipoAmbiente,
+		AppVersion:      resp.VersaoAplicativo,
+		ProcessedAt:     resp.DataHoraProcessamento,
+	}, nil
+}

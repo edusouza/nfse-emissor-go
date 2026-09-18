@@ -219,6 +219,32 @@ O guia do emissor público diz "44 dígitos", mas o próprio exemplo que ele
 apresenta tem 50, e a soma dos campos acima também. O XSD é a fonte: `TSChaveNFSe`
 restringe o tipo a `[0-9]{50}`.
 
+### Cancelar uma nota
+
+```bash
+nfse cancelar 41069022212345678000195000000000000126081234567890 \
+  --motivo erro-emissao \
+  --justificativa "Valor do servico lancado incorretamente na nota"
+```
+
+```
+Cancelamento registrado
+  NFS-e            41069022212345678000195000000000000126081234567890
+  Pedido           PRE41069022212345678000195000000000000126081234567890101101
+  Ambiente         producao-restrita
+  Evento           notas/PRE4106902...101101-evento.xml
+```
+
+O cancelamento é um documento à parte — um pedido de registro de evento,
+assinado com o mesmo certificado. Os motivos aceitos são `erro-emissao`,
+`nao-prestado` e `outros`.
+
+A justificativa entra no registro fiscal e o schema exige **entre 15 e 255
+caracteres**. Não é capricho da ferramenta: `TSMotivo` impõe o mínimo, que na
+prática obriga a explicar o que aconteceu em vez de escrever "erro".
+
+Cancelar em `producao` pede confirmação no terminal — a operação é definitiva.
+
 ## Roadmap
 
 | Versão | Entrega | Estado |
@@ -226,7 +252,8 @@ restringe o tipo a `[0-9]{50}`.
 | v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
 | v0.2.0 | Envio à Sefin Nacional | pronto |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
-| v0.4.0 | Cancelamento e substituição | planejado |
+| v0.4.0 | Cancelamento de NFS-e | pronto |
+| v0.5.0 | Substituição de NFS-e | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 

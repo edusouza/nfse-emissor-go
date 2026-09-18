@@ -275,3 +275,41 @@ func (c *Client) get(ctx context.Context, url string) ([]byte, int, error) {
 	}
 	return body, resp.StatusCode, nil
 }
+
+// EventResult is a registered event.
+type EventResult struct {
+	// EventXML is the event document the government generated, decompressed.
+	EventXML []byte
+
+	EnvironmentCode int
+	AppVersion      string
+	ProcessedAt     time.Time
+}
+
+// RegisterEvent submits a signed event request against an issued invoice.
+//
+// Like emission, this is synchronous and not retried: the government either
+// registers the event or refuses it within the request, and a retry after a
+// dropped connection could register the same event twice.
+func (c *Client) RegisterEvent(ctx context.Context, accessKey string, signedRequest []byte) (*EventResult, error) {
+	encoded, err := encodeGzipBase64(signedRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := json.Marshal(map[string]string{fieldEventRequest: encoded})
+	if err != nil {
+		return nil, fmt.Errorf("falha ao montar a requisicao: %w", err)
+	}
+
+	url := c.baseURL + pathNFSe + url.PathEscape(accessKey) + pathEvents
+	body, status, err := c.post(ctx, url, payload)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status > 299 {
+		return nil, c.classify(status, body)
+	}
+
+	return parseEvent(body)
+}

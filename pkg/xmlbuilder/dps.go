@@ -206,7 +206,7 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 
 	// Build XML structure
 	dps := &dpsXML{
-		XMLNs:  "http://www.sped.fazenda.gov.br/nfse",
+		XMLNs:  NFSeNamespace,
 		Versao: "1.00",
 		InfDPS: infDPSXML{
 			ID:       dpsID,

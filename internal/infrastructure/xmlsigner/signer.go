@@ -104,6 +104,21 @@ func NewXMLSigner(certInfo *CertificateInfo) *XMLSigner {
 //	    return fmt.Errorf("failed to sign DPS: %w", err)
 //	}
 func (s *XMLSigner) SignDPS(dpsXML string) (string, error) {
+	return s.SignDocument(dpsXML, "DPS", "infDPS")
+}
+
+// SignEventRequest signs a pedRegEvento document, used to cancel an invoice or
+// register any other event.
+func (s *XMLSigner) SignEventRequest(eventXML string) (string, error) {
+	return s.SignDocument(eventXML, "pedRegEvento", "infPedReg")
+}
+
+// SignDocument applies an enveloped XMLDSig signature to a document.
+//
+// rootName is the document element and signedName the child carrying the Id
+// attribute that the signature references. The national system's documents all
+// follow that shape: DPS/infDPS, pedRegEvento/infPedReg, NFSe/infNFSe.
+func (s *XMLSigner) SignDocument(documentXML, rootName, signedName string) (string, error) {
 	// Validate certificate before signing
 	if err := s.validateCertificate(); err != nil {
 		return "", err
@@ -111,23 +126,21 @@ func (s *XMLSigner) SignDPS(dpsXML string) (string, error) {
 
 	// Parse the XML document
 	doc := etree.NewDocument()
-	if err := doc.ReadFromString(dpsXML); err != nil {
+	if err := doc.ReadFromString(documentXML); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrSigningInvalidXML, err)
 	}
 
-	// Find the DPS element
-	dps := doc.FindElement("//DPS")
+	dps := doc.FindElement("//" + rootName)
 	if dps == nil {
-		return "", fmt.Errorf("%w: DPS element", ErrSigningMissingElement)
+		return "", fmt.Errorf("%w: %s element", ErrSigningMissingElement, rootName)
 	}
 
-	// Find the infDPS element
-	infDPS := dps.FindElement("infDPS")
+	infDPS := dps.FindElement(signedName)
 	if infDPS == nil {
-		return "", fmt.Errorf("%w: infDPS element", ErrSigningMissingElement)
+		return "", fmt.Errorf("%w: %s element", ErrSigningMissingElement, signedName)
 	}
 
-	// Get the Id attribute from infDPS
+	// The signature references the signed element by its Id.
 	idAttr := infDPS.SelectAttr("Id")
 	if idAttr == nil {
 		return "", ErrSigningMissingID
