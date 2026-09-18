@@ -17,6 +17,7 @@ import (
 	"github.com/edusouza/nfse-emissor-go/internal/domain/validation"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
+	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 	"github.com/edusouza/nfse-emissor-go/pkg/xmlbuilder"
 )
 
@@ -173,6 +174,10 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 
 	certInfo, err := loadCertificate(cmd, cfg, f)
 	if err != nil {
+		return err
+	}
+
+	if err := ensureCertificateBelongsToProvider(certInfo, cfg.Prestador.CNPJ); err != nil {
 		return err
 	}
 
@@ -387,6 +392,47 @@ func takerFor(nota config.Nota) *xmlbuilder.DPSTaker {
 		Name:  t.Nome,
 		Email: t.Email,
 	}
+}
+
+// ensureCertificateBelongsToProvider refuses a certificate issued to someone
+// other than the provider named in the document.
+//
+// The Sefin identifies the issuer by the certificate on the TLS connection, so
+// a mismatch comes back as a bare 403 — no envelope, no explanation, and a
+// status a corporate proxy produces too. Both numbers are on this machine
+// before any connection is opened, so the check belongs here.
+//
+// It runs before signing, not just before sending: a DPS signed with the wrong
+// certificate cannot be salvaged by resending it with the right one, because
+// the signature inside the XML is part of what the government validates.
+//
+// An unreadable certificate CNPJ is not an error. Only ICP-Brasil guarantees
+// the "RAZAO SOCIAL:CNPJ" form, and refusing everything else would break
+// anyone whose certificate is laid out differently.
+func ensureCertificateBelongsToProvider(certInfo *xmlsigner.CertificateInfo, providerCNPJ string) error {
+	certCNPJ := certInfo.SubjectCNPJ()
+	if certCNPJ == "" || providerCNPJ == "" {
+		return nil
+	}
+	if certCNPJ == cnpjcpf.CleanCNPJ(providerCNPJ) {
+		return nil
+	}
+
+	return fmt.Errorf("o certificado nao e do prestador desta nota:\n"+
+		"  Certificado  %s (%s)\n"+
+		"  Prestador    %s\n"+
+		"Use o A1 da empresa que esta emitindo. O certificado de teste de exemplos/ "+
+		"serve para montar e assinar offline, nunca para enviar",
+		formatCNPJ(certCNPJ), certInfo.SubjectHolderName(), formatCNPJ(cnpjcpf.CleanCNPJ(providerCNPJ)))
+}
+
+// formatCNPJ renders a CNPJ the way a person reads it, so that two numbers
+// side by side can be compared at a glance.
+func formatCNPJ(cnpj string) string {
+	if len(cnpj) != 14 {
+		return cnpj
+	}
+	return cnpj[0:2] + "." + cnpj[2:5] + "." + cnpj[5:8] + "/" + cnpj[8:12] + "-" + cnpj[12:14]
 }
 
 // loadCertificate reads and validates the A1 certificate.

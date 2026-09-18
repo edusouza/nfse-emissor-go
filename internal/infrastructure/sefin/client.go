@@ -193,12 +193,18 @@ func (c *Client) classify(status int, body []byte) error {
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusForbidden, http.StatusUnauthorized:
-		// A 403 with no Sefin envelope did not necessarily come from the Sefin.
-		// Corporate proxies and firewalls answer 403 too, and reporting that as
-		// a fiscal-secrecy refusal sends the user looking in the wrong place.
+		// A 403 with no Sefin envelope did not come from the Sefin's business
+		// rules: it was refused at the edge. On a mutual-TLS endpoint the usual
+		// reason is the client certificate — not an ICP-Brasil A1, expired, or
+		// issued to someone who is not a party to the document. A proxy is the
+		// second hypothesis, and naming it first sent users hunting through
+		// firewall rules for a problem sitting in their certificate.
 		if !looksLikeSefinBody(body) {
-			return fmt.Errorf("%w (resposta %d sem corpo de erro da Sefin — "+
-				"verifique se um proxy ou firewall esta interceptando a conexao)",
+			return fmt.Errorf("%w (resposta %d sem corpo de erro da Sefin: a conexao foi "+
+				"recusada na borda. Confira se o certificado e um A1 valido da ICP-Brasil "+
+				"e se pertence a uma parte da nota — um certificado de teste autoassinado "+
+				"nao serve para enviar. Se o certificado estiver correto, verifique se um "+
+				"proxy ou firewall esta interceptando a conexao)",
 				ErrForbidden, status)
 		}
 		return ErrForbidden
