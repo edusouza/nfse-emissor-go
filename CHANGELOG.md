@@ -20,6 +20,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - O ambiente reportado pelo governo na resposta é exibido: quem decide se a nota
   tem valor fiscal é ele, não o arquivo de configuração local.
 - Especificações OpenAPI oficiais versionadas em [`docs/api/`](docs/api/).
+- **Exemplo executável** em [`exemplos/`](exemplos/): configuração pronta de um
+  MEI, uma nota B2B e um script que gera certificado descartável. Os dados são
+  fictícios mas consistentes — CNPJ com dígitos verificadores válidos, código do
+  município conferido na tabela do IBGE e código do serviço na lista nacional.
+- **Validação de CNPJ e CPF** na configuração e nos dados da nota. O
+  `pkg/cnpjcpf` existia desde o início e nunca havia sido ligado ao caminho de
+  emissão: o emissor aceitava qualquer sequência de dígitos e deixava a rejeição
+  para o governo.
+- `nfse emitir` **recusa sobrescrever** um arquivo já existente. O nome vem do
+  identificador da DPS, que se repete quando série e número se repetem;
+  sobrescrever em silêncio destruiria uma declaração assinada — ou, depois do
+  envio, a única cópia local de uma nota que existe no governo. `--sobrescrever`
+  permite a substituição deliberada.
 - **CLI `nfse`** — binário único, sem `cgo`, instalável com
   `go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest`.
 - `nfse versao` — versão, plataforma e versão do Go.

@@ -289,7 +289,7 @@ func basicDPSConfig() DPSConfig {
 		EmitterType:        1,
 		MunicipalityCode:   "3550308",
 		Provider: DPSProvider{
-			CNPJ:      "12345678000190",
+			CNPJ:      "12345678000195",
 			Name:      "Test Provider Ltda",
 			TaxRegime: "mei",
 		},

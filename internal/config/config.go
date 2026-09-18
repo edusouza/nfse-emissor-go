@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 )
 
 // Environment names accepted in the "ambiente" field.
@@ -235,8 +237,13 @@ func (c *Config) Validate() error {
 			c.Ambiente, EnvProducao, EnvProducaoRestrita))
 	}
 
-	if c.Prestador.CNPJ == "" {
+	switch {
+	case c.Prestador.CNPJ == "":
 		problems = append(problems, "prestador.cnpj: obrigatorio")
+	case !cnpjcpf.ValidateCNPJ(c.Prestador.CNPJ):
+		// The government rejects an invalid CNPJ anyway; catching the check
+		// digits here costs nothing and saves a round-trip.
+		problems = append(problems, fmt.Sprintf("prestador.cnpj: %q tem digitos verificadores invalidos", c.Prestador.CNPJ))
 	}
 	if c.Prestador.Nome == "" {
 		problems = append(problems, "prestador.nome: obrigatorio")

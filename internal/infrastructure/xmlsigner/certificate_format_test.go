@@ -96,7 +96,7 @@ func newTestChain(t *testing.T) (*rsa.PrivateKey, *x509.Certificate, *x509.Certi
 	}
 	leafTmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "EMPRESA TESTE LTDA:12345678000199"},
+		Subject:      pkix.Name{CommonName: "EMPRESA TESTE LTDA:12345678000195"},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

@@ -28,6 +28,12 @@ go build -o nfse ./cmd/nfse
 Requer Go 1.26 ou superior. O resultado é um binário único, sem `cgo` e sem
 dependência de serviço externo.
 
+## Experimentar em 2 minutos
+
+Há um passo a passo completo em [`exemplos/`](exemplos/), com configuração
+pronta e um script que gera um certificado descartável — dá para ver o emissor
+funcionando sem ter um A1 em mãos.
+
 ## Uso
 
 ### Verificar o certificado
@@ -41,7 +47,7 @@ nfse cert info --arquivo certificado.pfx
 ```
 
 ```
-Titular                 EMPRESA EXEMPLO LTDA:12345678000199
+Titular                 EMPRESA EXEMPLO LTDA:12345678000195
 Emissor                 AC CERTISIGN RFB G5
 Numero de serie         4A3B2C1D...
 Valido de               10/03/2026 09:14
@@ -75,7 +81,7 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria - agosto/2026"
 ```
 
 ```
-DPS DPS410690211234567800019900001000000000000042
+DPS DPS410690211234567800019500001000000000000042
   Ambiente       producao-restrita
   Valor          R$ 1500.00
   Servico        Consultoria - agosto/2026
@@ -86,7 +92,7 @@ DPS DPS410690211234567800019900001000000000000042
 Para identificar o cliente, use as flags do tomador:
 
 ```bash
-nfse emitir --numero 43 --valor 2400 --descricao "Manutencao mensal"   --tomador-cnpj 98765432000188 --tomador-nome "CLIENTE EXEMPLO SA"
+nfse emitir --numero 43 --valor 2400 --descricao "Manutencao mensal"   --tomador-cnpj 98765432000198 --tomador-nome "CLIENTE EXEMPLO SA"
 ```
 
 Para notas com muitos campos, ou para versionar a nota junto do projeto, use um
@@ -102,7 +108,7 @@ valores:
   valor_servico: 8500.00
   desconto_incondicionado: 500.00
 tomador:
-  cnpj: "98765432000188"
+  cnpj: "98765432000198"
   nome: CLIENTE EXEMPLO SA
   email: financeiro@exemplo.com.br
 ```
@@ -126,8 +132,8 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria" --enviar
 
 ```
 NFS-e emitida
-  Chave de acesso  41069021123456780001990000100000000000004212345
-  DPS              DPS410690211234567800019900001000000000000042
+  Chave de acesso  41069021123456780001950000100000000000004212345
+  DPS              DPS410690211234567800019500001000000000000042
   Ambiente         producao-restrita
   Valor            R$ 1500.00
   Processada em    18/09/2026 09:57:36
@@ -193,6 +199,7 @@ pkg/
   xmlbuilder/      montagem do XML da DPS
   cnpjcpf/         validação de CNPJ e CPF
   dpsid/           identificador da DPS (42 caracteres)
+exemplos/          passo a passo executável
 docs/
   api/             especificações OpenAPI oficiais do governo
   decisoes/        registro de decisões de arquitetura (ADRs)

@@ -1,0 +1,20 @@
+# Uma nota com tomador identificado, para o caso B2B.
+#
+# O que estiver aqui sobrescreve a secao "padroes" do nfse.yaml; o que nao
+# estiver e herdado dela. Note que "codigo_tributacao_nacional" nao aparece:
+# vem da configuracao.
+
+numero: "2"
+competencia: "2026-08-01"       # AAAA-MM-DD; se omitido, usa hoje
+
+servico:
+  descricao: Consultoria tecnica em arquitetura de software - agosto/2026
+
+valores:
+  valor_servico: 8500.00
+  desconto_incondicionado: 500.00
+
+tomador:
+  cnpj: "98765432000198"
+  nome: CLIENTE EXEMPLO SA
+  email: financeiro@exemplo.com.br

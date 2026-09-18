@@ -1,0 +1,50 @@
+# Configuracao de exemplo: um MEI de desenvolvimento de software em Curitiba.
+#
+# Os valores abaixo sao ficticios mas consistentes — o CNPJ tem digitos
+# verificadores validos, o codigo do municipio e o de Curitiba na tabela do
+# IBGE, e o codigo do servico existe na lista nacional. Troque pelos seus.
+
+# producao-restrita e o ambiente de testes do governo: as notas emitidas ali
+# NAO tem valor fiscal. Mude para "producao" apenas quando for emitir de
+# verdade — o comando vai pedir confirmacao.
+ambiente: producao-restrita
+
+certificado:
+  # Gere um descartavel com ./gerar-certificado-teste.sh para experimentar.
+  # Para emitir de verdade, use seu A1 da ICP-Brasil.
+  arquivo: ./certificado-teste.pfx
+  # A senha nunca fica aqui. Use NFSE_CERT_SENHA ou o prompt do terminal.
+
+prestador:
+  cnpj: "12345678000195"
+  nome: EMPRESA EXEMPLO LTDA
+  regime_tributario: mei        # mei | me_epp
+  inscricao_municipal: "1234567"
+  municipio: "4106902"          # Curitiba/PR (ANEXO_A, tabela do IBGE)
+
+dps:
+  serie: "00001"
+
+# Tudo que se repete em toda nota mora aqui, para a linha de comando ficar
+# curta. Pode ser sobrescrito por --yaml ou por uma flag.
+padroes:
+  servico:
+    # 010101 = Analise e desenvolvimento de sistemas.
+    # Formato: 2 digitos de item + 2 de subitem + 2 de desdobro (LC 116/2003).
+    # A lista completa esta em docs/anexos/ANEXO_B-...LISTA_SERVICO_NACIONAL...
+    # Confira o codigo do SEU servico: errar aqui gera rejeicao.
+    codigo_tributacao_nacional: "010101"
+    descricao: Desenvolvimento de software sob encomenda
+
+  valores:
+    # MEI recolhe o ISS pelo DAS, entao a aliquota na nota e 0.
+    # ME/EPP: consulte a aliquota do seu municipio para o servico prestado.
+    iss_aliquota: 0
+
+  tomador:
+    # Venda ao publico em geral: a nota sai sem identificar o cliente.
+    # Para identificar, use --tomador-cnpj/--tomador-nome ou um arquivo --yaml.
+    nao_identificado: true
+
+saida:
+  diretorio: ./notas

@@ -32,7 +32,7 @@ type DPSIDConfig struct {
 // Format: DPS + MunCode(7) + RegType(1) + FedReg(14) + Series(5) + Number(15)
 // Total length: 3 + 7 + 1 + 14 + 5 + 15 = 45 characters
 //
-// Example: DPS355030811234567800019900001000000000000001
+// Example: DPS355030811234567800019500001000000000000001
 func GenerateDPSID(config DPSIDConfig) (string, error) {
 	// Validate municipality code (7 digits)
 	if len(config.MunicipalityCode) != 7 {

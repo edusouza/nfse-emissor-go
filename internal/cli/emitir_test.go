@@ -37,7 +37,7 @@ ambiente: producao-restrita
 certificado:
   arquivo: ` + localCert + `
 prestador:
-  cnpj: "12345678000199"
+  cnpj: "12345678000195"
   nome: EMPRESA EXEMPLO LTDA
   regime_tributario: mei
   inscricao_municipal: "1234567"
@@ -114,7 +114,7 @@ func TestEmitir_MinimalInvoice(t *testing.T) {
 		"DPS/infDPS/serie":                      "00001",
 		"DPS/infDPS/nDPS":                       "42",
 		"DPS/infDPS/cLocEmi":                    "4106902",
-		"DPS/infDPS/prest/CNPJ":                 "12345678000199",
+		"DPS/infDPS/prest/CNPJ":                 "12345678000195",
 		"DPS/infDPS/serv/cServ/cTribNac":        "010101",
 		"DPS/infDPS/serv/cServ/xDescServ":       "Consultoria tecnica",
 		"DPS/infDPS/valores/vServPrest/vServ":   "1500.00",
@@ -187,7 +187,7 @@ func TestEmitir_IdentifiedTakerReplacesDefault(t *testing.T) {
 	// A taker given on the command line must fully replace the config's
 	// "nao_identificado" default, not merge into it.
 	if out, err := runEmit(t, dir, "--numero", "8", "--valor", "1000", "--descricao", "Servico",
-		"--tomador-cnpj", "98765432000188", "--tomador-nome", "CLIENTE EXEMPLO SA"); err != nil {
+		"--tomador-cnpj", "98765432000198", "--tomador-nome", "CLIENTE EXEMPLO SA"); err != nil {
 		t.Fatalf("emissao falhou: %v\n%s", err, out)
 	}
 
@@ -195,7 +195,7 @@ func TestEmitir_IdentifiedTakerReplacesDefault(t *testing.T) {
 	if err := doc.ReadFromString(onlyXML(t, dir)); err != nil {
 		t.Fatal(err)
 	}
-	if el := doc.FindElement("DPS/infDPS/toma/CNPJ"); el == nil || el.Text() != "98765432000188" {
+	if el := doc.FindElement("DPS/infDPS/toma/CNPJ"); el == nil || el.Text() != "98765432000198" {
 		t.Errorf("CNPJ do tomador ausente ou incorreto: %v", el)
 	}
 }
@@ -291,5 +291,41 @@ func TestEmitir_RejectsUnknownConfigField(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "aliquota_iss") {
 		t.Errorf("o erro deveria apontar o campo desconhecido: %v", err)
+	}
+}
+
+// TestEmitir_RefusesSilentOverwrite pins that a repeated DPS number cannot
+// destroy an earlier document. The file name comes from the DPS identifier,
+// which repeats whenever a series and number are reused; overwriting silently
+// would throw away a signed declaration — or, after transmission, the only
+// local copy of an invoice that exists at the government.
+func TestEmitir_RefusesSilentOverwrite(t *testing.T) {
+	dir := workspace(t)
+
+	if out, err := runEmit(t, dir, "--numero", "1", "--valor", "100", "--descricao", "Primeira"); err != nil {
+		t.Fatalf("primeira emissao falhou: %v\n%s", err, out)
+	}
+
+	_, err := runEmit(t, dir, "--numero", "1", "--valor", "999", "--descricao", "Segunda")
+	if err == nil {
+		t.Fatal("a segunda emissao com o mesmo numero sobrescreveu a primeira em silencio")
+	}
+	if !strings.Contains(err.Error(), "ja existe") {
+		t.Errorf("a mensagem deveria explicar a colisao: %v", err)
+	}
+
+	// The original must be untouched.
+	xmlStr := onlyXML(t, dir)
+	if !strings.Contains(xmlStr, "Primeira") {
+		t.Error("o arquivo original foi alterado")
+	}
+
+	// And --sobrescrever must still allow it deliberately.
+	if out, err := runEmit(t, dir, "--numero", "1", "--valor", "999",
+		"--descricao", "Segunda", "--sobrescrever"); err != nil {
+		t.Fatalf("--sobrescrever deveria permitir a substituicao: %v\n%s", err, out)
+	}
+	if !strings.Contains(onlyXML(t, dir), "Segunda") {
+		t.Error("--sobrescrever nao substituiu o arquivo")
 	}
 }

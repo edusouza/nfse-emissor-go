@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,9 +44,10 @@ type emitirFlags struct {
 	tomadorNome  string
 	tomadorEmail string
 
-	semAssinar bool
-	enviar     bool
-	confirmar  bool
+	semAssinar   bool
+	enviar       bool
+	confirmar    bool
+	sobrescrever bool
 }
 
 func newEmitirCommand() *cobra.Command {
@@ -104,6 +106,7 @@ confirmacao no terminal; use --confirmar para dispensa-la em scripts.`,
 	fl.BoolVar(&f.semAssinar, "sem-assinar", false, "gera o XML sem assinar (para inspecao; nao serve para envio)")
 	fl.BoolVar(&f.enviar, "enviar", false, "envia a DPS assinada para a Sefin Nacional e grava a NFS-e")
 	fl.BoolVar(&f.confirmar, "confirmar", false, "dispensa a confirmacao interativa ao emitir em producao")
+	fl.BoolVar(&f.sobrescrever, "sobrescrever", false, "substitui um arquivo ja existente com o mesmo identificador")
 
 	return cmd
 }
@@ -431,10 +434,38 @@ func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed 
 	}
 
 	path := filepath.Join(dir, dpsID+suffix)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
+	if err := writeNew(path, []byte(content), f.sobrescrever); err != nil {
+		return "", err
 	}
 	return path, nil
+}
+
+// writeNew writes a file, refusing to replace one that already exists.
+//
+// The file name is derived from the DPS identifier, which repeats whenever the
+// same series and number are reused. Overwriting silently would destroy a
+// signed declaration — and, once transmission is involved, the only local
+// record of an invoice that exists at the government.
+func writeNew(path string, content []byte, overwrite bool) error {
+	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	if overwrite {
+		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	}
+
+	file, err := os.OpenFile(path, flags, 0o644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%q ja existe: o numero da DPS provavelmente ja foi usado.\n"+
+				"Use outro --numero, ou --sobrescrever se for mesmo para substituir o arquivo", path)
+		}
+		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
+	}
+	defer file.Close()
+
+	if _, err := file.Write(content); err != nil {
+		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
+	}
+	return nil
 }
 
 func report(cmd *cobra.Command, cfg *config.Config, nota config.Nota, dpsID, path string, signed bool) error {
@@ -454,7 +485,9 @@ func report(cmd *cobra.Command, cfg *config.Config, nota config.Nota, dpsID, pat
 	if cfg.Ambiente == config.EnvProducaoRestrita {
 		fmt.Fprintf(out, "\nAmbiente de producao restrita: esta DPS nao tem valor fiscal.\n")
 	}
-	fmt.Fprintf(out, "\nO envio a Sefin Nacional ainda nao esta disponivel (v0.2).\n")
+	if signed {
+		fmt.Fprintf(out, "\nA DPS foi assinada mas nao enviada. Use --enviar para transmiti-la.\n")
+	}
 
 	return nil
 }
@@ -474,8 +507,8 @@ func writeNFSe(cfg *config.Config, f *emitirFlags, result *sefin.EmissionResult)
 	}
 
 	path := filepath.Join(dir, name+"-nfse.xml")
-	if err := os.WriteFile(path, result.NFSeXML, 0o644); err != nil {
-		return "", fmt.Errorf("a NFS-e foi emitida mas nao pode ser gravada em %q: %w", path, err)
+	if err := writeNew(path, result.NFSeXML, f.sobrescrever); err != nil {
+		return "", fmt.Errorf("a NFS-e foi emitida mas nao pode ser gravada: %w", err)
 	}
 	return path, nil
 }

@@ -14,11 +14,11 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name:  "valid CNPJ identifier",
-			input: "355030811234567800019900001000000000000001",
+			input: "355030811234567800019500001000000000000001",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -38,11 +38,11 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:  "valid with all zeros in number",
-			input: "355030811234567800019900001000000000000000",
+			input: "355030811234567800019500001000000000000000",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000000",
 			},
@@ -50,11 +50,11 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:  "valid with high number",
-			input: "355030811234567800019999999999999999999999",
+			input: "355030811234567800019599999999999999999999",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "99999",
 				Number:              "999999999999999",
 			},
@@ -68,59 +68,59 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "too short",
-			input:   "35503081123456780001990000100000000000001",
+			input:   "35503081123456780001950000100000000000001",
 			want:    nil,
 			wantErr: ErrInvalidLength,
 		},
 		{
 			name:    "too long",
-			input:   "3550308112345678000199000010000000000000011",
+			input:   "3550308112345678000195000010000000000000011",
 			want:    nil,
 			wantErr: ErrInvalidLength,
 		},
 		{
 			name:    "contains letters",
-			input:   "35503081123456780001990000100000000000000A",
+			input:   "35503081123456780001950000100000000000000A",
 			want:    nil,
 			wantErr: ErrInvalidCharacters,
 		},
 		{
 			name:    "contains special characters",
-			input:   "3550308-12345678000199-00001-00000000000001",
+			input:   "3550308-12345678000195-00001-00000000000001",
 			want:    nil,
 			wantErr: ErrInvalidLength, // Special chars cause length change
 		},
 		{
 			name:    "invalid registration type 0",
-			input:   "355030801234567800019900001000000000000001",
+			input:   "355030801234567800019500001000000000000001",
 			want:    nil,
 			wantErr: ErrInvalidRegistrationType,
 		},
 		{
 			name:    "invalid registration type 3",
-			input:   "355030831234567800019900001000000000000001",
+			input:   "355030831234567800019500001000000000000001",
 			want:    nil,
 			wantErr: ErrInvalidRegistrationType,
 		},
 		{
 			name:    "invalid registration type 9",
-			input:   "355030891234567800019900001000000000000001",
+			input:   "355030891234567800019500001000000000000001",
 			want:    nil,
 			wantErr: ErrInvalidRegistrationType,
 		},
 		{
 			name:    "CPF without 000 prefix",
-			input:   "355030821234567800019900001000000000000001",
+			input:   "355030821234567800019500001000000000000001",
 			want:    nil,
 			wantErr: ErrInvalidCPFPadding,
 		},
 		{
 			name:  "whitespace is trimmed",
-			input: "  355030811234567800019900001000000000000001  ",
+			input: "  355030811234567800019500001000000000000001  ",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -178,11 +178,11 @@ func TestDPSIdentifier_String(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
-			want: "355030811234567800019900001000000000000001",
+			want: "355030811234567800019500001000000000000001",
 		},
 		{
 			name: "CPF identifier",
@@ -224,7 +224,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -252,7 +252,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "355030",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -264,7 +264,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "355030A",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -276,7 +276,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    5,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -300,7 +300,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "0001",
 				Number:              "000000000000001",
 			},
@@ -312,7 +312,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "00000000000001",
 			},
@@ -336,7 +336,7 @@ func TestDPSIdentifier_Validate(t *testing.T) {
 			id: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
-				FederalRegistration: "12345678000199",
+				FederalRegistration: "12345678000195",
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
@@ -425,15 +425,15 @@ func TestDPSIdentifier_IsCPF(t *testing.T) {
 func TestDPSIdentifier_GetCNPJ(t *testing.T) {
 	cnpjID := &DPSIdentifier{
 		RegistrationType:    RegistrationTypeCNPJ,
-		FederalRegistration: "12345678000199",
+		FederalRegistration: "12345678000195",
 	}
 	cpfID := &DPSIdentifier{
 		RegistrationType:    RegistrationTypeCPF,
 		FederalRegistration: "00012345678901",
 	}
 
-	if got := cnpjID.GetCNPJ(); got != "12345678000199" {
-		t.Errorf("GetCNPJ() for CNPJ = %v, want %v", got, "12345678000199")
+	if got := cnpjID.GetCNPJ(); got != "12345678000195" {
+		t.Errorf("GetCNPJ() for CNPJ = %v, want %v", got, "12345678000195")
 	}
 
 	if got := cpfID.GetCNPJ(); got != "" {
@@ -448,7 +448,7 @@ func TestDPSIdentifier_GetCPF(t *testing.T) {
 	}
 	cnpjID := &DPSIdentifier{
 		RegistrationType:    RegistrationTypeCNPJ,
-		FederalRegistration: "12345678000199",
+		FederalRegistration: "12345678000195",
 	}
 
 	if got := cpfID.GetCPF(); got != "12345678901" {
@@ -475,10 +475,10 @@ func TestNew(t *testing.T) {
 			name:                "valid CNPJ with padding",
 			municipalityCode:    "3550308",
 			registrationType:    RegistrationTypeCNPJ,
-			federalRegistration: "12345678000199",
+			federalRegistration: "12345678000195",
 			series:              "1",
 			number:              "1",
-			wantString:          "355030811234567800019900001000000000000001",
+			wantString:          "355030811234567800019500001000000000000001",
 			wantErr:             false,
 		},
 		{
@@ -495,17 +495,17 @@ func TestNew(t *testing.T) {
 			name:                "CNPJ with formatting characters",
 			municipalityCode:    "3550308",
 			registrationType:    RegistrationTypeCNPJ,
-			federalRegistration: "12.345.678/0001-99",
+			federalRegistration: "12.345.678/0001-95",
 			series:              "00001",
 			number:              "000000000000001",
-			wantString:          "355030811234567800019900001000000000000001",
+			wantString:          "355030811234567800019500001000000000000001",
 			wantErr:             false,
 		},
 		{
 			name:                "invalid municipality code",
 			municipalityCode:    "355",
 			registrationType:    RegistrationTypeCNPJ,
-			federalRegistration: "12345678000199",
+			federalRegistration: "12345678000195",
 			series:              "1",
 			number:              "1",
 			wantErr:             true,
@@ -514,7 +514,7 @@ func TestNew(t *testing.T) {
 			name:                "invalid registration type",
 			municipalityCode:    "3550308",
 			registrationType:    5,
-			federalRegistration: "12345678000199",
+			federalRegistration: "12345678000195",
 			series:              "1",
 			number:              "1",
 			wantErr:             true,
@@ -537,7 +537,7 @@ func TestNew(t *testing.T) {
 
 func TestMustParse(t *testing.T) {
 	// Test valid input
-	id := MustParse("355030811234567800019900001000000000000001")
+	id := MustParse("355030811234567800019500001000000000000001")
 	if id.MunicipalityCode != "3550308" {
 		t.Errorf("MustParse() MunicipalityCode = %v, want %v", id.MunicipalityCode, "3550308")
 	}
@@ -553,7 +553,7 @@ func TestMustParse(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	// Test that parsing and stringifying produces the same result
-	original := "355030811234567800019900001000000000000001"
+	original := "355030811234567800019500001000000000000001"
 	parsed, err := Parse(original)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)

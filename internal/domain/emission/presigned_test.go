@@ -22,7 +22,7 @@ const (
     <cLocEmi>3550308</cLocEmi>
     <subst>2</subst>
     <prest>
-      <CNPJ>12345678000190</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
       <xNome>Provider Company Ltd</xNome>
     </prest>
     <serv>
@@ -190,8 +190,8 @@ func TestParsePreSignedXML_ValidSignedDocument(t *testing.T) {
 		t.Errorf("Expected DPSID 'DPS12345678901234567890123456789012345678901234567890', got '%s'", info.DPSID)
 	}
 
-	if info.ProviderCNPJ != "12345678000190" {
-		t.Errorf("Expected ProviderCNPJ '12345678000190', got '%s'", info.ProviderCNPJ)
+	if info.ProviderCNPJ != "12345678000195" {
+		t.Errorf("Expected ProviderCNPJ '12345678000195', got '%s'", info.ProviderCNPJ)
 	}
 
 	if info.ProviderName != "Provider Company Ltd" {
@@ -341,9 +341,9 @@ func TestPreSignedInfo_GetProviderID(t *testing.T) {
 		providerCPF  string
 		expected     string
 	}{
-		{"CNPJ only", "12345678000190", "", "12345678000190"},
+		{"CNPJ only", "12345678000195", "", "12345678000195"},
 		{"CPF only", "", "12345678901", "12345678901"},
-		{"Both", "12345678000190", "12345678901", "12345678000190"}, // CNPJ takes precedence
+		{"Both", "12345678000195", "12345678901", "12345678000195"}, // CNPJ takes precedence
 		{"Neither", "", "", ""},
 	}
 
@@ -372,7 +372,7 @@ func TestPreSignedInfo_Validate(t *testing.T) {
 			name: "valid signed document",
 			info: &PreSignedInfo{
 				DPSID:        "DPS12345",
-				ProviderCNPJ: "12345678000190",
+				ProviderCNPJ: "12345678000195",
 				Environment:  2,
 				HasSignature: true,
 			},
@@ -381,7 +381,7 @@ func TestPreSignedInfo_Validate(t *testing.T) {
 		{
 			name: "missing DPSID",
 			info: &PreSignedInfo{
-				ProviderCNPJ: "12345678000190",
+				ProviderCNPJ: "12345678000195",
 				Environment:  2,
 				HasSignature: true,
 			},
@@ -424,7 +424,7 @@ func TestPreSignedInfo_Validate(t *testing.T) {
 			name: "invalid environment",
 			info: &PreSignedInfo{
 				DPSID:        "DPS12345",
-				ProviderCNPJ: "12345678000190",
+				ProviderCNPJ: "12345678000195",
 				Environment:  0,
 				HasSignature: true,
 			},
@@ -435,7 +435,7 @@ func TestPreSignedInfo_Validate(t *testing.T) {
 			name: "not signed",
 			info: &PreSignedInfo{
 				DPSID:        "DPS12345",
-				ProviderCNPJ: "12345678000190",
+				ProviderCNPJ: "12345678000195",
 				Environment:  2,
 				HasSignature: false,
 			},
@@ -481,7 +481,7 @@ func TestCleanNumericString(t *testing.T) {
 	}{
 		{"12.345.678/0001-90", "12345678000190"},
 		{"123.456.789-01", "12345678901"},
-		{"12345678000190", "12345678000190"},
+		{"12345678000195", "12345678000195"},
 		{"abc123def", "123"},
 		{"", ""},
 	}

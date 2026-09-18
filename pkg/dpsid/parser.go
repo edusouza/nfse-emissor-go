@@ -8,7 +8,7 @@
 //   - Series (5 digits): DPS series number
 //   - Number (15 digits): DPS sequential number
 //
-// Example: "3550308112345678000199000010000000000000001"
+// Example: "3550308112345678000195000010000000000000001"
 //
 //	|     |              |    |
 //	7     1      14      5   15 = 42 characters
@@ -121,7 +121,7 @@ type DPSIdentifier struct {
 //
 // Example:
 //
-//	id, err := dpsid.Parse("3550308112345678000199000010000000000000001")
+//	id, err := dpsid.Parse("3550308112345678000195000010000000000000001")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -177,11 +177,11 @@ func Parse(id string) (*DPSIdentifier, error) {
 //	id := &DPSIdentifier{
 //	    MunicipalityCode:    "3550308",
 //	    RegistrationType:    1,
-//	    FederalRegistration: "12345678000199",
+//	    FederalRegistration: "12345678000195",
 //	    Series:              "00001",
 //	    Number:              "000000000000001",
 //	}
-//	fmt.Println(id.String()) // "3550308112345678000199000010000000000000001"
+//	fmt.Println(id.String()) // "3550308112345678000195000010000000000000001"
 func (d *DPSIdentifier) String() string {
 	if d == nil {
 		return ""

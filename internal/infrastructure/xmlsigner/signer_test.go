@@ -95,7 +95,7 @@ func generateExpiredCertificate(t *testing.T) *CertificateInfo {
 // sampleDPSXML is a sample DPS XML document for testing.
 const sampleDPSXML = `<?xml version="1.0" encoding="UTF-8"?>
 <DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
-  <infDPS Id="DPS355030812345678000199000010000000000000001">
+  <infDPS Id="DPS355030812345678000195000010000000000000001">
     <tpAmb>2</tpAmb>
     <dhEmi>2024-01-15T10:30:00-03:00</dhEmi>
     <verAplic>1.0.0</verAplic>
@@ -106,7 +106,7 @@ const sampleDPSXML = `<?xml version="1.0" encoding="UTF-8"?>
     <cLocEmi>3550308</cLocEmi>
     <subst>2</subst>
     <prest>
-      <CNPJ>12345678000199</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
       <xNome>Test Provider</xNome>
       <regTrib>
         <opSimpNac>2</opSimpNac>
@@ -159,7 +159,7 @@ func TestXMLSigner_SignDPS(t *testing.T) {
 	}
 
 	// Verify the signed XML contains the correct reference URI
-	if !strings.Contains(signedXML, `URI="#DPS355030812345678000199000010000000000000001"`) {
+	if !strings.Contains(signedXML, `URI="#DPS355030812345678000195000010000000000000001"`) {
 		t.Error("Signed XML does not contain correct reference URI")
 	}
 

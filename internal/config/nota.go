@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 )
 
 // CompetenciaLayout is the date format accepted in the "competencia" field.
@@ -110,11 +112,15 @@ func (n Nota) Validate() error {
 	}
 
 	if t := n.Tomador; t != nil && !t.NaoIdentificado {
-		if t.CNPJ == "" && t.CPF == "" {
+		switch {
+		case t.CNPJ == "" && t.CPF == "":
 			problems = append(problems, "tomador: informe cnpj ou cpf, ou marque nao_identificado")
-		}
-		if t.CNPJ != "" && t.CPF != "" {
+		case t.CNPJ != "" && t.CPF != "":
 			problems = append(problems, "tomador: informe cnpj ou cpf, nunca os dois")
+		case t.CNPJ != "" && !cnpjcpf.ValidateCNPJ(t.CNPJ):
+			problems = append(problems, fmt.Sprintf("tomador.cnpj: %q tem digitos verificadores invalidos", t.CNPJ))
+		case t.CPF != "" && !cnpjcpf.ValidateCPF(t.CPF):
+			problems = append(problems, fmt.Sprintf("tomador.cpf: %q tem digitos verificadores invalidos", t.CPF))
 		}
 		if t.Nome == "" {
 			problems = append(problems, "tomador.nome: obrigatorio quando o tomador e identificado")

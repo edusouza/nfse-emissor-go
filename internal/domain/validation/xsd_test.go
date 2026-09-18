@@ -20,7 +20,7 @@ const (
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
     <prest>
-      <CNPJ>12345678000190</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
       <xNome>Provider Company Ltd</xNome>
     </prest>
     <serv>
@@ -61,7 +61,7 @@ const (
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
     <prest>
-      <CNPJ>12345678000190</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
     </prest>
     <serv>
       <locPrest>
@@ -105,7 +105,7 @@ const (
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
     <prest>
-      <CNPJ>12345678000190</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
     </prest>
     <serv>
       <locPrest>
@@ -255,7 +255,7 @@ func TestXSDValidator_ValidateDPS_MissingNamespace(t *testing.T) {
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
     <prest>
-      <CNPJ>12345678000190</CNPJ>
+      <CNPJ>12345678000195</CNPJ>
     </prest>
     <serv>
       <locPrest>

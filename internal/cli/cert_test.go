@@ -110,7 +110,7 @@ func writeTestPFX(t *testing.T, password string, notAfter time.Time) string {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(42),
-		Subject:      pkix.Name{CommonName: "EMPRESA TESTE LTDA:12345678000199"},
+		Subject:      pkix.Name{CommonName: "EMPRESA TESTE LTDA:12345678000195"},
 		Issuer:       pkix.Name{CommonName: "AC TESTE"},
 		NotBefore:    time.Now().Add(-365 * 24 * time.Hour),
 		NotAfter:     notAfter,
