@@ -22,7 +22,6 @@ type consultarFlags struct {
 
 	dpsID         string
 	somenteExiste bool
-	sobrescrever  bool
 }
 
 func newConsultarCommand() *cobra.Command {
@@ -51,7 +50,6 @@ a quem consta na nota (prestador, tomador ou intermediario).`,
 	fl.StringVarP(&f.outputDir, "saida", "o", "", "diretorio onde gravar o XML")
 	fl.StringVar(&f.dpsID, "dps", "", "consulta pelo identificador da DPS em vez da chave de acesso")
 	fl.BoolVar(&f.somenteExiste, "existe", false, "com --dps, apenas informa se a NFS-e foi gerada")
-	fl.BoolVar(&f.sobrescrever, "sobrescrever", false, "substitui um arquivo ja existente")
 
 	return cmd
 }
@@ -204,8 +202,12 @@ func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, result *sefin.NFSeR
 		return "", fmt.Errorf("nao foi possivel criar o diretorio de saida: %w", err)
 	}
 
+	// A query overwrites without asking. Consulting is idempotent and the NFS-e
+	// is immutable at the government, so a second fetch of the same access key
+	// brings back the same document — refusing to write it protected nothing and
+	// turned a harmless repeat into an error.
 	path := filepath.Join(dir, result.AccessKey+"-nfse.xml")
-	if err := writeNew(path, result.NFSeXML, f.sobrescrever); err != nil {
+	if err := writeNew(path, result.NFSeXML, true); err != nil {
 		return "", err
 	}
 	return path, nil

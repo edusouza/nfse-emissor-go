@@ -517,6 +517,9 @@ func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed 
 
 	path := filepath.Join(dir, dpsID+suffix)
 	if err := writeNew(path, []byte(content), f.sobrescrever); err != nil {
+		if errors.Is(err, errArquivoExistente) {
+			return "", fmt.Errorf("%w\nO numero da DPS provavelmente ja foi usado: tente outro --numero", err)
+		}
 		return "", err
 	}
 	return path, nil
@@ -528,6 +531,11 @@ func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed 
 // same series and number are reused. Overwriting silently would destroy a
 // signed declaration — and, once transmission is involved, the only local
 // record of an invoice that exists at the government.
+// errArquivoExistente lets a caller add advice this function has no business
+// guessing at. The refusal used to name the DPS number and --numero, which is
+// wrong for every caller but one: a query has neither.
+var errArquivoExistente = errors.New("arquivo ja existe")
+
 func writeNew(path string, content []byte, overwrite bool) error {
 	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if overwrite {
@@ -537,8 +545,8 @@ func writeNew(path string, content []byte, overwrite bool) error {
 	file, err := os.OpenFile(path, flags, 0o644)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("%q ja existe: o numero da DPS provavelmente ja foi usado.\n"+
-				"Use outro --numero, ou --sobrescrever se for mesmo para substituir o arquivo", path)
+			return fmt.Errorf("%w: %q ja existe.\nUse --sobrescrever se for mesmo para substituir o arquivo",
+				errArquivoExistente, path)
 		}
 		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
 	}

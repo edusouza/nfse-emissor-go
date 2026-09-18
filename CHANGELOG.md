@@ -114,12 +114,28 @@ teria sido encontrada por inspeção ou por cobertura de testes.
   emitida de novo. Não há conserto no arquivo — a assinatura é parte do que o
   governo valida.
 
+- **`nfse consultar` recusava consultar a mesma nota duas vezes**, com uma
+  mensagem de emissão: *"o numero da DPS provavelmente ja foi usado. Use outro
+  --numero"* — numa consulta, que não tem número de DPS nem a flag `--numero`.
+
+  A guarda contra sobrescrita foi escrita para a emissão, onde repetir um número
+  destrói um documento fiscal distinto. Uma consulta é idempotente e a NFS-e é
+  imutável no governo: a segunda busca traz o mesmo documento. Recusar não
+  protegia nada.
+
+  O `consultar` passa a sobrescrever sem perguntar, e o `--sobrescrever` some
+  dele por não ter mais o que fazer. A recusa continua onde ela protege algo —
+  emissão e cancelamento —, agora com uma mensagem que não empresta o
+  vocabulário da emissão a quem não é emissão.
+
 ### Adicionado
 
 - Testes que amarram a escolha do `totTrib` ao regime nos quatro casos — MEI com
   e sem percentual, ME/EPP com e sem —, citando o texto das regras E0710 e
   E0712. O teste anterior afirmava o comportamento defeituoso: um MEI emitindo
   `pTotTribSN`.
+- Teste que consulta a mesma nota duas vezes, e outro que verifica que a recusa
+  genérica de sobrescrita não menciona `--numero`.
 - Testes que amarram o `xNome` ao `tpEmit` nos três valores possíveis, citando o
   texto das regras E0121 e E0122, e que conferem que o prestador continua
   identificado pelo CNPJ.
