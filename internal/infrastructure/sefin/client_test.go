@@ -416,3 +416,75 @@ func TestDPSExists(t *testing.T) {
 		})
 	}
 }
+
+// TestClassify_ProxyVersusSefin403 separates a fiscal-secrecy refusal from a
+// 403 produced by something between the client and the government.
+//
+// Both look identical at the status line, but they send the user to completely
+// different places: one means "this certificate is not a party to the invoice",
+// the other means "your network is blocking the request". Every documented
+// Sefin response carries versaoAplicativo and dataHoraProcessamento, so their
+// absence is the tell.
+func TestClassify_ProxyVersusSefin403(t *testing.T) {
+	t.Run("403 da Sefin", func(t *testing.T) {
+		client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]any{
+				"tipoAmbiente":          EnvCodeRestrictedProduction,
+				"versaoAplicativo":      "1.0.0",
+				"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			})
+		})
+
+		err := mustFetchErr(t, client)
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("erro = %v, esperava ErrForbidden", err)
+		}
+		if strings.Contains(err.Error(), "proxy") {
+			t.Errorf("uma recusa legitima da Sefin nao deveria sugerir proxy: %v", err)
+		}
+	})
+
+	t.Run("403 de um intermediario", func(t *testing.T) {
+		client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte("<html><body>Blocked by corporate proxy</body></html>"))
+		})
+
+		err := mustFetchErr(t, client)
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("erro = %v, esperava ErrForbidden", err)
+		}
+		if !strings.Contains(err.Error(), "proxy") {
+			t.Errorf("a mensagem deveria levantar a hipotese de proxy: %v", err)
+		}
+	})
+
+	t.Run("403 com erro detalhado vence o status", func(t *testing.T) {
+		client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]any{
+				"tipoAmbiente":          EnvCodeRestrictedProduction,
+				"versaoAplicativo":      "1.0.0",
+				"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+				"erro":                  map[string]string{"codigo": "E403", "descricao": "Ator nao consta na NFS-e"},
+			})
+		})
+
+		err := mustFetchErr(t, client)
+		// The government's own explanation is more useful than the sentinel.
+		if !strings.Contains(err.Error(), "Ator nao consta") {
+			t.Errorf("a explicacao da Sefin deveria aparecer: %v", err)
+		}
+	})
+}
+
+func mustFetchErr(t *testing.T, client *Client) error {
+	t.Helper()
+
+	_, err := client.FetchNFSe(context.Background(), strings.Repeat("1", 50))
+	if err == nil {
+		t.Fatal("esperava erro")
+	}
+	return err
+}

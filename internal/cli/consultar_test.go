@@ -196,3 +196,26 @@ func TestConsultar_ArgumentosIncompativeis(t *testing.T) {
 		})
 	}
 }
+
+// TestConsultar_403DeProxy checks that a 403 from something other than the
+// government keeps its distinguishing detail. The fiscal-secrecy explanation is
+// right when the Sefin refuses; it is a wild goose chase when a corporate proxy
+// is what answered.
+func TestConsultar_403DeProxy(t *testing.T) {
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("<html>Blocked</html>"))
+	})
+
+	dir := workspace(t)
+	_, err := runConsulta(t, dir, strings.Repeat("5", 50))
+	if err == nil {
+		t.Fatal("esperava erro")
+	}
+	if !strings.Contains(err.Error(), "sigilo fiscal") {
+		t.Errorf("a explicacao principal sumiu: %v", err)
+	}
+	if !strings.Contains(err.Error(), "proxy") {
+		t.Errorf("a pista sobre o intermediario foi descartada: %v", err)
+	}
+}

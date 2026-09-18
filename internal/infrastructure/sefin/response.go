@@ -210,3 +210,31 @@ func parseDPSLookup(body []byte) (*DPSLookup, error) {
 		ProcessedAt:     resp.DataHoraProcessamento,
 	}, nil
 }
+
+// asRejection returns the rejection described by a body, or nil when the body
+// is not a Sefin error envelope.
+func asRejection(body []byte) *RejectionError {
+	var env envelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil
+	}
+	rejections := env.rejections()
+	if len(rejections) == 0 {
+		return nil
+	}
+	return &RejectionError{Rejections: rejections, Warnings: env.Alertas}
+}
+
+// looksLikeSefinBody reports whether a body is a response from the national
+// system, as opposed to something an intermediary produced.
+//
+// Every documented response carries versaoAplicativo and dataHoraProcessamento,
+// so their presence is a reliable signal that the answer really came from the
+// government.
+func looksLikeSefinBody(body []byte) bool {
+	var env envelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return false
+	}
+	return env.VersaoAplicativo != "" || !env.DataHoraProcessamento.IsZero() || env.TipoAmbiente != 0
+}

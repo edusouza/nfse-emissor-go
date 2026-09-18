@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -70,7 +71,9 @@ func runConsultar(cmd *cobra.Command, args []string, f *consultarFlags) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.Validate(); err != nil {
+	// A lookup needs the environment and a certificate, not a full emitter
+	// configuration.
+	if err := cfg.ValidateForQuery(); err != nil {
 		return err
 	}
 
@@ -161,16 +164,35 @@ func consultarPorDPS(cmd *cobra.Command, cfg *config.Config, f *consultarFlags, 
 }
 
 // explainQueryError turns the client's sentinels into advice.
+//
+// It appends whatever detail the client attached rather than replacing the
+// message: the client distinguishes a refusal that came from the government
+// from one produced by something in between, and losing that distinction sends
+// the user looking in the wrong place.
 func explainQueryError(err error) error {
 	switch {
 	case errors.Is(err, sefin.ErrNotFound):
 		return fmt.Errorf("nao encontrado na Sefin Nacional: confira a chave e o ambiente da configuracao")
 	case errors.Is(err, sefin.ErrForbidden):
-		return fmt.Errorf("consulta negada: por sigilo fiscal, so o prestador, o tomador ou o " +
-			"intermediario da nota podem consulta-la, e o certificado usado precisa ser o de um deles")
+		msg := "consulta negada: por sigilo fiscal, so o prestador, o tomador ou o " +
+			"intermediario da nota podem consulta-la, e o certificado usado precisa ser o de um deles"
+		if detail := detailBeyond(err, sefin.ErrForbidden); detail != "" {
+			msg += "\n" + detail
+		}
+		return errors.New(msg)
 	default:
 		return err
 	}
+}
+
+// detailBeyond returns the part of err's message that the sentinel alone does
+// not account for.
+func detailBeyond(err error, sentinel error) string {
+	full, bare := err.Error(), sentinel.Error()
+	if full == bare {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(full, bare))
 }
 
 func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, result *sefin.NFSeResult) (string, error) {

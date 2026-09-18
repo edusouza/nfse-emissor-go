@@ -133,13 +133,13 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria" --enviar
 
 ```
 NFS-e emitida
-  Chave de acesso  41069021123456780001950000100000000000004212345
+  Chave de acesso  41069022212345678000195000000000000126081234567890
   DPS              DPS410690211234567800019500001000000000000042
   Ambiente         producao-restrita
   Valor            R$ 1500.00
   Processada em    18/09/2026 09:57:36
   DPS assinada     notas/DPS4106902...042-dps.xml
-  NFS-e            notas/4106902...4212345-nfse.xml
+  NFS-e            notas/4106902...67890-nfse.xml
 
 Ambiente de producao restrita: esta nota NAO tem valor fiscal.
 ```
@@ -178,14 +178,14 @@ sistema, e costumam ficar gravados no histórico do shell.
 ### Consultar uma nota emitida
 
 ```bash
-nfse consultar 41069021123456780001950000100000000000004212345
+nfse consultar 41069022212345678000195000000000000126081234567890
 ```
 
 ```
 NFS-e encontrada
-  Chave de acesso  41069021123456780001950000100000000000004212345
+  Chave de acesso  41069022212345678000195000000000000126081234567890
   Ambiente         producao-restrita
-  Arquivo          notas/4106902...4212345-nfse.xml
+  Arquivo          notas/4106902...67890-nfse.xml
 ```
 
 Se uma emissão foi interrompida e você não sabe se a nota saiu, consulte pelo
@@ -199,6 +199,25 @@ nfse consultar --dps DPS410690211234567800019500001000000000000042 --existe
 qualquer certificado válido. Sem a flag, ele devolve a chave de acesso, que por
 sigilo fiscal só é informada a quem consta na nota (prestador, tomador ou
 intermediário).
+
+#### A chave de acesso
+
+São **50 dígitos**, sem prefixo, compostos assim:
+
+| Posições | Campo | Exemplo |
+|---|---|---|
+| 1–7 | Código IBGE do município | `4106902` |
+| 8 | Ambiente gerador (1 = sistema próprio, 2 = Sefin Nacional) | `2` |
+| 9 | Tipo de inscrição (1 = CPF, 2 = CNPJ) | `2` |
+| 10–23 | Inscrição federal (CPF preenchido com zeros à esquerda) | `12345678000195` |
+| 24–36 | Número da NFS-e | `0000000000001` |
+| 37–40 | Ano e mês da emissão | `2608` |
+| 41–49 | Código numérico aleatório | `123456789` |
+| 50 | Dígito verificador | `0` |
+
+O guia do emissor público diz "44 dígitos", mas o próprio exemplo que ele
+apresenta tem 50, e a soma dos campos acima também. O XSD é a fonte: `TSChaveNFSe`
+restringe o tipo a `[0-9]{50}`.
 
 ## Roadmap
 

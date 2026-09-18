@@ -165,11 +165,26 @@ func (c *Client) post(ctx context.Context, url string, payload []byte) ([]byte, 
 }
 
 // classify maps an error status onto the sentinel a caller can branch on.
+//
+// The body is consulted first: the government explains a refusal in its own
+// envelope, and that explanation is more useful than the status alone.
 func (c *Client) classify(status int, body []byte) error {
+	if rejection := asRejection(body); rejection != nil {
+		return rejection
+	}
+
 	switch status {
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusForbidden, http.StatusUnauthorized:
+		// A 403 with no Sefin envelope did not necessarily come from the Sefin.
+		// Corporate proxies and firewalls answer 403 too, and reporting that as
+		// a fiscal-secrecy refusal sends the user looking in the wrong place.
+		if !looksLikeSefinBody(body) {
+			return fmt.Errorf("%w (resposta %d sem corpo de erro da Sefin — "+
+				"verifique se um proxy ou firewall esta interceptando a conexao)",
+				ErrForbidden, status)
+		}
 		return ErrForbidden
 	case http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout:
 		return ErrUnavailable

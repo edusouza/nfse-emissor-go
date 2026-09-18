@@ -225,14 +225,28 @@ func (c *Config) EnvironmentCode() int {
 	return 2
 }
 
+// ValidateForQuery checks only what a lookup needs: which environment to talk
+// to. The certificate is checked when it is loaded.
+//
+// Querying deliberately does not require a complete emitter configuration.
+// Someone who only wants to look an invoice up should not have to fill in a
+// CNPJ, a municipality and a tax regime first.
+func (c *Config) ValidateForQuery() error {
+	switch c.Ambiente {
+	case EnvProducao, EnvProducaoRestrita:
+		return nil
+	default:
+		return fmt.Errorf("configuracao invalida:\n  - ambiente: %q e invalido (use %q ou %q)",
+			c.Ambiente, EnvProducao, EnvProducaoRestrita)
+	}
+}
+
 // Validate checks the settings that must be present regardless of which
 // invoice is being issued. Per-invoice fields are checked after merging.
 func (c *Config) Validate() error {
 	var problems []string
 
-	switch c.Ambiente {
-	case EnvProducao, EnvProducaoRestrita:
-	default:
+	if err := c.ValidateForQuery(); err != nil {
 		problems = append(problems, fmt.Sprintf("ambiente: %q e invalido (use %q ou %q)",
 			c.Ambiente, EnvProducao, EnvProducaoRestrita))
 	}

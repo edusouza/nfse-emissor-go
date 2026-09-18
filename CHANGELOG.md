@@ -18,6 +18,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   quem consta na nota.
 - Uma negativa por sigilo fiscal (403) e explicada em vez de repassada como
   status cru.
+- Consultar nao exige mais uma configuracao completa de emissao: bastam o
+  ambiente e o certificado. Quem so quer olhar uma nota nao precisa preencher
+  CNPJ, municipio e regime tributario antes.
+- Teste que valida as chaves de acesso mostradas na documentacao contra o
+  proprio validador do `nfse`, para nao documentar exemplo que a ferramenta
+  recusa.
+- Um 403 sem corpo de erro da Sefin passa a levantar a hipotese de proxy ou
+  firewall. Os dois casos sao identicos na linha de status, mas mandam o usuario
+  para lugares opostos: um significa "este certificado nao e parte da nota", o
+  outro "sua rede esta bloqueando a requisicao".
 - **`nfse emitir --enviar`** — transmite a DPS assinada para a Sefin Nacional e
   grava a NFS-e autorizada, nomeada pela chave de acesso. A emissão é síncrona:
   o governo valida e devolve a nota ou a rejeição na mesma requisição.
@@ -95,6 +105,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   Ver [ADR 0003](docs/decisoes/0003-xml-conforme-o-xsd.md).
 - O validador estrutural procurava `cTribNac`, `cLocPrest` e `vServPrest` em
   caminhos que não existem no schema, e exigia `subst`, que é opcional.
+- **O README documentava uma chave de acesso com 47 dígitos**, escrita à mão e
+  nunca conferida. Quem copiasse o exemplo recebia `a chave de acesso deve ter
+  exatamente 50 digitos`. Corrigida e coberta por teste.
 - **A validação da chave de acesso exigia um prefixo `NFSe` inexistente.** O
   XSD define `TSChaveNFSe` como `[0-9]{50}` e a especificação da Sefin diz o
   mesmo ("deve conter 50 números"): são 50 dígitos, sem prefixo. A regra
