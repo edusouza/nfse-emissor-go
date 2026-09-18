@@ -455,3 +455,46 @@ func TestGetEnvironmentFromDPS(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateVerAplic guards a field that is easy to overflow without
+// noticing. TSVerAplic caps verAplic at 20 characters, and the emitter was
+// filling it with "nfse-cli " plus a Go pseudo-version — 49 characters — which
+// would have had every declaration rejected on that field alone.
+func TestValidateVerAplic(t *testing.T) {
+	build := func(verAplic string) string {
+		return strings.Replace(validDPSXML, "<verAplic>1.0.0</verAplic>",
+			"<verAplic>"+verAplic+"</verAplic>", 1)
+	}
+
+	cases := []struct {
+		name     string
+		verAplic string
+		wantErr  bool
+	}{
+		{name: "curto", verAplic: "nfse-cli v0.4.0"},
+		{name: "exatamente 20", verAplic: strings.Repeat("a", 20)},
+		{name: "21 caracteres", verAplic: strings.Repeat("a", 21), wantErr: true},
+		{name: "pseudo-versao completa", verAplic: "nfse-cli v0.0.0-20260918131458-fed93cba325f", wantErr: true},
+		{name: "vazio", verAplic: "", wantErr: true},
+	}
+
+	validator := NewStructuralValidator()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			xmlStr := build(tc.verAplic)
+			if xmlStr == validDPSXML && tc.verAplic != "1.0.0" {
+				t.Fatal("a fixture mudou: <verAplic>1.0.0</verAplic> nao foi encontrado")
+			}
+
+			var encontrou bool
+			for _, e := range validator.ValidateDPS(xmlStr) {
+				if strings.Contains(e.Element, "verAplic") {
+					encontrou = true
+				}
+			}
+			if encontrou != tc.wantErr {
+				t.Errorf("erro em verAplic = %v, esperava %v", encontrou, tc.wantErr)
+			}
+		})
+	}
+}

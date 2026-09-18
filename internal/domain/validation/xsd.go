@@ -191,10 +191,10 @@ func (v *StructuralValidator) validateInfDPS(infDPS *etree.Element) []Structural
 	// Validate dhEmi (emission date/time) - required
 	errors = append(errors, v.validateDhEmi(infDPS)...)
 
-	// Validate verAplic (application version) - required
-	errors = append(errors, v.validateRequiredElement(infDPS, "verAplic", "application version")...)
+	// verAplic has its own check: presence is not enough, the length matters.
 
 	// Validate serie (series) - required
+	errors = append(errors, v.validateVerAplic(infDPS)...)
 	errors = append(errors, v.validateSerie(infDPS)...)
 
 	// Validate nDPS (DPS number) - required
@@ -279,6 +279,42 @@ func (v *StructuralValidator) validateDhEmi(infDPS *etree.Element) []StructuralE
 }
 
 // validateSerie validates the serie element.
+// maxVerAplicLength is the limit TSVerAplic sets on verAplic.
+const maxVerAplicLength = 20
+
+// validateVerAplic checks the application version field.
+//
+// It is easy to overflow without noticing: a Go pseudo-version alone is 40
+// characters, and the government rejects the whole declaration over it.
+func (v *StructuralValidator) validateVerAplic(infDPS *etree.Element) []StructuralError {
+	el := infDPS.FindElement("verAplic")
+	if el == nil {
+		return []StructuralError{{
+			Code:    XSDErrorMissingElement,
+			Element: "infDPS/verAplic",
+			Message: "required element 'verAplic' (application version) not found",
+		}}
+	}
+
+	value := strings.TrimSpace(el.Text())
+	switch {
+	case value == "":
+		return []StructuralError{{
+			Code:    XSDErrorInvalidValue,
+			Element: "infDPS/verAplic",
+			Message: "verAplic cannot be empty",
+		}}
+	case len(value) > maxVerAplicLength:
+		return []StructuralError{{
+			Code:    XSDErrorInvalidValue,
+			Element: "infDPS/verAplic",
+			Message: fmt.Sprintf("verAplic cannot exceed %d characters", maxVerAplicLength),
+			Value:   fmt.Sprintf("%d characters", len(value)),
+		}}
+	}
+	return nil
+}
+
 func (v *StructuralValidator) validateSerie(infDPS *etree.Element) []StructuralError {
 	var errors []StructuralError
 

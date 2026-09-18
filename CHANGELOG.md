@@ -105,6 +105,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   Ver [ADR 0003](docs/decisoes/0003-xml-conforme-o-xsd.md).
 - O validador estrutural procurava `cTribNac`, `cLocPrest` e `vServPrest` em
   caminhos que não existem no schema, e exigia `subst`, que é opcional.
+- **O campo `verAplic` estourava o limite do schema em toda DPS emitida.**
+  `TSVerAplic` permite 20 caracteres; o emissor preenchia com `nfse-cli ` mais a
+  pseudo-versão do Go — 49 caracteres. A Sefin rejeitaria a declaração por esse
+  campo sozinho. Truncado, e agora verificado pelo validador estrutural antes da
+  assinatura.
 - **O README documentava uma chave de acesso com 47 dígitos**, escrita à mão e
   nunca conferida. Quem copiasse o exemplo recebia `a chave de acesso deve ter
   exatamente 50 digitos`. Corrigida e coberta por teste.

@@ -304,7 +304,7 @@ func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult,
 	dpsCfg := xmlbuilder.DPSConfig{
 		Environment:        cfg.EnvironmentCode(),
 		EmissionDateTime:   time.Now(),
-		ApplicationVersion: "nfse-cli " + Version(),
+		ApplicationVersion: AppVersion(),
 		Series:             cfg.DPS.Serie,
 		Number:             nota.Numero,
 		CompetenceDate:     competencia,

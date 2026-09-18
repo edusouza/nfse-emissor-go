@@ -26,6 +26,27 @@ func Version() string {
 	return "desenvolvimento"
 }
 
+// maxAppVersionLength is the limit TSVerAplic imposes on verAplic in the DPS
+// and in event requests.
+const maxAppVersionLength = 20
+
+// AppVersion returns the identifier written to verAplic.
+//
+// The field is capped at 20 characters by the schema, while Version() can be a
+// Go pseudo-version like "v0.0.0-20260918131458-fed93cba325f+dirty" — 40
+// characters on its own. Overflowing it gets the whole declaration rejected,
+// so the version is truncated rather than the name dropped: knowing the
+// document came from this tool matters more than knowing the exact build.
+func AppVersion() string {
+	const prefix = "nfse-cli "
+
+	version := Version()
+	if len(prefix)+len(version) <= maxAppVersionLength {
+		return prefix + version
+	}
+	return prefix + version[:maxAppVersionLength-len(prefix)]
+}
+
 func newVersionCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versao",
