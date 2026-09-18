@@ -13,9 +13,10 @@ depender de portal web.
 > As emissões reais já chegaram ao governo, e foi assim que os dois últimos
 > defeitos apareceram: a renegociação TLS (v0.5.0), o digest da assinatura
 > calculado sem a declaração de namespace, o tipo de inscrição federal
-> invertido no identificador e a razão social enviada onde a regra a proíbe
-> (os três na v0.5.2). **Toda DPS gerada antes da v0.5.2 é inválida** e precisa
-> ser emitida de novo.
+> invertido no identificador, a razão social enviada onde a regra a proíbe e o
+> total de tributos escolhido pelo valor em vez do regime (os quatro na
+> v0.5.2). **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida
+> de novo.
 >
 > O que ainda falta confirmar é uma emissão que atravesse inteira, do `POST`
 > até a NFS-e autorizada. É por isso que a numeração segue em `0.x`. Veja o
@@ -357,7 +358,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.4.0 | Cancelamento de NFS-e | pronto |
 | v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
 | v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
-| v0.5.2 | Três correções de emissão: digest sem namespace, tipo de inscrição invertido, razão social indevida | **lançada** |
+| v0.5.2 | Quatro correções de emissão, todas encontradas por rejeições reais da Sefin | **lançada** |
 | v0.6.0 | Substituição de NFS-e | planejado |
 | v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
 

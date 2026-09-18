@@ -15,11 +15,36 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.5.2] - 2026-09-18
 
-Três correções que, juntas, eram tudo que impedia uma emissão de atravessar.
+Quatro correções que, juntas, eram tudo que impedia uma emissão de atravessar.
 Cada uma foi encontrada por uma rejeição real do governo, uma depois da outra, e
 nenhuma teria sido encontrada por inspeção ou por cobertura de testes.
 
 ### Corrigido
+
+- **O total de tributos era escolhido pelo valor configurado, não pelo regime.**
+  A Sefin recusava ME/EPP com `[E0712] Para ME/EPP o indicador de informação de
+  valor total de tributos não pode ser informado`.
+
+  O `totTrib` é um *choice* de um filho só, e qual deles é permitido depende da
+  situação do prestador no Simples Nacional:
+
+  ```
+  E0710 — para MEI,    pTotTribSN nunca pode ser informado
+  E0712 — para ME/EPP, indTotTrib nunca pode ser informado
+  ```
+
+  O construtor escolhia por outro critério: mandava `pTotTribSN` se houvesse um
+  percentual configurado e `indTotTrib` se não houvesse. Errava nos **dois**
+  sentidos — um ME/EPP sem percentual declarava `indTotTrib`, e um MEI com
+  percentual declarava `pTotTribSN`.
+
+  Um ME/EPP que não sabe a própria alíquota declara `pTotTribSN` igual a zero:
+  não existe `indTotTrib` para ele se abster, e o padrão do tipo `TSDec2V2` no
+  XSD admite o zero.
+
+  O `opSimpNac` passou a ser calculado num único lugar, lido pelas duas seções
+  que dependem dele. Estava duplicado, e duas cópias de uma regra são duas
+  chances de divergirem.
 
 - **A razão social do prestador era enviada quando não devia.** A Sefin recusava
   com `[E0121] O nome ou razão social do prestador não deve ser informado quando
@@ -86,6 +111,10 @@ nenhuma teria sido encontrada por inspeção ou por cobertura de testes.
 
 ### Adicionado
 
+- Testes que amarram a escolha do `totTrib` ao regime nos quatro casos — MEI com
+  e sem percentual, ME/EPP com e sem —, citando o texto das regras E0710 e
+  E0712. O teste anterior afirmava o comportamento defeituoso: um MEI emitindo
+  `pTotTribSN`.
 - Testes que amarram o `xNome` ao `tpEmit` nos três valores possíveis, citando o
   texto das regras E0121 e E0122, e que conferem que o prestador continua
   identificado pelo CNPJ.

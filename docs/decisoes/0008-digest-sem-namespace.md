@@ -1,4 +1,4 @@
-# 0008 — Três defeitos que só a emissão real revelou
+# 0008 — Quatro defeitos que só a emissão real revelou
 
 **Status:** Aceita
 **Data:** 2026-09-18
@@ -139,13 +139,34 @@ A correção ficou no construtor do XML, não numa validação. Um campo que só
 existir sob uma condição é melhor não ser montado fora dela: o documento passa a
 não poder ser construído errado, e não sobra nada para conferir depois.
 
+## E um quarto, específico de ME/EPP
+
+`[E0712] Para ME/EPP o indicador de informação de valor total de tributos não
+pode ser informado.`
+
+O `totTrib` é um *choice* de um filho só, e qual é permitido depende do regime:
+
+```
+E0710 — para MEI,    pTotTribSN nunca pode ser informado
+E0712 — para ME/EPP, indTotTrib nunca pode ser informado
+```
+
+O construtor escolhia pelo **valor configurado**, não pelo regime, e errava nos
+dois sentidos. O teste existente afirmava justamente o caso errado — um MEI
+emitindo `pTotTribSN` — o que fez dele um cimento em vez de uma rede.
+
+Este defeito tem um agravante próprio: o fixture de teste do projeto é um MEI, e
+a regra violada vale para ME/EPP. Mesmo um teste honesto não o teria visto, por
+não exercitar o regime. Cobertura de linha não é cobertura de caso.
+
 ## Aprendizado
 
-Os três defeitos têm a mesma assinatura: o código era **internamente
+Os quatro defeitos têm a mesma assinatura: o código era **internamente
 consistente** e discordava de um documento. O digest concordava com o
 verificador; o identificador concordava com os campos do próprio XML; o `xNome`
-era um campo válido, preenchido com o valor certo. Nenhum teste podia falhar,
-porque nenhum teste tinha por onde discordar.
+era um campo válido, preenchido com o valor certo; o `totTrib` tinha exatamente
+um filho, como o schema manda. Nenhum teste podia falhar, porque nenhum teste
+tinha por onde discordar.
 
 O ADR 0004 disse que faltava um teste de ida e volta. Estava certo e era
 insuficiente. Um teste de ida e volta prova **consistência interna**: que o
