@@ -103,6 +103,13 @@ func TestCertInfoMissingFile(t *testing.T) {
 // writeTestPFX builds a throwaway self-signed PKCS#12 file and returns its path.
 func writeTestPFX(t *testing.T, password string, notAfter time.Time) string {
 	t.Helper()
+	return writeTestPFXSubject(t, "EMPRESA TESTE LTDA:12345678000195", password, notAfter)
+}
+
+// writeTestPFXSubject builds a throwaway PKCS#12 file with the given subject
+// common name, which is where ICP-Brasil keeps the holder's CNPJ.
+func writeTestPFXSubject(t *testing.T, commonName, password string, notAfter time.Time) string {
+	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -110,7 +117,7 @@ func writeTestPFX(t *testing.T, password string, notAfter time.Time) string {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(42),
-		Subject:      pkix.Name{CommonName: "EMPRESA TESTE LTDA:12345678000195"},
+		Subject:      pkix.Name{CommonName: commonName},
 		Issuer:       pkix.Name{CommonName: "AC TESTE"},
 		NotBefore:    time.Now().Add(-365 * 24 * time.Hour),
 		NotAfter:     notAfter,

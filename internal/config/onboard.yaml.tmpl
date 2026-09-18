@@ -1,0 +1,64 @@
+# Configuracao do emissor de NFS-e, gerada por 'nfse onboard'.
+#
+# De onde veio cada dado:
+{{- range .Origens }}
+#   {{ . }}
+{{- end }}
+#
+# Campos em branco ainda precisam ser preenchidos. Rode 'nfse config check'
+# para conferir o que falta.
+
+# Ambiente do Sistema Nacional NFS-e.
+#   producao-restrita  ambiente de testes; as notas NAO tem valor fiscal
+#   producao           ambiente real; as notas tem valor fiscal
+ambiente: {{ .Ambiente }}
+
+certificado:
+  # Caminho do seu certificado A1 (.pfx ou .p12).  OBRIGATORIO
+  arquivo: {{ q .CertificadoArquivo }}
+  # A senha nao fica aqui. Use a variavel de ambiente NFSE_CERT_SENHA
+  # ou deixe o nfse perguntar no terminal.
+
+prestador:
+  cnpj: {{ q .CNPJ }}
+  nome: {{ q .Nome }}
+  # mei | me_epp — define se a aliquota de ISS pode ser informada.
+  regime_tributario: {{ q .RegimeTributario }}
+  # Codigo IBGE do municipio do prestador, 7 digitos.
+  municipio: {{ q .Municipio }}
+  # Preencha se o seu municipio exigir inscricao municipal na nota.
+  inscricao_municipal: ""
+
+dps:
+  # Serie da DPS, 5 digitos.
+  serie: {{ q .Serie }}
+
+# Valores aplicados a toda nota, para nao precisar repeti-los na linha de
+# comando. Tudo aqui pode ser sobrescrito pelo arquivo passado em --yaml
+# ou por uma flag.
+padroes:
+  servico:
+    # Codigo de tributacao nacional, 6 digitos (LC 116/2003).   OBRIGATORIO
+    # Consulte a lista nacional de servicos em
+    # docs/anexos/ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL-SNNFSe-v1.00-20251210.xlsx
+    codigo_tributacao_nacional: ""
+    # Onde o servico e prestado. Se vazio, usa prestador.municipio.
+    municipio_prestacao: ""
+    # Descricao usada quando --descricao nao e informado.
+    descricao: ""
+
+  valores:
+    # Aliquota de ISS em porcentagem.
+    # MEI recolhe o ISS pelo DAS, entao a aliquota e 0.
+    # ME/EPP: so informe a aliquota quando o tomador retiver o ISSQN.
+    iss_aliquota: 0
+
+  tomador:
+    # Quando true, a nota sai sem identificacao do tomador — o caso de
+    # venda ao publico em geral. Para identificar o cliente, use as flags
+    # --tomador-cnpj / --tomador-cpf / --tomador-nome, ou um arquivo --yaml.
+    nao_identificado: true
+
+saida:
+  # Onde gravar os XMLs gerados.
+  diretorio: ./notas

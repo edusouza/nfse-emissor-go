@@ -23,6 +23,7 @@ Nacional. Cada etapa pode ser executada isoladamente.`,
 	root.AddCommand(
 		newVersionCommand(),
 		newCertCommand(),
+		newOnboardCommand(),
 		newConfigCommand(),
 		newEmitirCommand(),
 		newConsultarCommand(),

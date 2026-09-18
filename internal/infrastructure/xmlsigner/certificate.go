@@ -10,8 +10,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 )
 
 // CertificateInfo contains the parsed certificate information from a PFX/P12 file.
@@ -167,6 +170,45 @@ func (c *CertificateInfo) GetSubjectCN() string {
 		return ""
 	}
 	return c.Certificate.Subject.CommonName
+}
+
+// SubjectCNPJ returns the CNPJ the certificate was issued to, or an empty
+// string when it cannot be read.
+//
+// ICP-Brasil writes the holder of an e-CNPJ as "RAZAO SOCIAL:CNPJ" in the
+// subject's common name, so the taxpayer number travels with the file. Reading
+// it saves the emitter from asking for something it already has — and a number
+// the user cannot mistype.
+//
+// The check digits are verified: a common name that merely ends in fourteen
+// digits is not evidence enough to fill a fiscal document with.
+func (c *CertificateInfo) SubjectCNPJ() string {
+	cn := c.GetSubjectCN()
+
+	i := strings.LastIndex(cn, ":")
+	if i < 0 {
+		return ""
+	}
+
+	candidate := cnpjcpf.CleanCNPJ(cn[i+1:])
+	if !cnpjcpf.ValidateCNPJ(candidate) {
+		return ""
+	}
+	return candidate
+}
+
+// SubjectHolderName returns the holder's name without the CNPJ suffix that
+// ICP-Brasil appends to the common name.
+//
+// For an e-CNPJ that name is the razão social as the Receita Federal has it,
+// which is exactly what the DPS carries in xNome.
+func (c *CertificateInfo) SubjectHolderName() string {
+	cn := c.GetSubjectCN()
+
+	if c.SubjectCNPJ() == "" {
+		return cn
+	}
+	return strings.TrimSpace(cn[:strings.LastIndex(cn, ":")])
 }
 
 // GetIssuerCN returns the Common Name (CN) from the certificate issuer.
