@@ -7,19 +7,20 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida,
-> assina e envia a DPS à Sefin Nacional.
+> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O ciclo completo
+> funciona: a v0.5.2 é a primeira versão que **emitiu uma NFS-e de verdade**,
+> em produção restrita — DPS montada, validada, assinada, aceita pela Sefin
+> Nacional e devolvida como nota autorizada.
 >
-> As emissões reais já chegaram ao governo, e foi assim que os dois últimos
-> defeitos apareceram: a renegociação TLS (v0.5.0), o digest da assinatura
-> calculado sem a declaração de namespace, o tipo de inscrição federal
-> invertido no identificador, a razão social enviada onde a regra a proíbe e o
-> total de tributos escolhido pelo valor em vez do regime (os quatro na
-> v0.5.2). **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida
-> de novo.
+> Chegar aqui custou cinco defeitos, e cada um foi encontrado por uma rejeição
+> do governo, nunca por inspeção: a renegociação TLS (v0.5.0), e na v0.5.2 o
+> digest da assinatura calculado sem a declaração de namespace, o tipo de
+> inscrição federal invertido no identificador, a razão social enviada onde a
+> regra a proíbe e o total de tributos escolhido pelo valor em vez do regime.
+> **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida de novo.
 >
-> O que ainda falta confirmar é uma emissão que atravesse inteira, do `POST`
-> até a NFS-e autorizada. É por isso que a numeração segue em `0.x`. Veja o
+> O que falta para a `1.0.0` é uma emissão em **produção** — com valor fiscal.
+> Tecnicamente é o mesmo caminho; a diferença é a consequência de errar. Veja o
 > [roadmap](#roadmap).
 
 ## Instalação
@@ -360,7 +361,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
 | v0.5.2 | Quatro correções de emissão, todas encontradas por rejeições reais da Sefin | **lançada** |
 | v0.6.0 | Substituição de NFS-e | planejado |
-| v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
+| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 

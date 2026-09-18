@@ -159,6 +159,16 @@ Este defeito tem um agravante próprio: o fixture de teste do projeto é um MEI,
 a regra violada vale para ME/EPP. Mesmo um teste honesto não o teria visto, por
 não exercitar o regime. Cobertura de linha não é cobertura de caso.
 
+## O desfecho
+
+A emissão seguinte atravessou. A Sefin aceitou a DPS e devolveu a NFS-e
+autorizada, com chave de acesso de 50 dígitos que o validador do próprio projeto
+aceita. É a primeira nota que este emissor produziu de fato, em produção
+restrita.
+
+O que ainda não foi exercitado é o ambiente de produção, com valor fiscal.
+Tecnicamente é o mesmo caminho — muda o endereço e a consequência de errar.
+
 ## Aprendizado
 
 Os quatro defeitos têm a mesma assinatura: o código era **internamente
@@ -184,6 +194,17 @@ Há um corolário prático: **constantes nomeadas não se auto-verificam**. Um p
 estava invertido. O que o prende à realidade é um teste que cita a regra, não o
 nome da constante — e uma validação que decide pelas constantes, nunca por um
 literal que pode discordar delas em silêncio.
+
+Há um limite disso que esta sequência deixou claro. Três dos quatro defeitos
+estavam documentados em artefatos que já estavam no repositório — a regra do
+tipo de inscrição, a do `xNome`, a do `totTrib`. Não foi falta de fonte: foi
+falta de confronto. O XSD foi usado para validar a estrutura e a planilha para
+traduzir rejeições, e ninguém tinha lido as regras que dizem *quando* cada campo
+pode existir. Ter o documento versionado não é o mesmo que tê-lo lido.
+
+O que finalmente os encontrou foi a coisa mais barata disponível o tempo todo:
+mandar uma nota para o ambiente de teste do governo, que não gera documento
+fiscal. Cinco tentativas, cinco defeitos, uma tarde.
 
 Vale notar também o custo da hipótese confortável. A primeira explicação —
 "certificado errado" — era plausível, tinha respaldo na regra oficial, e

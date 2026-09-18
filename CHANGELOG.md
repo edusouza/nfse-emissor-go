@@ -15,9 +15,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.5.2] - 2026-09-18
 
-Quatro correções que, juntas, eram tudo que impedia uma emissão de atravessar.
-Cada uma foi encontrada por uma rejeição real do governo, uma depois da outra, e
-nenhuma teria sido encontrada por inspeção ou por cobertura de testes.
+**A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o
+ciclo completo atravessou: DPS montada, validada, assinada, aceita pela Sefin
+Nacional e devolvida como nota autorizada, com chave de acesso de 50 dígitos que
+o próprio validador do projeto aceita.
+
+Quatro correções que, juntas, eram tudo que impedia isso. Cada uma foi
+encontrada por uma rejeição real do governo, uma depois da outra, e nenhuma
+teria sido encontrada por inspeção ou por cobertura de testes.
 
 ### Corrigido
 
