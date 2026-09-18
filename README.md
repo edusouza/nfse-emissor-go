@@ -408,6 +408,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
 | v0.4.0 | Cancelamento de NFS-e | pronto |
 | v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
+| v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
 | v0.6.0 | `nfse onboard`: configuração preenchida a partir do certificado | **lançada** |
 | v0.7.0 | Busca do código do serviço ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | planejado |
 | v0.8.0 | Substituição de NFS-e | planejado |

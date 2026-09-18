@@ -177,11 +177,14 @@ func (c *CertificateInfo) GetSubjectCN() string {
 //
 // ICP-Brasil writes the holder of an e-CNPJ as "RAZAO SOCIAL:CNPJ" in the
 // subject's common name, so the taxpayer number travels with the file. Reading
-// it saves the emitter from asking for something it already has — and a number
-// the user cannot mistype.
+// it serves two callers: onboard fills the configuration from it instead of
+// asking for a number the user cannot mistype, and emitir/enviar check, before
+// opening a connection, that the certificate belongs to the provider named in
+// the document.
 //
 // The check digits are verified: a common name that merely ends in fourteen
-// digits is not evidence enough to fill a fiscal document with.
+// digits is not evidence enough to fill a fiscal document with, nor to refuse
+// one.
 func (c *CertificateInfo) SubjectCNPJ() string {
 	cn := c.GetSubjectCN()
 

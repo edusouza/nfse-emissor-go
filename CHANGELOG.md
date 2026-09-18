@@ -38,10 +38,10 @@ arquivo em branco com cinco campos obrigatórios.
   que o certificado informou e o resto entra na lista de pendências. Uma
   indisponibilidade de terceiro não pode virar um beco sem saída para quem só
   quer começar.
-- `xmlsigner.CertificateInfo.SubjectCNPJ` e `SubjectHolderName`, que leem o
-  titular do certificado. Os dígitos verificadores do CNPJ são conferidos: um
-  *common name* que termina em quatorze dígitos não é evidência suficiente para
-  preencher um documento fiscal.
+- O `onboard` reaproveita `xmlsigner.CertificateInfo.SubjectCNPJ` e
+  `SubjectHolderName`, que a 0.5.1 introduziu para conferir se o certificado é
+  do prestador. A mesma leitura do titular serve para as duas coisas: recusar
+  uma emissão com o certificado errado e preencher a configuração sem digitação.
 
 ### Alterado
 
@@ -61,6 +61,47 @@ arquivo em branco com cinco campos obrigatórios.
 - Sobra um campo obrigatório que nenhuma consulta responde:
   `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
   Ver [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+## [0.5.1] - 2026-09-18
+
+### Corrigido
+
+- **Enviar com o certificado errado só falhava na Sefin, e a mensagem mandava
+  procurar no lugar errado.** Quem apontasse `--cert` para o certificado
+  descartável de `exemplos/` recebia `403` sem corpo de erro, e o emissor
+  sugeria procurar proxy e firewall — quando a resposta estava na máquina: o
+  certificado era de outro CNPJ.
+
+  `emitir` e `enviar` passam a comparar o CNPJ do certificado com o do
+  prestador **antes de abrir a conexão**, e a recusa nomeia os dois:
+
+  ```
+  erro: o certificado nao e do prestador desta nota:
+    Certificado  12.345.678/0001-95 (EMPRESA EXEMPLO LTDA)
+    Prestador    11.222.333/0001-81
+  ```
+
+  No `emitir` a checagem roda **antes de assinar**. Uma DPS assinada com o
+  certificado errado não se salva reenviando com o certo: a assinatura dentro
+  do XML é parte do que o governo valida, então o arquivo nasce morto. Antes,
+  o emissor gravava esse arquivo sem reclamar.
+- Um `403` sem envelope da Sefin passa a levantar primeiro a hipótese do
+  certificado — não ser um A1 da ICP-Brasil, estar vencido, ou não pertencer a
+  uma parte da nota. Proxy e firewall continuam citados, agora em segundo
+  lugar, que é onde a probabilidade os coloca num endpoint de TLS mútuo.
+
+### Adicionado
+
+- `xmlsigner.CertificateInfo.SubjectCNPJ` e `SubjectHolderName`, que leem o
+  titular do certificado. A ICP-Brasil escreve o portador de um e-CNPJ como
+  `RAZÃO SOCIAL:CNPJ` no *common name*. Os dígitos verificadores são
+  conferidos: um CN terminado em quatorze dígitos não é evidência suficiente.
+
+### Nota sobre a verificação
+
+A comparação só opina quando consegue ler o CNPJ do certificado. Só a
+ICP-Brasil garante o formato `RAZÃO SOCIAL:CNPJ`; recusar tudo que fuja disso
+travaria quem tem um certificado com outro leiaute. Na dúvida, o emissor cala
+e deixa o governo decidir.
 
 ## [0.5.0] - 2026-09-18
 

@@ -16,6 +16,11 @@ import (
 
 const testCertPassword = "senha-de-teste"
 
+// testCertCNPJ is the CNPJ in writeTestPFX's common name. The workspace uses it
+// so that the emitter's certificate-versus-provider check passes by default;
+// the tests that exercise a mismatch ask for a different one.
+const testCertCNPJ = "12345678000195"
+
 // workspace prepares a directory containing a valid nfse.yaml and a throwaway
 // certificate, and returns its path. The provider is a MEI, which is the common
 // case in these tests.
@@ -28,6 +33,18 @@ func workspace(t *testing.T) string {
 // whether an ISS rate may be declared at all, so tests that exercise pAliq need
 // to pick one explicitly.
 func workspaceRegime(t *testing.T, regime string) string {
+	t.Helper()
+	return workspaceFor(t, regime, testCertCNPJ)
+}
+
+// workspaceCNPJ builds a workspace whose provider is someone other than the
+// test certificate's holder, for the checks that compare the two.
+func workspaceCNPJ(t *testing.T, cnpj string) string {
+	t.Helper()
+	return workspaceFor(t, config.RegimeMEI, cnpj)
+}
+
+func workspaceFor(t *testing.T, regime, cnpj string) string {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -47,7 +64,7 @@ ambiente: producao-restrita
 certificado:
   arquivo: ` + localCert + `
 prestador:
-  cnpj: "12345678000195"
+  cnpj: "` + cnpj + `"
   nome: EMPRESA EXEMPLO LTDA
   regime_tributario: ` + regime + `
   inscricao_municipal: "1234567"
