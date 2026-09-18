@@ -29,7 +29,8 @@ type DPSConfig struct {
 	// CompetenceDate is the date of service competence
 	CompetenceDate time.Time
 
-	// EmitterType: 1 = service provider, 2 = service taker
+	// EmitterType is tpEmit: who is sending the declaration. It decides
+	// whether the provider's name travels with it — see buildProvider.
 	EmitterType int
 
 	// MunicipalityCode is the 7-digit IBGE code where the DPS is emitted
@@ -165,6 +166,31 @@ type DPSBuildResult struct {
 	XMLBytes []byte
 }
 
+// Simples Nacional status, as opSimpNac carries it in the DPS.
+const (
+	// SimplesNaoOptante is 1: the provider is not in the Simples Nacional.
+	SimplesNaoOptante = 1
+
+	// SimplesMEI is 2.
+	SimplesMEI = 2
+
+	// SimplesMEEPP is 3.
+	SimplesMEEPP = 3
+)
+
+// Emitter types, as tpEmit carries them in the DPS.
+const (
+	// EmitterTypeProvider is 1: the provider of the service sends the
+	// declaration. The only case this CLI emits.
+	EmitterTypeProvider = 1
+
+	// EmitterTypeTaker is 2: the taker of the service sends it.
+	EmitterTypeTaker = 2
+
+	// EmitterTypeIntermediary is 3: the intermediary sends it.
+	EmitterTypeIntermediary = 3
+)
+
 // DPSBuilder builds DPS XML documents according to the Sistema Nacional NFS-e specification.
 type DPSBuilder struct {
 	config DPSConfig
@@ -188,7 +214,7 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 		b.config.ApplicationVersion = "1.0.0"
 	}
 	if b.config.EmitterType == 0 {
-		b.config.EmitterType = 1 // Default to provider
+		b.config.EmitterType = EmitterTypeProvider
 	}
 	// A nil Substitution means an ordinary emission and omits <subst> entirely.
 
@@ -242,13 +268,22 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 	}, nil
 }
 
+// simplesStatus returns opSimpNac for the configured tax regime.
+//
+// Two sections of the DPS depend on it — the provider block and the total-tax
+// choice — and they must not disagree, so both read it from here.
+func (b *DPSBuilder) simplesStatus() int {
+	if b.config.Provider.TaxRegime == "me_epp" {
+		return SimplesMEEPP
+	}
+	return SimplesMEI
+}
+
 // buildProvider creates the provider (prestador) XML element.
 func (b *DPSBuilder) buildProvider() prestXML {
-	// opSimpNac: 1 = not a Simples Nacional opter, 2 = MEI, 3 = ME/EPP.
-	opSimpNac := 2
+	opSimpNac := b.simplesStatus()
 	regApTribSN := 0
-	if b.config.Provider.TaxRegime == "me_epp" {
-		opSimpNac = 3
+	if opSimpNac == SimplesMEEPP {
 		// regApTribSN says which taxes are still assessed under the Simples.
 		// It decides whether pAliq may be declared, so the caller's choice
 		// matters; 1 (everything under the Simples) is the common case.
@@ -259,8 +294,7 @@ func (b *DPSBuilder) buildProvider() prestXML {
 	}
 
 	prest := prestXML{
-		CNPJ:  cleanTaxID(b.config.Provider.CNPJ),
-		XNome: b.config.Provider.Name,
+		CNPJ: cleanTaxID(b.config.Provider.CNPJ),
 		RegTrib: regTribXML{
 			OpSimpNac:   opSimpNac,
 			RegApTribSN: regApTribSN,
@@ -271,6 +305,19 @@ func (b *DPSBuilder) buildProvider() prestXML {
 
 	if b.config.Provider.MunicipalRegistration != "" {
 		prest.IM = b.config.Provider.MunicipalRegistration
+	}
+
+	// The name is the government's to fill in when it already knows who is
+	// emitting. Rules E0121 and E0122 of the business-rules spreadsheet:
+	//
+	//	tpEmit = 1 (the provider emits)  → xNome must NOT be informed
+	//	tpEmit = 2 or 3                  → xNome MUST be informed
+	//
+	// Sending it as the provider is a rejection, not a redundancy, so the
+	// condition belongs here rather than in a validation: a document that
+	// cannot be built wrong needs nothing checking it afterwards.
+	if b.config.EmitterType != EmitterTypeProvider {
+		prest.XNome = b.config.Provider.Name
 	}
 
 	return prest
@@ -503,13 +550,25 @@ func (b *DPSBuilder) buildTaxSection() tribXML {
 // buildTotalTaxSection creates the <totTrib> element.
 //
 // The schema models totTrib as a choice of exactly one of vTotTrib, pTotTrib,
-// indTotTrib or pTotTribSN, so only one may be emitted. A Simples Nacional
-// provider who knows their rate declares pTotTribSN; otherwise indTotTrib = 0
-// declares that the totals are not being informed.
+// indTotTrib or pTotTribSN, and which one is allowed depends on the provider's
+// standing in the Simples Nacional, not on what the caller happens to know:
+//
+//	E0710 — for a MEI, pTotTribSN may never be informed;
+//	E0712 — for a ME/EPP, indTotTrib may never be informed.
+//
+// Choosing by the configured value instead of by the regime was wrong in both
+// directions: a ME/EPP without a rate declared indTotTrib, and a MEI with one
+// declared pTotTribSN.
+//
+// A ME/EPP that does not know its rate declares pTotTribSN = 0, which the
+// schema's own pattern for TSDec2V2 admits. It has no indTotTrib to opt out
+// with, so zero is the honest way to say nothing is being estimated.
 func (b *DPSBuilder) buildTotalTaxSection() totTribXML {
-	if b.config.Values.TotalTaxPercentSN > 0 {
+	if b.simplesStatus() == SimplesMEEPP {
 		return totTribXML{PTotTribSN: formatMoney(b.config.Values.TotalTaxPercentSN)}
 	}
+
+	// A MEI pays through the DAS and estimates nothing here.
 	notInformed := 0
 	return totTribXML{IndTotTrib: &notInformed}
 }

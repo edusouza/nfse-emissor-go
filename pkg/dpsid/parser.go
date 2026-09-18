@@ -42,13 +42,19 @@ const (
 	NumberLength = 15
 )
 
-// Registration type constants.
+// Registration type codes, as the government defines them in the E0004 rule of
+// docs/anexos/ANEXO_I-SEFIN_ADN-DPS_NFSe-SNNFSe-v1.00-20251226.xlsx:
+//
+//	Tipo de inscrição Federal = 1 / Inscrição Federal = CPF emitente da DPS;
+//	Tipo de inscrição Federal = 2 / Inscrição Federal = CNPJ emitente da DPS;
+//
+// CPF is 1 and CNPJ is 2 — the reverse of the order the names suggest.
 const (
-	// RegistrationTypeCNPJ indicates the provider is identified by CNPJ (company).
-	RegistrationTypeCNPJ = 1
-
 	// RegistrationTypeCPF indicates the provider is identified by CPF (individual).
-	RegistrationTypeCPF = 2
+	RegistrationTypeCPF = 1
+
+	// RegistrationTypeCNPJ indicates the provider is identified by CNPJ (company).
+	RegistrationTypeCNPJ = 2
 )
 
 // Byte offsets for parsing the DPS ID.

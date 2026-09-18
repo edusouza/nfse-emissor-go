@@ -22,7 +22,6 @@ type consultarFlags struct {
 
 	dpsID         string
 	somenteExiste bool
-	sobrescrever  bool
 }
 
 func newConsultarCommand() *cobra.Command {
@@ -51,7 +50,6 @@ a quem consta na nota (prestador, tomador ou intermediario).`,
 	fl.StringVarP(&f.outputDir, "saida", "o", "", "diretorio onde gravar o XML")
 	fl.StringVar(&f.dpsID, "dps", "", "consulta pelo identificador da DPS em vez da chave de acesso")
 	fl.BoolVar(&f.somenteExiste, "existe", false, "com --dps, apenas informa se a NFS-e foi gerada")
-	fl.BoolVar(&f.sobrescrever, "sobrescrever", false, "substitui um arquivo ja existente")
 
 	return cmd
 }
@@ -155,8 +153,17 @@ func consultarPorDPS(cmd *cobra.Command, cfg *config.Config, f *consultarFlags, 
 		return explainQueryError(err)
 	}
 
+	// The swagger marks idDps as required in DpsGetResponse, and the service
+	// leaves it out: the first real lookup printed a blank line where the
+	// identifier belongs. It is not worth a round trip to learn something the
+	// caller just typed, so the queried identifier fills in for it.
+	dpsID := lookup.DPSID
+	if dpsID == "" {
+		dpsID = f.dpsID
+	}
+
 	fmt.Fprintf(out, "NFS-e gerada a partir da DPS\n")
-	fmt.Fprintf(out, "  DPS              %s\n", lookup.DPSID)
+	fmt.Fprintf(out, "  DPS              %s\n", dpsID)
 	fmt.Fprintf(out, "  Chave de acesso  %s\n", lookup.AccessKey)
 	fmt.Fprintf(out, "  Ambiente         %s\n", sefin.EnvironmentName(lookup.EnvironmentCode))
 	fmt.Fprintf(out, "\nBaixe o XML com:\n  nfse consultar %s\n", lookup.AccessKey)
@@ -204,8 +211,12 @@ func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, result *sefin.NFSeR
 		return "", fmt.Errorf("nao foi possivel criar o diretorio de saida: %w", err)
 	}
 
+	// A query overwrites without asking. Consulting is idempotent and the NFS-e
+	// is immutable at the government, so a second fetch of the same access key
+	// brings back the same document — refusing to write it protected nothing and
+	// turned a harmless repeat into an error.
 	path := filepath.Join(dir, result.AccessKey+"-nfse.xml")
-	if err := writeNew(path, result.NFSeXML, f.sobrescrever); err != nil {
+	if err := writeNew(path, result.NFSeXML, true); err != nil {
 		return "", err
 	}
 	return path, nil

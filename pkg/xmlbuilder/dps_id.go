@@ -52,18 +52,23 @@ func GenerateDPSID(config DPSIDConfig) (string, error) {
 	fedReg = strings.ReplaceAll(fedReg, "-", "")
 	fedReg = strings.ReplaceAll(fedReg, "/", "")
 
-	if config.RegistrationType == 1 {
-		// CNPJ must be 14 digits
+	// Branch on the named constants, not on a literal: the two codes are the
+	// reverse of what their names suggest, and a bare 1 here read as CNPJ while
+	// the government reads it as CPF.
+	switch config.RegistrationType {
+	case RegistrationTypeCNPJ:
 		if len(fedReg) != 14 {
 			return "", fmt.Errorf("CNPJ must be 14 digits, got %d", len(fedReg))
 		}
-	} else {
-		// CPF must be 11 digits, pad to 14
+	case RegistrationTypeCPF:
 		if len(fedReg) != 11 {
 			return "", fmt.Errorf("CPF must be 11 digits, got %d", len(fedReg))
 		}
-		// Pad CPF to 14 digits with leading zeros
+		// The identifier carries 14 positions either way; a CPF is padded.
 		fedReg = fmt.Sprintf("%014s", fedReg)
+	default:
+		return "", fmt.Errorf("registration type must be %d (CPF) or %d (CNPJ), got %d",
+			RegistrationTypeCPF, RegistrationTypeCNPJ, config.RegistrationType)
 	}
 
 	if !isAllDigits(fedReg) {
@@ -145,8 +150,19 @@ func isAllDigits(s string) bool {
 	return true
 }
 
-// RegistrationTypeCNPJ represents a CNPJ registration type.
-const RegistrationTypeCNPJ = 1
+// Registration type codes, as the government defines them in the E0004 rule of
+// docs/anexos/ANEXO_I-SEFIN_ADN-DPS_NFSe-SNNFSe-v1.00-20251226.xlsx:
+//
+//	Tipo de inscrição Federal = 1 / Inscrição Federal = CPF emitente da DPS;
+//	Tipo de inscrição Federal = 2 / Inscrição Federal = CNPJ emitente da DPS;
+//
+// CPF is 1 and CNPJ is 2 — the reverse of the order the names suggest, and of
+// what this constant pair said until the government rejected every emission
+// with E0004.
+const (
+	// RegistrationTypeCPF identifies an emitter by CPF (individual).
+	RegistrationTypeCPF = 1
 
-// RegistrationTypeCPF represents a CPF registration type.
-const RegistrationTypeCPF = 2
+	// RegistrationTypeCNPJ identifies an emitter by CNPJ (company).
+	RegistrationTypeCNPJ = 2
+)
