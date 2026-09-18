@@ -87,6 +87,13 @@ func runEnviar(cmd *cobra.Command, path string, f *enviarFlags) error {
 		return err
 	}
 
+	// The provider comes from the file, not from the configuration: this command
+	// sends a document it did not build, and the certificate has to match what
+	// is inside it.
+	if err := ensureCertificateBelongsToProvider(certInfo, dps.providerCNPJ); err != nil {
+		return err
+	}
+
 	if err := confirmTransmission(cmd, cfg, f, dps); err != nil {
 		return err
 	}
@@ -125,8 +132,9 @@ func runEnviar(cmd *cobra.Command, path string, f *enviarFlags) error {
 // signedDPS is what the file tells us about the document being sent, which is
 // all this command knows: it never rebuilds the declaration.
 type signedDPS struct {
-	id    string
-	value string
+	id           string
+	value        string
+	providerCNPJ string
 }
 
 // inspectSignedDPS reads back the identity of a DPS on disk and refuses a file
@@ -156,6 +164,9 @@ func inspectSignedDPS(xml, path string) (signedDPS, error) {
 	}
 	if v := doc.FindElement("DPS/infDPS/valores/vServPrest/vServ"); v != nil {
 		dps.value = v.Text()
+	}
+	if p := doc.FindElement("DPS/infDPS/prest/CNPJ"); p != nil {
+		dps.providerCNPJ = p.Text()
 	}
 	return dps, nil
 }
