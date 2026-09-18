@@ -9,6 +9,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **Numeração automática da DPS.** `--numero` virou opcional: sem ele, o `nfse`
+  segue a sequência da série. O último número usado fica em
+  `.nfse-estado.json`, gravado de forma atômica e só depois do XML existir em
+  disco — uma gravação que falha não queima um número.
+- **`nfse numero ver` e `nfse numero definir`** — consultam e ajustam o
+  contador, para quem migra de outro emissor ou precisa realinhar depois de
+  emitir de outra máquina. Retroceder a contagem avisa sobre o risco de
+  repetição.
 - **`nfse cancelar <chave-de-acesso>`** — monta o pedido de registro de evento
   de cancelamento, assina e envia. Motivos: `erro-emissao`, `nao-prestado` e
   `outros`, correspondendo aos códigos 1, 2 e 9 de `TSCodJustCanc`.

@@ -87,7 +87,7 @@ confirmacao no terminal; use --confirmar para dispensa-la em scripts.`,
 	fl.StringVarP(&f.password, "senha", "s", "", "senha do certificado (prefira "+envCertPassword+")")
 	fl.StringVarP(&f.outputDir, "saida", "o", "", "diretorio onde gravar o XML")
 
-	fl.StringVarP(&f.numero, "numero", "n", "", "numero da DPS")
+	fl.StringVarP(&f.numero, "numero", "n", "", "numero da DPS (padrao: o proximo da serie)")
 	fl.StringVar(&f.competencia, "competencia", "", "data de competencia (AAAA-MM-DD; padrao: hoje)")
 	fl.StringVarP(&f.descricao, "descricao", "d", "", "descricao do servico prestado")
 	fl.StringVar(&f.codigo, "codigo-servico", "", "codigo de tributacao nacional (6 digitos)")
@@ -124,7 +124,13 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return fmt.Errorf("--enviar e --sem-assinar se excluem: a Sefin so aceita uma DPS assinada")
 	}
 
-	nota, err := resolveNota(cmd, cfg, f)
+	statePath := config.StatePath(f.configPath)
+	state, err := config.LoadState(statePath)
+	if err != nil {
+		return err
+	}
+
+	nota, err := resolveNota(cmd, cfg, f, state)
 	if err != nil {
 		return err
 	}
@@ -168,6 +174,13 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 
 	dpsPath, err := writeDPS(cfg, f, built.DPSID, signedXML, true)
 	if err != nil {
+		return err
+	}
+
+	// Record only after the file exists. Advancing the counter for a document
+	// that was never written would skip a number for no reason.
+	state.Record(cfg.DPS.Serie, nota.Numero)
+	if err := state.Save(statePath); err != nil {
 		return err
 	}
 
@@ -225,8 +238,9 @@ func confirmProduction(cmd *cobra.Command, cfg *config.Config, f *emitirFlags, n
 	}
 }
 
-// resolveNota layers the config defaults, the --yaml file and the flags.
-func resolveNota(cmd *cobra.Command, cfg *config.Config, f *emitirFlags) (config.Nota, error) {
+// resolveNota layers the config defaults, the --yaml file and the flags, and
+// supplies a DPS number when none of them did.
+func resolveNota(cmd *cobra.Command, cfg *config.Config, f *emitirFlags, state *config.State) (config.Nota, error) {
 	nota := cfg.Padroes
 
 	if f.notaPath != "" {
@@ -237,7 +251,15 @@ func resolveNota(cmd *cobra.Command, cfg *config.Config, f *emitirFlags) (config
 		nota = nota.Merge(*fromFile)
 	}
 
-	return nota.Merge(notaFromFlags(cmd, f)), nil
+	nota = nota.Merge(notaFromFlags(cmd, f))
+
+	// Remembering the last number is what turns "what number am I on?" from
+	// the user's problem into the tool's.
+	if nota.Numero == "" {
+		nota.Numero = state.NextNumber(cfg.DPS.Serie)
+	}
+
+	return nota, nil
 }
 
 // notaFromFlags builds an override containing only the flags actually given,

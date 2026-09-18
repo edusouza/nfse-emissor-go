@@ -268,12 +268,14 @@ func TestEmitir_ReportsMissingFields(t *testing.T) {
 		t.Fatalf("esperava erro por falta de dados obrigatorios\n%s", out)
 	}
 
-	// The message must name every missing field at once, so the user is not
-	// forced to rerun the command once per problem.
-	for _, want := range []string{"numero", "valor_servico"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("a mensagem de erro nao menciona %q: %v", want, err)
-		}
+	// The message names what is actually missing. The DPS number is not among
+	// them — it comes from the series counter — and neither is the description,
+	// which this workspace supplies through the config defaults.
+	if !strings.Contains(err.Error(), "valor_servico") {
+		t.Errorf("a mensagem de erro nao menciona o campo que falta: %v", err)
+	}
+	if strings.Contains(err.Error(), "numero") {
+		t.Errorf("o numero deveria vir do contador, nao ser cobrado: %v", err)
 	}
 }
 
@@ -327,5 +329,92 @@ func TestEmitir_RefusesSilentOverwrite(t *testing.T) {
 	}
 	if !strings.Contains(onlyXML(t, dir), "Segunda") {
 		t.Error("--sobrescrever nao substituiu o arquivo")
+	}
+}
+
+// TestEmitir_NumeracaoAutomatica covers the counter that removes "which number
+// am I on?" from the user's head. Repeating a number is not merely
+// inconvenient: it collides on the DPS identifier, and the government rejects
+// the second one.
+func TestEmitir_NumeracaoAutomatica(t *testing.T) {
+	dir := workspace(t)
+
+	numeroDe := func(t *testing.T, saida string) string {
+		t.Helper()
+		// The DPS identifier ends with the 15-digit, zero-padded number.
+		for _, linha := range strings.Split(saida, "\n") {
+			if strings.HasPrefix(linha, "DPS DPS") {
+				id := strings.TrimPrefix(linha, "DPS ")
+				return strings.TrimLeft(id[len(id)-15:], "0")
+			}
+		}
+		t.Fatalf("nao encontrei o identificador na saida:\n%s", saida)
+		return ""
+	}
+
+	primeira, err := runEmit(t, dir, "--valor", "100", "--descricao", "Primeira")
+	if err != nil {
+		t.Fatalf("primeira emissao falhou: %v\n%s", err, primeira)
+	}
+	if got := numeroDe(t, primeira); got != "1" {
+		t.Errorf("primeiro numero = %q, esperava 1", got)
+	}
+
+	segunda, err := runEmit(t, dir, "--valor", "200", "--descricao", "Segunda")
+	if err != nil {
+		t.Fatalf("segunda emissao falhou: %v\n%s", err, segunda)
+	}
+	if got := numeroDe(t, segunda); got != "2" {
+		t.Errorf("segundo numero = %q, esperava 2", got)
+	}
+
+	// An explicit number is still honoured, and advances the counter past it.
+	explicita, err := runEmit(t, dir, "--numero", "10", "--valor", "300", "--descricao", "Explicita")
+	if err != nil {
+		t.Fatalf("emissao explicita falhou: %v\n%s", err, explicita)
+	}
+
+	seguinte, err := runEmit(t, dir, "--valor", "400", "--descricao", "Seguinte")
+	if err != nil {
+		t.Fatalf("emissao seguinte falhou: %v\n%s", err, seguinte)
+	}
+	if got := numeroDe(t, seguinte); got != "11" {
+		t.Errorf("numero apos o explicito = %q, esperava 11", got)
+	}
+
+	// Filling a gap below the counter must not drag it backwards, or the next
+	// automatic number would collide with one already used.
+	if _, err := runEmit(t, dir, "--numero", "5", "--valor", "500", "--descricao", "Lacuna"); err != nil {
+		t.Fatalf("emissao de lacuna falhou: %v", err)
+	}
+	depois, err := runEmit(t, dir, "--valor", "600", "--descricao", "Depois da lacuna")
+	if err != nil {
+		t.Fatalf("emissao apos lacuna falhou: %v\n%s", err, depois)
+	}
+	if got := numeroDe(t, depois); got != "12" {
+		t.Errorf("numero apos preencher lacuna = %q, esperava 12", got)
+	}
+}
+
+// TestEmitir_ContadorNaoAvancaSemArquivo pins that a failed write leaves the
+// counter alone: burning a number on a document that does not exist would
+// create a permanent gap in the numbering for no reason.
+func TestEmitir_ContadorNaoAvancaSemArquivo(t *testing.T) {
+	dir := workspace(t)
+
+	if _, err := runEmit(t, dir, "--numero", "1", "--valor", "100", "--descricao", "Primeira"); err != nil {
+		t.Fatal(err)
+	}
+	// Colliding on purpose: the write is refused.
+	if _, err := runEmit(t, dir, "--numero", "1", "--valor", "100", "--descricao", "Colide"); err == nil {
+		t.Fatal("esperava erro de colisao")
+	}
+
+	proxima, err := runEmit(t, dir, "--valor", "100", "--descricao", "Proxima")
+	if err != nil {
+		t.Fatalf("emissao seguinte falhou: %v\n%s", err, proxima)
+	}
+	if !strings.Contains(proxima, strings.Repeat("0", 14)+"2") {
+		t.Errorf("o contador deveria estar em 2:\n%s", proxima)
 	}
 }

@@ -27,6 +27,7 @@ Nacional. Cada etapa pode ser executada isoladamente.`,
 		newEmitirCommand(),
 		newConsultarCommand(),
 		newCancelarCommand(),
+		newNumeroCommand(),
 	)
 
 	return root
