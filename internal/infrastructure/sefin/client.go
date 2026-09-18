@@ -92,6 +92,22 @@ func New(cfg Config) (*Client, error) {
 				TLSClientConfig: &tls.Config{
 					Certificates: []tls.Certificate{*cfg.Certificate},
 					MinVersion:   tls.VersionTLS12,
+
+					// The Sefin does not ask for the client certificate in the
+					// initial handshake: it renegotiates afterwards to request
+					// it. Go refuses renegotiation by default, which surfaces as
+					// "local error: tls: no renegotiation" on the first request
+					// and makes every emission impossible.
+					//
+					// Freely rather than once, because a keep-alive connection
+					// serves several requests and the server may re-request the
+					// certificate on each. Go only accepts renegotiation from a
+					// server that advertises RFC 5746 secure renegotiation, so
+					// this does not reopen CVE-2009-3555.
+					//
+					// Ignored when the connection lands on TLS 1.3, where the
+					// same need is served by post-handshake authentication.
+					Renegotiation: tls.RenegotiateFreelyAsClient,
 				},
 			},
 		}

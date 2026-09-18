@@ -2,6 +2,7 @@ package sefin
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -273,6 +274,34 @@ func TestNew(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The Sefin requests the client certificate through TLS renegotiation rather
+// than in the initial handshake, and Go refuses renegotiation unless asked. The
+// default cost the first real emission a "local error: tls: no renegotiation".
+//
+// This asserts the setting rather than the handshake on purpose: Go's own TLS
+// server cannot renegotiate, so no httptest server can reproduce what the
+// government does. The assertion exists so that the setting is not tidied away
+// by someone who has never seen that error.
+func TestNew_AllowsTLSRenegotiation(t *testing.T) {
+	cert := &tls.Certificate{}
+
+	client, err := New(Config{Environment: EnvRestrictedProduction, Certificate: cert})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	transport, ok := client.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transporte = %T, esperava *http.Transport", client.httpClient.Transport)
+	}
+	if got := transport.TLSClientConfig.Renegotiation; got != tls.RenegotiateFreelyAsClient {
+		t.Errorf("Renegotiation = %v, esperava RenegotiateFreelyAsClient", got)
+	}
+	if got := transport.TLSClientConfig.MinVersion; got != tls.VersionTLS12 {
+		t.Errorf("MinVersion = %v, esperava TLS 1.2", got)
+	}
 }
 
 func keys(m map[string]string) []string {

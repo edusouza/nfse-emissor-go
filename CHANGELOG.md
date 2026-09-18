@@ -7,6 +7,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### Corrigido
+
+- **A conexão com a Sefin falhava com `tls: no renegotiation`.** O governo não
+  pede o certificado do cliente no handshake inicial: pede depois, numa
+  renegociação TLS, que o `crypto/tls` do Go recusa por padrão. Toda emissão
+  com `--enviar` parava aí, na primeira requisição real. O cliente agora aceita
+  renegociação iniciada pelo servidor.
+
 ### Adicionado
 
 - **Validação da alíquota do ISS antes de assinar.** O `emitir` passa a recusar
