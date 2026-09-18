@@ -1,4 +1,4 @@
-# 0008 — O digest era calculado sem o namespace
+# 0008 — Dois defeitos que só a emissão real revelou
 
 **Status:** Aceita
 **Data:** 2026-09-18
@@ -92,6 +92,32 @@ referência e aceita o novo.
 - O `verAplic` de cada nota registra a versão do emissor, então dá para saber
   quais documentos saíram com o defeito.
 
+## Um segundo defeito, encontrado do mesmo jeito
+
+Com a assinatura aceita, a emissão seguinte parou em
+`[E0004] Conteúdo do identificador informado na DPS difere da concatenação dos
+campos correspondentes`.
+
+O identificador da DPS conferia com os campos do próprio XML — município com
+`cLocEmi`, inscrição com `prest/CNPJ`, série com `serie`, número com `nDPS`.
+Era consistente consigo mesmo. A divergência era com a regra, que a planilha
+enuncia assim:
+
+```
+Tipo de inscrição Federal = 1 / Inscrição Federal = CPF emitente da DPS;
+Tipo de inscrição Federal = 2 / Inscrição Federal = CNPJ emitente da DPS;
+```
+
+Os códigos são o inverso do que a ordem dos nomes sugere, e estavam trocados em
+dois pacotes. Pior: a validação decidia por um literal — `if RegistrationType
+== 1` — em vez das constantes nomeadas, então ela concordava com o engano em
+vez de denunciá-lo. Trocar as constantes sozinho deixaria a validação
+consistente e errada.
+
+Vale notar o formato do defeito. Não era uma regra sutil nem um canto escuro da
+especificação: era uma linha de documentação, em português, na planilha que já
+estava no repositório. O custo de não tê-la lido foi uma rejeição do governo.
+
 ## Aprendizado
 
 O ADR 0004 disse que faltava um teste de ida e volta. Estava certo e era
@@ -104,6 +130,12 @@ API — a única asserção que vale é contra algo que não saiu daqui. O XSD
 versionado, o swagger oficial, a planilha de regras, e agora a saída de uma
 segunda implementação. Cinco defeitos deste projeto foram encontrados assim, e
 nenhum por inspeção ou por cobertura.
+
+Há um corolário prático: **constantes nomeadas não se auto-verificam**. Um par
+`RegistrationTypeCNPJ = 1 / RegistrationTypeCPF = 2` lê-se perfeitamente bem e
+estava invertido. O que o prende à realidade é um teste que cita a regra, não o
+nome da constante — e uma validação que decide pelas constantes, nunca por um
+literal que pode discordar delas em silêncio.
 
 Vale notar também o custo da hipótese confortável. A primeira explicação —
 "certificado errado" — era plausível, tinha respaldo na regra oficial, e

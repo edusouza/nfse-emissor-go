@@ -15,7 +15,32 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.5.2] - 2026-09-18
 
+Duas correções que, juntas, eram tudo que impedia uma emissão de atravessar.
+Cada uma foi encontrada por uma rejeição real do governo, e nenhuma teria sido
+encontrada por inspeção ou por cobertura de testes.
+
 ### Corrigido
+
+- **O tipo de inscrição federal no identificador da DPS estava invertido.** A
+  Sefin recusava com `[E0004] Conteúdo do identificador informado na DPS difere
+  da concatenação dos campos correspondentes`.
+
+  A regra oficial, na planilha `ANEXO_I`, é explícita:
+
+  ```
+  Tipo de inscrição Federal = 1 / Inscrição Federal = CPF emitente da DPS;
+  Tipo de inscrição Federal = 2 / Inscrição Federal = CNPJ emitente da DPS;
+  ```
+
+  Os códigos são o **inverso** do que a ordem dos nomes sugere, e estavam
+  trocados em dois pacotes (`pkg/dpsid` e `pkg/xmlbuilder`). Toda DPS de empresa
+  saía com `1` onde o governo lê `2` — ou seja, toda DPS que este emissor
+  existe para emitir.
+
+  A validação interna também decidia por um literal (`if RegistrationType == 1`)
+  em vez das constantes nomeadas, então ela concordava com o engano em vez de
+  denunciá-lo. Agora decide pelas constantes, e recusa um tipo desconhecido em
+  vez de tratá-lo como CPF.
 
 - **A assinatura de toda DPS era inválida: o digest era calculado sem a
   declaração de namespace.** A Sefin recusava cada emissão com
@@ -42,6 +67,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- Testes que ancoram os códigos de tipo de inscrição no texto da regra E0004, e
+  que verificam cada fatia do identificador — município, tipo, inscrição, série
+  e número — na posição que a regra define.
 - Testes de canonicalização ancorados numa **implementação externa**: a forma
   canônica esperada foi produzida pelo libxml2 (via lxml), não por este pacote,
   e o comentário registra o comando que a reproduz. Mais uma asserção que teria

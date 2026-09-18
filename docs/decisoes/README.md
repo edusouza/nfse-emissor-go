@@ -15,4 +15,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0004](0004-assinatura-que-nao-verificava.md) | A assinatura digital nunca verificou | Aceita |
 | [0005](0005-contrato-da-sefin-verificado.md) | Cliente da Sefin reescrito contra a especificação oficial | Aceita |
 | [0006](0006-validacao-de-aliquota-do-iss.md) | Validar a alíquota do ISS antes de enviar | Aceita |
-| [0008](0008-digest-sem-namespace.md) | O digest era calculado sem o namespace | Aceita |
+| [0008](0008-digest-sem-namespace.md) | Dois defeitos que só a emissão real revelou | Aceita |

@@ -11,9 +11,10 @@ depender de portal web.
 > assina e envia a DPS à Sefin Nacional.
 >
 > As emissões reais já chegaram ao governo, e foi assim que os dois últimos
-> defeitos apareceram: a renegociação TLS (v0.5.0) e o digest da assinatura
-> calculado sem a declaração de namespace (v0.5.2). **Toda DPS assinada antes
-> da v0.5.2 é inválida** e precisa ser emitida de novo.
+> defeitos apareceram: a renegociação TLS (v0.5.0), o digest da assinatura
+> calculado sem a declaração de namespace e o tipo de inscrição federal
+> invertido no identificador da DPS (ambos v0.5.2). **Toda DPS gerada antes da
+> v0.5.2 é inválida** e precisa ser emitida de novo.
 >
 > O que ainda falta confirmar é uma emissão que atravesse inteira, do `POST`
 > até a NFS-e autorizada. É por isso que a numeração segue em `0.x`. Veja o
@@ -106,7 +107,7 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria - agosto/2026"
 ```
 
 ```
-DPS DPS410690211234567800019500001000000000000042
+DPS DPS410690221234567800019500001000000000000042
   Ambiente       producao-restrita
   Valor          R$ 1500.00
   Servico        Consultoria - agosto/2026
@@ -187,7 +188,7 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria" --enviar
 ```
 NFS-e emitida
   Chave de acesso  41069022212345678000195000000000000126081234567890
-  DPS              DPS410690211234567800019500001000000000000042
+  DPS              DPS410690221234567800019500001000000000000042
   Ambiente         producao-restrita
   Valor            R$ 1500.00
   Processada em    18/09/2026 09:57:36
@@ -265,7 +266,7 @@ Se uma emissão foi interrompida e você não sabe se a nota saiu, consulte pelo
 identificador da declaração:
 
 ```bash
-nfse consultar --dps DPS410690211234567800019500001000000000000042 --existe
+nfse consultar --dps DPS410690221234567800019500001000000000000042 --existe
 ```
 
 `--existe` responde apenas sim ou não — o governo atende essa pergunta a
@@ -355,7 +356,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.4.0 | Cancelamento de NFS-e | pronto |
 | v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
 | v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
-| v0.5.2 | Correção: o digest da assinatura era calculado sem o namespace | **lançada** |
+| v0.5.2 | Correções: digest da assinatura sem namespace; tipo de inscrição invertido no identificador | **lançada** |
 | v0.6.0 | Substituição de NFS-e | planejado |
 | v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
 
