@@ -415,15 +415,24 @@ func CanonicalizeSigned(element *etree.Element) ([]byte, error) {
 		return nil, nil
 	}
 
-	// Create a deep copy to avoid modifying the original
-	doc := etree.NewDocument()
-	doc.SetRoot(element.Copy())
-	root := doc.Root()
+	// The namespaces the element inherits have to be written out while it
+	// still has its ancestors. Copying it into a fresh document first — which
+	// is what this used to do — detaches it, and the inheritance is gone before
+	// anyone can look for it.
+	//
+	// The loss is silent and total. A DPS whose infDPS inherits the default
+	// namespace from its DPS root was digested as a bare <infDPS Id="...">,
+	// while every other implementation digests
+	// <infDPS xmlns="http://www.sped.fazenda.gov.br/nfse" Id="...">. Signing
+	// and verifying both went through here, so the two agreed with each other
+	// and with nobody else: the government answered E0714 on every document.
+	apex := materializeInheritedNamespaces(element).Copy()
 
-	// Remove any existing Signature element
-	removeSignatureElements(root)
+	// The enveloped-signature transform: whatever signature is already there is
+	// not part of what the signature covers.
+	removeSignatureElements(apex)
 
-	return Canonicalize(root)
+	return Canonicalize(apex)
 }
 
 // removeSignatureElements removes all Signature elements from an element tree.

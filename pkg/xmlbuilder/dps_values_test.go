@@ -195,29 +195,65 @@ func TestDPSBuilder_TaxSection(t *testing.T) {
 	})
 }
 
+// Which child of the totTrib choice is allowed depends on the provider's
+// standing in the Simples Nacional, not on what the caller knows. From the
+// business-rules spreadsheet, docs/anexos/ANEXO_I-...xlsx:
+//
+//	E0710 — "Se a situação do emitente da DPS perante o Simples Nacional na
+//	         data de competência informada for MEI, o choice pTotTribSN nunca
+//	         poderá ser informado."
+//	E0712 — "[...] for ME/EPP, o choice indTotTrib nunca poderá ser informado."
+//
+// This test used to assert the opposite for a MEI, because the builder chose by
+// the configured value rather than by the regime.
 func TestDPSBuilder_TotalTax(t *testing.T) {
-	t.Run("indTotTrib quando o percentual nao e informado", func(t *testing.T) {
-		cfg := basicDPSConfig()
+	t.Run("MEI declara indTotTrib", func(t *testing.T) {
+		cfg := basicDPSConfig() // TaxRegime: "mei"
 		cfg.Values = DPSValues{ServiceValue: 1000}
 		xmlStr := buildXML(t, cfg)
 
-		// totTrib belongs inside trib, and is a choice of exactly one child.
 		if got := path(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/indTotTrib"); got != "0" {
 			t.Errorf("indTotTrib = %q, esperava 0", got)
 		}
 		absent(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/pTotTribSN")
+		// totTrib belongs inside trib, never one level up.
 		absent(t, xmlStr, "DPS/infDPS/valores/totTrib")
 	})
 
-	t.Run("pTotTribSN quando informado", func(t *testing.T) {
+	t.Run("MEI nunca declara pTotTribSN, mesmo com percentual configurado", func(t *testing.T) {
 		cfg := basicDPSConfig()
 		cfg.Values = DPSValues{ServiceValue: 1000, TotalTaxPercentSN: 6}
 		xmlStr := buildXML(t, cfg)
 
-		if got := path(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/pTotTribSN"); got != "6.00" {
-			t.Errorf("pTotTribSN = %q", got)
+		absent(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/pTotTribSN")
+		if got := path(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/indTotTrib"); got != "0" {
+			t.Errorf("indTotTrib = %q, esperava 0", got)
 		}
-		// The choice allows only one child.
+	})
+
+	t.Run("ME/EPP declara pTotTribSN", func(t *testing.T) {
+		cfg := basicDPSConfig()
+		cfg.Provider.TaxRegime = "me_epp"
+		cfg.Values = DPSValues{ServiceValue: 1000, TotalTaxPercentSN: 6}
+		xmlStr := buildXML(t, cfg)
+
+		if got := path(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/pTotTribSN"); got != "6.00" {
+			t.Errorf("pTotTribSN = %q, esperava 6.00", got)
+		}
+		absent(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/indTotTrib")
+	})
+
+	t.Run("ME/EPP sem percentual declara pTotTribSN zero", func(t *testing.T) {
+		cfg := basicDPSConfig()
+		cfg.Provider.TaxRegime = "me_epp"
+		cfg.Values = DPSValues{ServiceValue: 1000}
+		xmlStr := buildXML(t, cfg)
+
+		// A ME/EPP has no indTotTrib to opt out with, and the schema's pattern
+		// for TSDec2V2 admits a bare zero.
+		if got := path(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/pTotTribSN"); got != "0.00" {
+			t.Errorf("pTotTribSN = %q, esperava 0.00", got)
+		}
 		absent(t, xmlStr, "DPS/infDPS/valores/trib/totTrib/indTotTrib")
 	})
 }

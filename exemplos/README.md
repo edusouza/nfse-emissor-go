@@ -74,7 +74,7 @@ de número, valor e descrição:
 
 ```console
 $ nfse emitir --numero 1 --valor 1500 --descricao "Consultoria - agosto/2026"
-DPS DPS410690211234567800019500001000000000000001
+DPS DPS410690221234567800019500001000000000000001
   Ambiente       producao-restrita
   Valor          R$ 1500.00
   Servico        Consultoria - agosto/2026
@@ -92,7 +92,7 @@ Para o caso B2B, um arquivo por nota é mais confortável — e versionável:
 
 ```console
 $ nfse emitir --yaml nota-consultoria.yaml
-DPS DPS410690211234567800019500001000000000000002
+DPS DPS410690221234567800019500001000000000000002
   Valor          R$ 8500.00
   Servico        Consultoria tecnica em arquitetura de software - agosto/2026
   Assinatura     aplicada

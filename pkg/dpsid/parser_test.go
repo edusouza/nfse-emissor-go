@@ -14,7 +14,7 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name:  "valid CNPJ identifier",
-			input: "355030811234567800019500001000000000000001",
+			input: "355030821234567800019500001000000000000001",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
@@ -26,7 +26,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:  "valid CPF identifier",
-			input: "355030820001234567890100001000000000000001",
+			input: "355030810001234567890100001000000000000001",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCPF,
@@ -38,7 +38,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:  "valid with all zeros in number",
-			input: "355030811234567800019500001000000000000000",
+			input: "355030821234567800019500001000000000000000",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
@@ -50,7 +50,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:  "valid with high number",
-			input: "355030811234567800019599999999999999999999",
+			input: "355030821234567800019599999999999999999999",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
@@ -68,19 +68,19 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "too short",
-			input:   "35503081123456780001950000100000000000001",
+			input:   "35503082123456780001950000100000000000001",
 			want:    nil,
 			wantErr: ErrInvalidLength,
 		},
 		{
 			name:    "too long",
-			input:   "3550308112345678000195000010000000000000011",
+			input:   "3550308212345678000195000010000000000000011",
 			want:    nil,
 			wantErr: ErrInvalidLength,
 		},
 		{
 			name:    "contains letters",
-			input:   "35503081123456780001950000100000000000000A",
+			input:   "35503082123456780001950000100000000000000A",
 			want:    nil,
 			wantErr: ErrInvalidCharacters,
 		},
@@ -110,13 +110,13 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "CPF without 000 prefix",
-			input:   "355030821234567800019500001000000000000001",
+			input:   "355030811234567800019500001000000000000001",
 			want:    nil,
 			wantErr: ErrInvalidCPFPadding,
 		},
 		{
 			name:  "whitespace is trimmed",
-			input: "  355030811234567800019500001000000000000001  ",
+			input: "  355030821234567800019500001000000000000001  ",
 			want: &DPSIdentifier{
 				MunicipalityCode:    "3550308",
 				RegistrationType:    RegistrationTypeCNPJ,
@@ -182,7 +182,7 @@ func TestDPSIdentifier_String(t *testing.T) {
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
-			want: "355030811234567800019500001000000000000001",
+			want: "355030821234567800019500001000000000000001",
 		},
 		{
 			name: "CPF identifier",
@@ -193,7 +193,7 @@ func TestDPSIdentifier_String(t *testing.T) {
 				Series:              "00001",
 				Number:              "000000000000001",
 			},
-			want: "355030820001234567890100001000000000000001",
+			want: "355030810001234567890100001000000000000001",
 		},
 		{
 			name: "nil identifier",
@@ -478,7 +478,7 @@ func TestNew(t *testing.T) {
 			federalRegistration: "12345678000195",
 			series:              "1",
 			number:              "1",
-			wantString:          "355030811234567800019500001000000000000001",
+			wantString:          "355030821234567800019500001000000000000001",
 			wantErr:             false,
 		},
 		{
@@ -488,7 +488,7 @@ func TestNew(t *testing.T) {
 			federalRegistration: "12345678901",
 			series:              "1",
 			number:              "1",
-			wantString:          "355030820001234567890100001000000000000001",
+			wantString:          "355030810001234567890100001000000000000001",
 			wantErr:             false,
 		},
 		{
@@ -498,7 +498,7 @@ func TestNew(t *testing.T) {
 			federalRegistration: "12.345.678/0001-95",
 			series:              "00001",
 			number:              "000000000000001",
-			wantString:          "355030811234567800019500001000000000000001",
+			wantString:          "355030821234567800019500001000000000000001",
 			wantErr:             false,
 		},
 		{
@@ -537,7 +537,7 @@ func TestNew(t *testing.T) {
 
 func TestMustParse(t *testing.T) {
 	// Test valid input
-	id := MustParse("355030811234567800019500001000000000000001")
+	id := MustParse("355030821234567800019500001000000000000001")
 	if id.MunicipalityCode != "3550308" {
 		t.Errorf("MustParse() MunicipalityCode = %v, want %v", id.MunicipalityCode, "3550308")
 	}
@@ -553,7 +553,7 @@ func TestMustParse(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	// Test that parsing and stringifying produces the same result
-	original := "355030811234567800019500001000000000000001"
+	original := "355030821234567800019500001000000000000001"
 	parsed, err := Parse(original)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)

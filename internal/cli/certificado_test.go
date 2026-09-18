@@ -95,7 +95,7 @@ func TestEnviar_RefusesCertificateFromAnotherCompany(t *testing.T) {
 	// A DPS belonging to someone else: what the user gets by pointing --cert at
 	// the throwaway certificate from exemplos/.
 	path := filepath.Join(dir, "alheia-dps.xml")
-	alheia := `<?xml version="1.0"?><DPS><infDPS Id="DPS410690211122233300018100001000000000000003">` +
+	alheia := `<?xml version="1.0"?><DPS><infDPS Id="DPS410690221122233300018100001000000000000003">` +
 		`<prest><CNPJ>11222333000181</CNPJ></prest>` +
 		`<valores><vServPrest><vServ>1500.00</vServ></vServPrest></valores>` +
 		`</infDPS><Signature/></DPS>`

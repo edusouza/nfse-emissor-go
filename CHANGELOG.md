@@ -61,6 +61,164 @@ arquivo em branco com cinco campos obrigatórios.
 - Sobra um campo obrigatório que nenhuma consulta responde:
   `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
   Ver [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+## [0.5.2] - 2026-09-18
+
+**A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o
+ciclo inteiro foi exercitado contra a Sefin Nacional, ponta a ponta:
+
+```
+emitir → enviar → consultar <chave> → consultar --dps → cancelar
+```
+
+A DPS foi montada, validada, assinada, aceita e devolvida como nota autorizada,
+com chave de acesso de 50 dígitos que o próprio validador do projeto aceita. O
+cancelamento — outro XML, outra raiz, outro endpoint — foi registrado na
+primeira tentativa.
+
+Seis correções. As **quatro primeiras** eram tudo que impedia a emissão de
+atravessar, cada uma encontrada por uma rejeição do governo, uma depois da
+outra. As **duas últimas** vieram logo em seguida, de usar o que passou a
+funcionar: consultar a nota recém-emitida.
+
+Nenhuma delas teria sido encontrada por inspeção ou por cobertura de testes — a
+suíte estava verde com as seis.
+
+### Corrigido
+
+- **O total de tributos era escolhido pelo valor configurado, não pelo regime.**
+  A Sefin recusava ME/EPP com `[E0712] Para ME/EPP o indicador de informação de
+  valor total de tributos não pode ser informado`.
+
+  O `totTrib` é um *choice* de um filho só, e qual deles é permitido depende da
+  situação do prestador no Simples Nacional:
+
+  ```
+  E0710 — para MEI,    pTotTribSN nunca pode ser informado
+  E0712 — para ME/EPP, indTotTrib nunca pode ser informado
+  ```
+
+  O construtor escolhia por outro critério: mandava `pTotTribSN` se houvesse um
+  percentual configurado e `indTotTrib` se não houvesse. Errava nos **dois**
+  sentidos — um ME/EPP sem percentual declarava `indTotTrib`, e um MEI com
+  percentual declarava `pTotTribSN`.
+
+  Um ME/EPP que não sabe a própria alíquota declara `pTotTribSN` igual a zero:
+  não existe `indTotTrib` para ele se abster, e o padrão do tipo `TSDec2V2` no
+  XSD admite o zero.
+
+  O `opSimpNac` passou a ser calculado num único lugar, lido pelas duas seções
+  que dependem dele. Estava duplicado, e duas cópias de uma regra são duas
+  chances de divergirem.
+
+- **A razão social do prestador era enviada quando não devia.** A Sefin recusava
+  com `[E0121] O nome ou razão social do prestador não deve ser informado quando
+  o emitente da DPS for o próprio prestador`.
+
+  As regras E0121 e E0122 formam um par:
+
+  ```
+  tpEmit = 1 (o prestador emite)  → xNome NÃO deve ser informado
+  tpEmit = 2 ou 3                 → xNome DEVE ser informado
+  ```
+
+  O governo já sabe o nome pelo CNPJ quando é o próprio prestador que emite;
+  mandá-lo mesmo assim é rejeição, não redundância. Como este CLI sempre emite
+  como prestador, o `xNome` simplesmente deixa de ser montado — a condição fica
+  no construtor do XML, não numa validação: um documento que não pode ser
+  montado errado dispensa quem o confira depois.
+
+  O `pkg/xmlbuilder` continua servindo os casos 2 e 3, e aí informa o nome.
+
+- **O tipo de inscrição federal no identificador da DPS estava invertido.** A
+  Sefin recusava com `[E0004] Conteúdo do identificador informado na DPS difere
+  da concatenação dos campos correspondentes`.
+
+  A regra oficial, na planilha `ANEXO_I`, é explícita:
+
+  ```
+  Tipo de inscrição Federal = 1 / Inscrição Federal = CPF emitente da DPS;
+  Tipo de inscrição Federal = 2 / Inscrição Federal = CNPJ emitente da DPS;
+  ```
+
+  Os códigos são o **inverso** do que a ordem dos nomes sugere, e estavam
+  trocados em dois pacotes (`pkg/dpsid` e `pkg/xmlbuilder`). Toda DPS de empresa
+  saía com `1` onde o governo lê `2` — ou seja, toda DPS que este emissor
+  existe para emitir.
+
+  A validação interna também decidia por um literal (`if RegistrationType == 1`)
+  em vez das constantes nomeadas, então ela concordava com o engano em vez de
+  denunciá-lo. Agora decide pelas constantes, e recusa um tipo desconhecido em
+  vez de tratá-lo como CPF.
+
+- **A assinatura de toda DPS era inválida: o digest era calculado sem a
+  declaração de namespace.** A Sefin recusava cada emissão com
+  `[E0714] Arquivo enviado com erro na assinatura`.
+
+  `CanonicalizeSigned` — a função sobre cuja saída o digest da referência é
+  calculado — copiava o elemento para um documento novo antes de
+  canonicalizá-lo. Isso o desliga dos ancestrais, e o `infDPS` perde o
+  `xmlns` que herda do `DPS`:
+
+  ```
+  o que assinávamos:    <infDPS Id="DPS4106902...">
+  o que o mundo assina: <infDPS xmlns="http://www.sped.fazenda.gov.br/nfse" Id="DPS4106902...">
+  ```
+
+  É o defeito do [ADR 0004](docs/decisoes/0004-assinatura-que-nao-verificava.md)
+  voltando por outra porta: a correção de namespace tinha sido aplicada a
+  `Canonicalize`, e `CanonicalizeSigned` destruía o contexto antes de chamá-la.
+  Ver [ADR 0008](docs/decisoes/0008-digest-sem-namespace.md).
+
+  **Toda DPS assinada por uma versão anterior é inválida** e precisa ser
+  emitida de novo. Não há conserto no arquivo — a assinatura é parte do que o
+  governo valida.
+
+- **`nfse consultar --dps` imprimia o identificador em branco.** O `DpsGetResponse`
+  do swagger marca `idDps` como obrigatório na resposta, e o serviço real não o
+  envia. O teste que existia não podia ver isso: o *stub* dele foi escrito a
+  partir do swagger, e aqui é o swagger que está errado.
+
+  Não vale uma viagem de ida e volta para descobrir algo que o usuário acabou de
+  digitar — o identificador consultado preenche a linha quando a resposta o
+  omite. Há um teste novo fiel ao que o governo devolve de fato.
+- **`nfse consultar` recusava consultar a mesma nota duas vezes**, com uma
+  mensagem de emissão: *"o numero da DPS provavelmente ja foi usado. Use outro
+  --numero"* — numa consulta, que não tem número de DPS nem a flag `--numero`.
+
+  A guarda contra sobrescrita foi escrita para a emissão, onde repetir um número
+  destrói um documento fiscal distinto. Uma consulta é idempotente e a NFS-e é
+  imutável no governo: a segunda busca traz o mesmo documento. Recusar não
+  protegia nada.
+
+  O `consultar` passa a sobrescrever sem perguntar, e o `--sobrescrever` some
+  dele por não ter mais o que fazer. A recusa continua onde ela protege algo —
+  emissão e cancelamento —, agora com uma mensagem que não empresta o
+  vocabulário da emissão a quem não é emissão.
+
+### Adicionado
+
+- Testes que amarram a escolha do `totTrib` ao regime nos quatro casos — MEI com
+  e sem percentual, ME/EPP com e sem —, citando o texto das regras E0710 e
+  E0712. O teste anterior afirmava o comportamento defeituoso: um MEI emitindo
+  `pTotTribSN`.
+- Teste que consulta a mesma nota duas vezes, e outro que verifica que a recusa
+  genérica de sobrescrita não menciona `--numero`.
+- Testes que amarram o `xNome` ao `tpEmit` nos três valores possíveis, citando o
+  texto das regras E0121 e E0122, e que conferem que o prestador continua
+  identificado pelo CNPJ.
+- Testes que ancoram os códigos de tipo de inscrição no texto da regra E0004, e
+  que verificam cada fatia do identificador — município, tipo, inscrição, série
+  e número — na posição que a regra define.
+- Testes de canonicalização ancorados numa **implementação externa**: a forma
+  canônica esperada foi produzida pelo libxml2 (via lxml), não por este pacote,
+  e o comentário registra o comando que a reproduz. Mais uma asserção que teria
+  pegado o defeito sozinha: sem assinatura envelopada para remover,
+  `CanonicalizeSigned` e `Canonicalize` precisam produzir bytes idênticos.
+
+  O teste de ida e volta que o ADR 0004 introduziu não podia detectar isto: o
+  verificador usa a mesma função do assinador, então os dois concordavam entre
+  si e com mais ninguém.
+
 ## [0.5.1] - 2026-09-18
 
 ### Corrigido
@@ -95,6 +253,20 @@ arquivo em branco com cinco campos obrigatórios.
   titular do certificado. A ICP-Brasil escreve o portador de um e-CNPJ como
   `RAZÃO SOCIAL:CNPJ` no *common name*. Os dígitos verificadores são
   conferidos: um CN terminado em quatorze dígitos não é evidência suficiente.
+
+### Atenção: a inscrição municipal pode ser a próxima
+
+A regra **E0120** diz que, quando o prestador emite (`tpEmit = 1`) e **não** há
+registro complementar do contribuinte no CNC do município, a inscrição municipal
+**não deve** ser informada na DPS.
+
+Não dá para saber isso localmente — depende do cadastro do município. E não há
+regra nenhuma que **exija** o IM: informá-lo é condicionalmente um erro, omiti-lo
+nunca é. Por isso o emissor continua respeitando o que estiver configurado, em
+vez de decidir por conta própria.
+
+Se a sua emissão parar em E0120, esvazie `prestador.inscricao_municipal` no
+`nfse.yaml` — o campo é opcional.
 
 ### Nota sobre a verificação
 

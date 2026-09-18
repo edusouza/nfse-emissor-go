@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -217,5 +218,113 @@ func TestConsultar_403DeProxy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "proxy") {
 		t.Errorf("a pista sobre o intermediario foi descartada: %v", err)
+	}
+}
+
+// Consulting the same invoice twice is the obvious thing to do — the first
+// query already wrote the file, and the user has no reason to think a second
+// one is a problem. It used to fail, with an emission error that mentioned a
+// DPS number and a --numero flag this command does not even have.
+//
+// A query is idempotent and the NFS-e is immutable at the government, so the
+// second fetch brings back the same document.
+func TestConsultar_PodeRepetir(t *testing.T) {
+	const nfseXML = `<?xml version="1.0"?><NFSe><infNFSe Id="NFS1"/></NFSe>`
+	chave := strings.Repeat("6", 50)
+
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		zw := newGzipWriter(&buf)
+		zw.Write([]byte(nfseXML))
+		zw.Close()
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          2,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"chaveAcesso":           chave,
+			"nfseXmlGZipB64":        encodeBase64(buf.Bytes()),
+		})
+	})
+
+	dir := workspace(t)
+	if out, err := runConsulta(t, dir, chave); err != nil {
+		t.Fatalf("primeira consulta falhou: %v\n%s", out, err)
+	}
+
+	out, err := runConsulta(t, dir, chave)
+	if err != nil {
+		t.Fatalf("a segunda consulta deveria funcionar: %v\n%s", err, out)
+	}
+
+	saved, err := os.ReadFile(filepath.Join(dir, "notas", chave+"-nfse.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(saved) != nfseXML {
+		t.Error("o XML gravado na segunda consulta nao confere")
+	}
+}
+
+// The refusal that remains — for documents a repeat would genuinely destroy —
+// must not borrow emission's vocabulary. Only the DPS write has a number to
+// suggest another of.
+func TestWriteNew_MensagemNaoAssumeEmissao(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ja-existe.xml")
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := writeNew(path, []byte("y"), false)
+	if err == nil {
+		t.Fatal("esperava recusa")
+	}
+	if !errors.Is(err, errArquivoExistente) {
+		t.Errorf("erro nao identificavel: %v", err)
+	}
+	for _, proibido := range []string{"--numero", "numero da DPS"} {
+		if strings.Contains(err.Error(), proibido) {
+			t.Errorf("a mensagem generica menciona %q: %v", proibido, err)
+		}
+	}
+	if !strings.Contains(err.Error(), "--sobrescrever") {
+		t.Errorf("a mensagem deveria dizer como prosseguir: %v", err)
+	}
+}
+
+// The real service omits idDps, although DpsGetResponse marks it required. The
+// first lookup against the government printed a blank line where the identifier
+// belongs, and the existing test could not see it: its stub was written from
+// the swagger, and here the swagger is what is wrong.
+//
+// The caller typed the identifier, so it is known without asking.
+func TestConsultar_PorDPS_QuandoOServidorOmiteOIdentificador(t *testing.T) {
+	chave := strings.Repeat("8", 50)
+	const dpsID = "DPS410690221234567800019500001000000000000009"
+
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		// Faithful to what the Sefin actually answers: no idDps.
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          2,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"chaveAcesso":           chave,
+		})
+	})
+
+	dir := workspace(t)
+	out, err := runConsulta(t, dir, "--dps", dpsID)
+	if err != nil {
+		t.Fatalf("consulta falhou: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, dpsID) {
+		t.Errorf("a saida nao traz o identificador da DPS:\n%s", out)
+	}
+	if strings.Contains(out, "DPS              \n") {
+		t.Errorf("a linha da DPS saiu vazia:\n%s", out)
+	}
+	if !strings.Contains(out, chave) {
+		t.Errorf("a saida nao traz a chave de acesso:\n%s", out)
 	}
 }

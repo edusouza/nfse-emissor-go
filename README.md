@@ -7,12 +7,21 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.6.0** ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida,
-> assina e envia a DPS à Sefin Nacional, e agora se configura sozinho a partir
-> do certificado (`nfse onboard`). A conexão com o ambiente real já foi
-> exercitada — foi assim que apareceu o defeito de renegociação TLS corrigido
-> na v0.5.0. O que ainda falta confirmar é uma emissão completa, do `POST` até
-> a NFS-e autorizada; é por isso que a numeração segue em `0.x`. Veja o
+> **Estado atual — v0.6.0** ([CHANGELOG](CHANGELOG.md)). O ciclo inteiro foi
+> exercitado contra a Sefin Nacional em produção restrita — `emitir`, `enviar`,
+> `consultar` por chave e por identificador da DPS, e `cancelar`. A v0.5.2 foi a
+> primeira versão que **emitiu uma NFS-e de verdade**, e a v0.6.0 acrescenta o
+> `nfse onboard`, que monta a configuração a partir do certificado.
+>
+> Chegar lá custou cinco defeitos, e cada um foi encontrado por uma rejeição do
+> governo, nunca por inspeção: a renegociação TLS (v0.5.0), e na v0.5.2 o digest
+> da assinatura calculado sem a declaração de namespace, o tipo de inscrição
+> federal invertido no identificador, a razão social enviada onde a regra a
+> proíbe e o total de tributos escolhido pelo valor em vez do regime.
+> **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida de novo.
+>
+> O que falta para a `1.0.0` é uma emissão em **produção** — com valor fiscal.
+> Tecnicamente é o mesmo caminho; a diferença é a consequência de errar. Veja o
 > [roadmap](#roadmap).
 
 ## Instalação
@@ -160,7 +169,7 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria - agosto/2026"
 ```
 
 ```
-DPS DPS410690211234567800019500001000000000000042
+DPS DPS410690221234567800019500001000000000000042
   Ambiente       producao-restrita
   Valor          R$ 1500.00
   Servico        Consultoria - agosto/2026
@@ -241,7 +250,7 @@ nfse emitir --numero 42 --valor 1500 --descricao "Consultoria" --enviar
 ```
 NFS-e emitida
   Chave de acesso  41069022212345678000195000000000000126081234567890
-  DPS              DPS410690211234567800019500001000000000000042
+  DPS              DPS410690221234567800019500001000000000000042
   Ambiente         producao-restrita
   Valor            R$ 1500.00
   Processada em    18/09/2026 09:57:36
@@ -319,7 +328,7 @@ Se uma emissão foi interrompida e você não sabe se a nota saiu, consulte pelo
 identificador da declaração:
 
 ```bash
-nfse consultar --dps DPS410690211234567800019500001000000000000042 --existe
+nfse consultar --dps DPS410690221234567800019500001000000000000042 --existe
 ```
 
 `--existe` responde apenas sim ou não — o governo atende essa pergunta a
@@ -409,10 +418,11 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.4.0 | Cancelamento de NFS-e | pronto |
 | v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
 | v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
+| v0.5.2 | Seis correções, todas encontradas por rejeições reais da Sefin | lançada |
 | v0.6.0 | `nfse onboard`: configuração preenchida a partir do certificado | **lançada** |
 | v0.7.0 | Busca do código do serviço ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | planejado |
 | v0.8.0 | Substituição de NFS-e | planejado |
-| v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
+| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 
