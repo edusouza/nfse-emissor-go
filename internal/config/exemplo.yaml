@@ -1,0 +1,54 @@
+# Configuracao do emissor de NFS-e.
+#
+# Os campos marcados como OBRIGATORIO precisam ser preenchidos antes da
+# primeira emissao. Rode 'nfse emitir' para ver o que ainda falta.
+
+# Ambiente do Sistema Nacional NFS-e.
+#   producao-restrita  ambiente de testes; as notas NAO tem valor fiscal
+#   producao           ambiente real; as notas tem valor fiscal
+ambiente: producao-restrita
+
+certificado:
+  # Caminho do seu certificado A1 (.pfx ou .p12).  OBRIGATORIO
+  arquivo: ./certificado.pfx
+  # A senha nao fica aqui. Use a variavel de ambiente NFSE_CERT_SENHA
+  # ou deixe o nfse perguntar no terminal.
+
+prestador:
+  cnpj: ""                      # somente digitos.               OBRIGATORIO
+  nome: ""                      # razao social.                  OBRIGATORIO
+  regime_tributario: mei        # mei | me_epp                   OBRIGATORIO
+  inscricao_municipal: ""       # se o seu municipio exigir
+  municipio: ""                 # codigo IBGE, 7 digitos.        OBRIGATORIO
+
+dps:
+  # Serie da DPS, 5 digitos.
+  serie: "00001"
+
+# Valores aplicados a toda nota, para nao precisar repeti-los na linha de
+# comando. Tudo aqui pode ser sobrescrito pelo arquivo passado em --yaml
+# ou por uma flag.
+padroes:
+  servico:
+    # Codigo de tributacao nacional, 6 digitos (LC 116/2003).
+    codigo_tributacao_nacional: ""
+    # Onde o servico e prestado. Se vazio, usa prestador.municipio.
+    municipio_prestacao: ""
+    # Descricao usada quando --descricao nao e informado.
+    descricao: ""
+
+  valores:
+    # Aliquota de ISS em porcentagem.
+    # MEI recolhe o ISS pelo DAS, entao a aliquota e 0.
+    # ME/EPP: confira a aliquota do seu municipio para o servico prestado.
+    iss_aliquota: 0
+
+  tomador:
+    # Quando true, a nota sai sem identificacao do tomador — o caso de
+    # venda ao publico em geral. Para identificar o cliente, use as flags
+    # --tomador-cnpj / --tomador-cpf / --tomador-nome, ou um arquivo --yaml.
+    nao_identificado: true
+
+saida:
+  # Onde gravar os XMLs gerados.
+  diretorio: ./notas

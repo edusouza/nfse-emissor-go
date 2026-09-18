@@ -70,3 +70,6 @@ debug
 
 # Local development
 nul
+
+# Binario do CLI
+/nfse

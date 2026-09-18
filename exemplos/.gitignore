@@ -1,0 +1,6 @@
+# Gerados ao seguir o passo a passo do README.
+notas/
+certificado-teste.pfx
+
+# Contador local de numeracao das DPS.
+.nfse-estado.json

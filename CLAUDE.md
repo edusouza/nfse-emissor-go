@@ -1,95 +1,98 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Orientações para o Claude Code (claude.ai/code) ao trabalhar neste repositório.
 
-## Project Overview
+## Visão geral
 
-NFS-e emission backend service for Brazil's Sistema Nacional NFS-e (National Electronic Service Invoice System). The project contains:
-1. **Documentation**: Government specs, XSD schemas, and reference data for NFS-e compliance
-2. **Backend Service**: Go REST API for NFS-e emission targeting SIMPLES NACIONAL service providers (MEI/ME/EPP)
+`nfse` é um emissor de NFS-e em **linha de comando** para o Sistema Nacional
+NFS-e do Brasil, voltado a prestadores do Simples Nacional (MEI/ME/EPP).
 
-## Tech Stack
+O projeto já foi uma API REST com worker, MongoDB e Redis. Isso foi removido —
+veja [ADR 0001](docs/decisoes/0001-cli-em-vez-de-api.md). Não reintroduza
+servidor, fila ou banco de dados sem uma decisão registrada.
 
-- **Language**: Go 1.21+ with Gin web framework
-- **Queue**: Asynq (Redis-based async job processing)
-- **Database**: MongoDB (request status, API keys)
-- **Cache**: Redis (job queue, rate limiting)
+## Stack
 
-## Commands
+- Go 1.26+, binário único, **sem `cgo`** (preserva o cross-compile)
+- [cobra](https://github.com/spf13/cobra) para o comando
+- [etree](https://github.com/beevik/etree) para manipular XML
+- [go-pkcs12](https://software.sslmate.com/src/go-pkcs12) para ler o certificado A1
+
+Mantenha as dependências no mínimo. Toda dependência nova em um binário que
+lida com certificado digital é superfície de risco.
+
+## Comandos
 
 ```bash
-# Run API server
-go run ./src/cmd/api
-
-# Run async worker
-go run ./src/cmd/worker
-
-# Run tests
-go test ./...
-
-# Run single test
-go test -run TestEmission ./internal/domain/emission/
-
-# Run with coverage
-go test -coverprofile=coverage.out ./...
-
-# Integration tests (requires MongoDB + Redis)
-go test -tags=integration ./tests/integration/...
-
-# PDF to markdown conversion (documentation utility)
-pip install PyMuPDF && python convert_pdfs.py
+go build -o nfse ./cmd/nfse   # compilar
+go test -short ./...          # testes rápidos (~2s) — use durante o desenvolvimento
+go test ./...                 # suíte completa (~75s, inclui testes de backoff)
+go test -race ./...           # o que a CI roda
+go vet ./...
+gofmt -l ./cmd ./internal ./pkg
 ```
 
-## Architecture
+## Arquitetura
 
 ```
-src/
-├── cmd/api/          # HTTP server entry point
-├── cmd/worker/       # Async job worker entry point
-├── internal/
-│   ├── api/          # HTTP handlers, middleware, routes
-│   ├── domain/       # Business logic (emission, validation)
-│   ├── infrastructure/  # External integrations (sefin, mongodb, redis, xmlsigner)
-│   └── jobs/         # Async job definitions
-└── pkg/              # Shared utilities (cnpjcpf, xmlbuilder)
+cmd/nfse/                  entrypoint
+internal/
+  cli/                     comandos cobra, apresentação e leitura de entrada
+  domain/                  regras de negócio, sem I/O
+    emission/              cálculo de valores, tradução de rejeições
+    validation/            validação da DPS
+    query/                 chave de acesso e respostas de consulta
+  infrastructure/
+    xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
+    sefin/                 cliente HTTP da API do governo
+pkg/                       utilidades reutilizáveis fora do projeto
+  xmlbuilder/              montagem do XML da DPS
+  cnpjcpf/                 validação de CNPJ/CPF
+  dpsid/                   identificador da DPS (42 caracteres)
 ```
 
-**Data Flow**: API receives JSON → validates → queues job → worker generates DPS XML → signs with certificate → submits to Sefin Nacional → webhook callback with result
+**Fluxo de uma emissão:** dados do usuário → montar XML da DPS → validar →
+assinar com o A1 → enviar à Sefin Nacional → receber a NFS-e autorizada.
 
-## Documentation Structure
+`internal/domain` não faz I/O. Rede, disco e apresentação ficam em
+`internal/infrastructure` e `internal/cli`.
+
+## Convenções
+
+- **Idioma:** documentação, mensagens do CLI e issues em **pt-BR**; código,
+  comentários e mensagens de commit em **inglês**.
+- Comentários explicam *por quê*, não *o quê*. Não narre o óbvio.
+- Erros voltam com contexto (`fmt.Errorf("...: %w", err)`) e a mensagem final
+  ao usuário precisa dizer o que fazer a respeito.
+- Testes dependentes de relógio vão atrás de `testing.Short()`.
+- Toda decisão que muda o rumo do projeto vira um ADR em `docs/decisoes/`.
+- O CHANGELOG é atualizado na mesma mudança que altera o comportamento.
+
+## Cuidados com segurança
+
+- Nunca registre em log a senha do certificado, a chave privada ou o conteúdo
+  do PFX.
+- Senha de certificado por argumento de linha de comando é visível na lista de
+  processos. Prefira `NFSE_CERT_SENHA` ou o prompt interativo.
+- O `.gitignore` bloqueia `*.pfx`, `*.p12`, `*.pem` e `*.key`. Não force a
+  adição desses arquivos — gere fixtures em memória nos testes.
+
+## Documentação de referência
 
 ```
-docs/
-├── nfse-nacional/    # Original PDFs (6 guides)
-├── markdown/         # Converted markdown + images
-├── schemas/          # XSD files for XML validation
-└── anexos/           # XLSX reference data (IBGE codes, service list)
+docs/decisoes/    ADRs — leia antes de mudar arquitetura
+docs/markdown/    manuais oficiais do governo convertidos
+docs/schemas/     XSDs oficiais (DPS_v1.00.xsd, NFSe_v1.00.xsd, evento_v1.00.xsd)
+docs/anexos/      planilhas de referência (códigos IBGE, lista de serviços)
+specs/            especificações Speckit do desenho anterior (API REST)
 ```
 
-## Feature Specs (Speckit)
+Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
 
-Feature specifications are in `specs/` with this workflow:
-- `/speckit.specify` - Create feature spec
-- `/speckit.clarify` - Resolve ambiguities
-- `/speckit.plan` - Generate implementation plan
-- `/speckit.tasks` - Generate task breakdown
+## Glossário
 
-Current feature: `001-nfse-emission-core` (NFS-e emission API)
-
-## Key XSD Schemas
-
-| Schema | Purpose |
-|--------|---------|
-| DPS_v1.00.xsd | Service declaration (input) |
-| NFSe_v1.00.xsd | Electronic invoice (output) |
-| evento_v1.00.xsd | Events (cancellation, etc.) |
-
-Target namespace: `http://www.sped.fazenda.gov.br/nfse`
-
-## Domain Terms
-
-- **DPS**: Declaração de Prestação de Serviço (Service Declaration) - input XML
-- **NFS-e**: Nota Fiscal de Serviço Eletrônica - output invoice
-- **SIMPLES NACIONAL**: Simplified tax regime (MEI = individual, ME/EPP = small business)
-- **cTribNac**: National service code (6 digits per LC 116/2003)
-- **chaveAcesso**: 50-character NFS-e access key
+- **DPS** — Declaração de Prestação de Serviço; o XML de entrada
+- **NFS-e** — Nota Fiscal de Serviço eletrônica; o XML de saída
+- **chaveAcesso** — identificador de 50 caracteres da NFS-e
+- **cTribNac** — código nacional do serviço, 6 dígitos (LC 116/2003)
+- **A1** — certificado digital em arquivo `.pfx`/`.p12`
