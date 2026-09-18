@@ -5,7 +5,24 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+> **Sobre a numeração:** a `1.0.0` no fim deste arquivo é a API REST anterior,
+> que nunca chegou a ser marcada com uma tag. A `0.5.0` é a **primeira versão
+> publicada** deste repositório. O emissor em linha de comando começou do zero
+> em `0.x` porque a primeira emissão real contra a Sefin ainda não foi
+> confirmada — a `1.0.0` fica reservada para quando for.
+
 ## [Não lançado]
+
+## [0.5.0] - 2026-09-18
+
+Primeira versão publicada do emissor em linha de comando. Entrega o ciclo
+completo de uma nota — **emitir, enviar, consultar, cancelar** — em um binário
+único, sem `cgo` e sem serviço externo.
+
+Substitui a API REST com worker, MongoDB e Redis, removida em
+[ADR 0001](docs/decisoes/0001-cli-em-vez-de-api.md). Seis defeitos que
+impediam qualquer emissão foram corrigidos no caminho; cada um está registrado
+nos [ADRs](docs/decisoes/).
 
 ### Corrigido
 
