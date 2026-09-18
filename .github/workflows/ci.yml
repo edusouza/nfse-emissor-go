@@ -41,7 +41,11 @@ jobs:
         run: go build ./...
 
       - name: Testes
-        run: go test -race -coverprofile=coverage.out ./...
+        run: go test -race ./...
 
+      # Kept separate from the test run so that a coverage tooling problem is
+      # never mistaken for a failing test.
       - name: Cobertura
-        run: go tool cover -func=coverage.out | tail -1
+        run: |
+          go test -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1

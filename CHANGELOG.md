@@ -70,8 +70,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   `github.com/edusouza/nfse-emissor-go`, agora coincidindo com o repositório —
   requisito para `go install` funcionar.
 - Código Go movido de `src/` para a raiz do repositório, como é convenção em Go.
-- Dependências diretas reduzidas de 12 para 4 (`etree`, `cobra`, `go-pkcs12`,
-  `golang.org/x/{crypto,term}`).
+- Dependências diretas reduzidas de 12 para 5 (`etree`, `cobra`, `go-pkcs12`,
+  `golang.org/x/term`, `yaml.v3`).
+- Versão mínima do Go passou a 1.26, exigida por `golang.org/x/term` e pela
+  cadeia do `cobra`. Manter 1.25 custaria rebaixar o `golang.org/x/crypto`, o
+  que não compensa num programa que lida com certificado digital.
 - Testes dependentes de relógio agora são pulados com `-short`, reduzindo a
   suíte local de ~75s para ~2s.
 

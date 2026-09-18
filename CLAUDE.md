@@ -13,7 +13,7 @@ servidor, fila ou banco de dados sem uma decisão registrada.
 
 ## Stack
 
-- Go 1.25+, binário único, **sem `cgo`** (preserva o cross-compile)
+- Go 1.26+, binário único, **sem `cgo`** (preserva o cross-compile)
 - [cobra](https://github.com/spf13/cobra) para o comando
 - [etree](https://github.com/beevik/etree) para manipular XML
 - [go-pkcs12](https://software.sslmate.com/src/go-pkcs12) para ler o certificado A1

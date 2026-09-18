@@ -24,7 +24,7 @@ cd nfse-emissor-go
 go build -o nfse ./cmd/nfse
 ```
 
-Requer Go 1.25 ou superior. O resultado é um binário único, sem `cgo` e sem
+Requer Go 1.26 ou superior. O resultado é um binário único, sem `cgo` e sem
 dependência de serviço externo.
 
 ## Uso
