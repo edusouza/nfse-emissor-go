@@ -140,6 +140,14 @@ Com um A1 da ICP-Brasil, aponte `certificado.arquivo` para ele e acrescente
 nfse emitir --numero 1 --valor 1500 --descricao "Consultoria" --enviar
 ```
 
+Se preferir conferir antes de transmitir, emita sem `--enviar` e mande o
+arquivo depois — é o mesmo documento, byte a byte:
+
+```bash
+nfse emitir --valor 1500 --descricao "Consultoria"
+nfse enviar notas/DPS4106902...-dps.xml
+```
+
 Em `producao-restrita` a nota é processada pelo governo mas **não tem valor
 fiscal** — é o lugar certo para o primeiro teste. Para emitir com valor fiscal,
 mude `ambiente` para `producao` no `nfse.yaml`; o comando vai pedir confirmação

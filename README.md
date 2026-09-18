@@ -7,15 +7,23 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual:** o CLI monta, valida, assina e envia a DPS à Sefin Nacional.
-> O envio segue a especificação oficial do governo e é coberto por testes, mas
-> ainda não foi exercitado contra o ambiente real — veja o [roadmap](#roadmap).
+> **Estado atual — v0.5.0**, a primeira versão publicada
+> ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida, assina e envia a DPS à
+> Sefin Nacional. A conexão com o ambiente real já foi exercitada — foi assim
+> que apareceu o defeito de renegociação TLS corrigido nesta versão. O que
+> ainda falta confirmar é uma emissão completa, do `POST` até a NFS-e
+> autorizada; é por isso que a numeração segue em `0.x`. Veja o
+> [roadmap](#roadmap).
 
 ## Instalação
 
 ```bash
 go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
 ```
+
+Para fixar a versão, troque `@latest` por `@v0.5.0`. O `nfse versao` mostra o
+que está instalado — e é o mesmo identificador que vai no `verAplic` de cada
+declaração.
 
 Ou compilando a partir do código:
 
@@ -36,6 +44,18 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 [Linux/macOS](exemplos/README.md) e [Windows/PowerShell](exemplos/README-windows.md).
 
 ## Uso
+
+| Comando | O que faz |
+|---------|-----------|
+| `nfse config init` / `check` | cria o `nfse.yaml` e confere o que está preenchido |
+| `nfse cert info` | inspeciona o certificado A1 |
+| `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
+| `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
+| `nfse consultar <chave>` | busca a NFS-e, ou a chave a partir do identificador da DPS |
+| `nfse cancelar <chave>` | registra o evento de cancelamento |
+| `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
+
+Todos aceitam `--help`.
 
 ### Verificar o certificado
 
@@ -125,26 +145,6 @@ arquivo de `--yaml`, depois as flags. Cada uma sobrescreve a anterior, então
 `--sem-assinar` gera o XML sem assinatura, para inspecionar antes de gastar o
 certificado.
 
-### Conferir agora, enviar depois
-
-`nfse emitir` sem `--enviar` para na assinatura e grava a DPS. Para transmitir
-**aquele mesmo arquivo** depois, use `nfse enviar`:
-
-```bash
-nfse emitir --valor 1500 --descricao "Consultoria - agosto/2026"
-# confira notas/DPS4106902...-dps.xml
-nfse enviar notas/DPS4106902...-dps.xml
-```
-
-Chamar `nfse emitir --enviar` de novo **não** manda o arquivo anterior: monta um
-documento novo, com o próximo número da série e outro instante de emissão. A
-nota que você conferiu ficaria para trás, e o número já gasto viraria um buraco
-na sequência.
-
-`nfse enviar` não assina nada e não mexe no contador — a numeração pertence à
-emissão. Um arquivo sem assinatura é recusado antes de sair da máquina, porque
-é o engano provável: `--sem-assinar` grava com nome parecido.
-
 ### Alíquota do ISS e retenção
 
 Quem pode declarar alíquota de ISS na nota depende do regime do prestador, e a
@@ -211,6 +211,26 @@ O envio **não é repetido automaticamente** em caso de falha de rede. Emissão 
 é idempotente: uma requisição que chegou ao governo e falhou na volta geraria uma
 segunda nota numa retentativa. Se acontecer, consulte pelo identificador da DPS
 antes de tentar de novo.
+
+### Conferir agora, enviar depois
+
+`nfse emitir` sem `--enviar` para na assinatura e grava a DPS. Para transmitir
+**aquele mesmo arquivo** depois, use `nfse enviar`:
+
+```bash
+nfse emitir --valor 1500 --descricao "Consultoria - agosto/2026"
+# confira notas/DPS4106902...-dps.xml
+nfse enviar notas/DPS4106902...-dps.xml
+```
+
+Chamar `nfse emitir --enviar` de novo **não** manda o arquivo anterior: monta um
+documento novo, com o próximo número da série e outro instante de emissão. A
+nota que você conferiu ficaria para trás, e o número já gasto viraria um buraco
+na sequência.
+
+`nfse enviar` não assina nada e não mexe no contador — a numeração pertence à
+emissão. Um arquivo sem assinatura é recusado antes de sair da máquina, porque
+é o engano provável: `--sem-assinar` grava com nome parecido.
 
 ### A senha do certificado
 
@@ -329,7 +349,9 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.2.0 | Envio à Sefin Nacional | pronto |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
 | v0.4.0 | Cancelamento de NFS-e | pronto |
-| v0.5.0 | Substituição de NFS-e | planejado |
+| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | **lançada** |
+| v0.6.0 | Substituição de NFS-e | planejado |
+| v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 
@@ -367,9 +389,12 @@ gofmt -l ./cmd ./internal ./pkg
 ## O que a validação local cobre
 
 O CLI valida a DPS antes de assinar, mas essa validação **não substitui** a da
-Sefin Nacional. Ela confere estrutura, tipos, formatos e regras de valores
-monetários; não faz validação XSD completa nem conhece as parametrizações
-municipais. A palavra final é sempre do governo.
+Sefin Nacional. Ela confere estrutura, tipos, formatos, regras de valores
+monetários e as regras de alíquota do ISS que dependem só do regime do
+prestador (E0595, E0600, E0621, E0625). Não faz validação XSD completa nem
+conhece as parametrizações municipais — as regras que dependem do convênio do
+município (E0635, E0640) ficam de fora de propósito. A palavra final é sempre
+do governo.
 
 Veja as issues [#4](https://github.com/edusouza/nfse-emissor-go/issues/4) e
 [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
