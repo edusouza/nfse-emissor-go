@@ -17,6 +17,12 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **`nfse enviar <arquivo.xml>`** — transmite uma DPS que já foi gerada e
+  assinada, byte a byte. Fechava um buraco no fluxo de conferir antes de
+  mandar: quem emitia sem `--enviar` e depois chamava `--enviar` não mandava o
+  arquivo conferido, e sim um documento novo, com outro número de DPS e outro
+  instante de emissão. O comando não assina nada e não mexe no contador; recusa
+  um arquivo sem assinatura antes de gastar a viagem até a Sefin.
 - **Validação da alíquota do ISS antes de assinar.** O `emitir` passa a recusar
   as combinações que a Sefin rejeita na recepção: MEI informando alíquota
   (E0600), ME/EPP do Simples informando alíquota sem retenção (E0625), ME/EPP

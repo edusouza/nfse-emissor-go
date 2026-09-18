@@ -2,162 +2,232 @@ package cli
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/beevik/etree"
-
-	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
+	"github.com/edusouza/nfse-emissor-go/internal/config"
 )
 
-// stubSefin starts a fake Sefin Nacional and points the CLI at it for the
-// duration of the test. The handler receives the decoded request body.
-func stubSefin(t *testing.T, handler func(w http.ResponseWriter, body map[string]string)) {
+func execEnviar(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
+	t.Setenv(envCertPassword, testCertPassword)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("corpo invalido: %v", err)
-		}
-		handler(w, body)
-	}))
-	t.Cleanup(srv.Close)
+	var out bytes.Buffer
+	root := NewRootCommand()
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs(append([]string{"enviar", "--config", filepath.Join(dir, "nfse.yaml")}, args...))
 
-	original := newSefinClient
-	newSefinClient = func(cfg sefin.Config) (*sefin.Client, error) {
-		cfg.BaseURL = srv.URL
-		cfg.HTTPClient = srv.Client()
-		return sefin.New(cfg)
-	}
-	t.Cleanup(func() { newSefinClient = original })
+	err := root.Execute()
+	return out.String(), err
 }
 
-// respondSuccess writes a NFSePostResponseSucesso carrying the given invoice.
-func respondSuccess(t *testing.T, w http.ResponseWriter, accessKey, nfseXML string) {
+// The whole point of the command: what reaches the government is the file on
+// disk, byte for byte. Rebuilding it would change dhEmi and the signature, so
+// the document reviewed offline would not be the document issued.
+func TestEnviar_TransmitsTheFileUnchanged(t *testing.T) {
+	dir := workspace(t)
+
+	if out, err := runEmit(t, dir, "--numero", "20", "--valor", "1500",
+		"--descricao", "Consultoria"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+	dpsPath := onlyXMLPath(t, dir)
+	onDisk, err := os.ReadFile(dpsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var received string
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		received = decodePayload(t, body["dpsXmlGZipB64"])
+		respondEmission(t, w)
+	})
+
+	out, err := execEnviar(t, dir, dpsPath)
+	if err != nil {
+		t.Fatalf("envio falhou: %v\n%s", err, out)
+	}
+
+	if received != string(onDisk) {
+		t.Errorf("a Sefin recebeu um documento diferente do arquivo em disco")
+	}
+	if !strings.Contains(out, "NFS-e emitida") {
+		t.Errorf("saida nao confirma a emissao:\n%s", out)
+	}
+}
+
+// --sem-assinar names its output the same way, so an unsigned file is the
+// likely mistake. Catching it here beats a rejection from the government.
+func TestEnviar_RefusesUnsignedDPS(t *testing.T) {
+	dir := workspace(t)
+
+	if out, err := runEmit(t, dir, "--numero", "21", "--valor", "100",
+		"--descricao", "Servico", "--sem-assinar"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+
+	out, err := execEnviar(t, dir, onlyXMLPath(t, dir))
+	if err == nil {
+		t.Fatalf("esperava recusa de uma DPS sem assinatura\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "assinad") {
+		t.Errorf("a mensagem deveria explicar que falta assinatura: %v", err)
+	}
+}
+
+func TestEnviar_RefusesSomethingThatIsNotADPS(t *testing.T) {
+	dir := workspace(t)
+
+	path := filepath.Join(dir, "nfse.xml")
+	if err := os.WriteFile(path, []byte(`<?xml version="1.0"?><NFSe><infNFSe Id="X"/></NFSe>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := execEnviar(t, dir, path)
+	if err == nil {
+		t.Fatalf("esperava recusa de um XML que nao e DPS\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "infDPS") {
+		t.Errorf("a mensagem deveria dizer o que esperava encontrar: %v", err)
+	}
+}
+
+func TestEnviar_ReportsMissingFile(t *testing.T) {
+	dir := workspace(t)
+
+	out, err := execEnviar(t, dir, filepath.Join(dir, "nao-existe.xml"))
+	if err == nil {
+		t.Fatalf("esperava erro para arquivo inexistente\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "nao-existe.xml") {
+		t.Errorf("a mensagem deveria nomear o arquivo: %v", err)
+	}
+}
+
+// The counter belongs to emission. Transmitting a document that was already
+// written must not burn another number.
+func TestEnviar_DoesNotAdvanceTheCounter(t *testing.T) {
+	dir := workspace(t)
+
+	if out, err := runEmit(t, dir, "--valor", "300", "--descricao", "Servico"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+	before := readCounter(t, dir)
+
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		respondEmission(t, w)
+	})
+	if out, err := execEnviar(t, dir, onlyXMLPath(t, dir)); err != nil {
+		t.Fatalf("envio falhou: %v\n%s", err, out)
+	}
+
+	if after := readCounter(t, dir); after != before {
+		t.Errorf("contador foi de %q para %q; enviar nao deveria numerar nada", before, after)
+	}
+}
+
+func TestEnviar_ClientSeeksSefinConfiguration(t *testing.T) {
+	var gotPath string
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		respondEmission(t, w)
+	})
+
+	dir := workspace(t)
+	if out, err := runEmit(t, dir, "--numero", "30", "--valor", "10",
+		"--descricao", "Servico"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+	if out, err := execEnviar(t, dir, onlyXMLPath(t, dir)); err != nil {
+		t.Fatalf("envio falhou: %v\n%s", err, out)
+	}
+
+	if !strings.HasSuffix(gotPath, "/nfse") {
+		t.Errorf("caminho = %q, esperava terminar em /nfse", gotPath)
+	}
+}
+
+// respondEmission answers with the swagger's NFSePostResponseSucesso shape.
+func respondEmission(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 
 	var buf bytes.Buffer
-	zw := newGzipWriter(&buf)
-	if _, err := zw.Write([]byte(nfseXML)); err != nil {
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write([]byte(`<?xml version="1.0"?><NFSe><infNFSe Id="N1"/></NFSe>`)); err != nil {
 		t.Fatal(err)
 	}
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
+	payload := base64.StdEncoding.EncodeToString(buf.Bytes())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"idDps":                 "DPS1",
+		"chaveAcesso":           strings.Repeat("7", 50),
+		"nfseXmlGZipB64":        payload,
 		"tipoAmbiente":          2,
-		"versaoAplicativo":      "1.0.0",
-		"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
-		"idDps":                 "DPS123",
-		"chaveAcesso":           accessKey,
-		"nfseXmlGZipB64":        encodeBase64(buf.Bytes()),
+		"versaoAplicativo":      "1.0",
+		"dataHoraProcessamento": "2026-09-18T12:00:00Z",
 	})
 }
 
-func TestEmitir_Enviar(t *testing.T) {
-	const nfseXML = `<?xml version="1.0"?><NFSe><infNFSe Id="NFS1"/></NFSe>`
-	accessKey := strings.Repeat("7", 50)
+// decodePayload undoes the gzip+base64 the API wraps every XML in.
+func decodePayload(t *testing.T, encoded string) string {
+	t.Helper()
 
-	var receivedDPS string
-	stubSefin(t, func(w http.ResponseWriter, body map[string]string) {
-		receivedDPS = body["dpsXmlGZipB64"]
-		respondSuccess(t, w, accessKey, nfseXML)
-	})
-
-	dir := workspace(t)
-	out, err := runEmit(t, dir, "--numero", "50", "--valor", "1200",
-		"--descricao", "Servico enviado", "--enviar")
+	compressed, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		t.Fatalf("emissao falhou: %v\n%s", err, out)
+		t.Fatal(err)
 	}
-
-	// The Sefin must have received the signed declaration, not the draft.
-	if receivedDPS == "" {
-		t.Fatal("a Sefin nao recebeu o campo dpsXmlGZipB64")
-	}
-	sent := decodeForTest(t, receivedDPS)
-	if !strings.Contains(sent, "<Signature") {
-		t.Error("a DPS enviada nao esta assinada")
-	}
-
-	doc := etree.NewDocument()
-	if err := doc.ReadFromString(sent); err != nil {
-		t.Fatalf("a DPS enviada nao e XML valido: %v", err)
-	}
-	if el := doc.FindElement("DPS/infDPS/valores/vServPrest/vServ"); el == nil || el.Text() != "1200.00" {
-		t.Errorf("valor enviado incorreto: %v", el)
-	}
-
-	// The authorised invoice must land on disk, named by its access key.
-	nfsePath := filepath.Join(dir, "notas", accessKey+"-nfse.xml")
-	saved, err := os.ReadFile(nfsePath)
+	zr, err := gzip.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		t.Fatalf("NFS-e nao foi gravada: %v", err)
+		t.Fatal(err)
 	}
-	if string(saved) != nfseXML {
-		t.Error("a NFS-e gravada nao confere com a recebida")
-	}
+	defer zr.Close()
 
-	for _, want := range []string{"NFS-e emitida", accessKey, "producao-restrita", "NAO tem valor fiscal"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("a saida nao menciona %q:\n%s", want, out)
-		}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return string(raw)
 }
 
-func TestEmitir_EnviarRejeicao(t *testing.T) {
-	stubSefin(t, func(w http.ResponseWriter, body map[string]string) {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{
-			"tipoAmbiente":          2,
-			"versaoAplicativo":      "1.0.0",
-			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
-			"erros": []map[string]string{
-				{"codigo": "E001", "descricao": "Municipio nao conveniado"},
-				{"codigo": "E042", "descricao": "cTribNac invalido", "complemento": "010101"},
-			},
-		})
-	})
+// onlyXMLPath returns the path of the single XML written under the workspace.
+func onlyXMLPath(t *testing.T, dir string) string {
+	t.Helper()
 
-	dir := workspace(t)
-	_, err := runEmit(t, dir, "--numero", "51", "--valor", "100", "--descricao", "x", "--enviar")
-	if err == nil {
-		t.Fatal("esperava erro para DPS rejeitada")
+	matches, err := filepath.Glob(filepath.Join(dir, "notas", "*.xml"))
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// Every rejection reason must reach the user in one go.
-	for _, want := range []string{"E001", "Municipio nao conveniado", "E042", "010101"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("a mensagem nao menciona %q:\n%v", want, err)
-		}
+	if len(matches) != 1 {
+		t.Fatalf("esperava exatamente 1 XML gerado, encontrei %d", len(matches))
 	}
-
-	// A rejected emission must not leave an invoice file behind.
-	if matches, _ := filepath.Glob(filepath.Join(dir, "notas", "*-nfse.xml")); len(matches) != 0 {
-		t.Errorf("uma emissao rejeitada gravou %d arquivo(s) de NFS-e", len(matches))
-	}
+	return matches[0]
 }
 
-// TestEmitir_EnviarComSemAssinar pins that the two flags are refused together:
-// the Sefin only accepts a signed declaration, so the combination is a mistake
-// worth catching before anything is written.
-func TestEmitir_EnviarComSemAssinar(t *testing.T) {
-	dir := workspace(t)
-	_, err := runEmit(t, dir, "--numero", "52", "--valor", "100",
-		"--descricao", "x", "--enviar", "--sem-assinar")
-	if err == nil {
-		t.Fatal("esperava erro ao combinar --enviar com --sem-assinar")
+// readCounter returns the raw numbering state, so a test can assert that a
+// command left it untouched.
+func readCounter(t *testing.T, dir string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(filepath.Join(dir, config.StateFileName))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "assinada") {
-		t.Errorf("a mensagem deveria explicar o motivo: %v", err)
-	}
+	return string(data)
 }

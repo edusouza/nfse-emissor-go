@@ -125,6 +125,26 @@ arquivo de `--yaml`, depois as flags. Cada uma sobrescreve a anterior, então
 `--sem-assinar` gera o XML sem assinatura, para inspecionar antes de gastar o
 certificado.
 
+### Conferir agora, enviar depois
+
+`nfse emitir` sem `--enviar` para na assinatura e grava a DPS. Para transmitir
+**aquele mesmo arquivo** depois, use `nfse enviar`:
+
+```bash
+nfse emitir --valor 1500 --descricao "Consultoria - agosto/2026"
+# confira notas/DPS4106902...-dps.xml
+nfse enviar notas/DPS4106902...-dps.xml
+```
+
+Chamar `nfse emitir --enviar` de novo **não** manda o arquivo anterior: monta um
+documento novo, com o próximo número da série e outro instante de emissão. A
+nota que você conferiu ficaria para trás, e o número já gasto viraria um buraco
+na sequência.
+
+`nfse enviar` não assina nada e não mexe no contador — a numeração pertence à
+emissão. Um arquivo sem assinatura é recusado antes de sair da máquina, porque
+é o engano provável: `--sem-assinar` grava com nome parecido.
+
 ### Alíquota do ISS e retenção
 
 Quem pode declarar alíquota de ISS na nota depende do regime do prestador, e a
