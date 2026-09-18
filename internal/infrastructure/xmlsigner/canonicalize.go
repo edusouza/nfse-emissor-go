@@ -48,20 +48,7 @@ type namespaceInfo struct {
 //   - []byte: The canonical form of the element as UTF-8 bytes
 //   - error: Any error encountered during canonicalization
 func Canonicalize(element *etree.Element) ([]byte, error) {
-	if element == nil {
-		return nil, nil
-	}
-
-	// Create a buffer for the output
-	buf := &bytes.Buffer{}
-
-	// Collect all namespaces that are in scope for this element
-	nsInScope := collectNamespacesInScope(element)
-
-	// Perform exclusive canonicalization
-	canonicalizeElement(buf, element, nsInScope, nil)
-
-	return buf.Bytes(), nil
+	return CanonicalizeToBytesWithNamespaces(element, nil)
 }
 
 // CanonicalizeToBytesWithNamespaces canonicalizes an element with additional
@@ -83,41 +70,74 @@ func CanonicalizeToBytesWithNamespaces(element *etree.Element, inclusiveNSPrefix
 		return nil, nil
 	}
 
+	// A subtree being canonicalized for XMLDSig is treated as a document of its
+	// own: its apex has no output ancestors, so every namespace the apex
+	// visibly utilizes must be rendered on it, even when the surrounding
+	// document already declares the same URI further up.
+	//
+	// Getting this wrong is invisible until someone else verifies the
+	// signature. A <SignedInfo> nested in a <Signature xmlns="...dsig#"> was
+	// being canonicalized as a bare <SignedInfo>, because the inherited
+	// declaration made the apex's own look redundant.
+	apex := materializeInheritedNamespaces(element)
+
 	buf := &bytes.Buffer{}
-	nsInScope := collectNamespacesInScope(element)
-	canonicalizeElement(buf, element, nsInScope, inclusiveNSPrefixes)
+	canonicalizeElement(buf, apex, map[string]string{}, inclusiveNSPrefixes)
 
 	return buf.Bytes(), nil
 }
 
-// collectNamespacesInScope collects all namespace declarations in scope for an element,
-// including inherited namespaces from ancestor elements.
-func collectNamespacesInScope(element *etree.Element) map[string]string {
+// materializeInheritedNamespaces returns the element with the namespace
+// declarations it inherits from its ancestors written out explicitly, so that
+// it can be canonicalized as a standalone subtree.
+//
+// Declarations the element already carries win. Unused prefixed declarations
+// are added but dropped later by collectRequiredNamespaces, which renders only
+// what the subtree visibly utilizes.
+func materializeInheritedNamespaces(element *etree.Element) *etree.Element {
+	inherited := collectAncestorNamespaces(element)
+	if len(inherited) == 0 {
+		return element
+	}
+
+	// Copy so the caller's document is left untouched.
+	apex := element.Copy()
+
+	for prefix, uri := range inherited {
+		key := "xmlns"
+		if prefix != "" {
+			key = "xmlns:" + prefix
+		}
+		if apex.SelectAttr(key) == nil {
+			apex.CreateAttr(key, uri)
+		}
+	}
+
+	return apex
+}
+
+// collectAncestorNamespaces collects the namespace declarations an element
+// inherits, walking from its parent up to the document root. The element's own
+// declarations are excluded: those are handled as part of the subtree.
+func collectAncestorNamespaces(element *etree.Element) map[string]string {
 	nsInScope := make(map[string]string)
 
-	// Walk up the tree to collect inherited namespaces
 	var ancestors []*etree.Element
-	for e := element; e != nil; e = e.Parent() {
+	for e := element.Parent(); e != nil; e = e.Parent() {
 		ancestors = append([]*etree.Element{e}, ancestors...)
 	}
 
-	// Process from root to leaf to get correct namespace inheritance
+	// Walk root to leaf so that a nearer declaration overrides a farther one.
 	for _, e := range ancestors {
-		// Check the element's own namespace
 		if e.Space != "" {
-			// Find the prefix for this namespace
-			prefix := findNamespacePrefix(e, e.Space)
-			nsInScope[prefix] = e.Space
+			nsInScope[findNamespacePrefix(e, e.Space)] = e.Space
 		}
-
-		// Check all namespace attributes
 		for _, attr := range e.Attr {
-			if attr.Space == "xmlns" || (attr.Space == "" && attr.Key == "xmlns") {
-				if attr.Key == "xmlns" {
-					nsInScope[""] = attr.Value
-				} else {
-					nsInScope[attr.Key] = attr.Value
-				}
+			switch {
+			case attr.Space == "xmlns":
+				nsInScope[attr.Key] = attr.Value
+			case attr.Space == "" && attr.Key == "xmlns":
+				nsInScope[""] = attr.Value
 			}
 		}
 	}

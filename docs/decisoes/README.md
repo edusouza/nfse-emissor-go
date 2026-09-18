@@ -11,3 +11,5 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 |---|---------|--------|
 | [0001](0001-cli-em-vez-de-api.md) | CLI em vez de API REST | Aceita |
 | [0002](0002-parser-pkcs12.md) | Troca do parser de PKCS#12 | Aceita |
+| [0003](0003-xml-conforme-o-xsd.md) | Ancorar o gerador de XML no XSD oficial | Aceita |
+| [0004](0004-assinatura-que-nao-verificava.md) | A assinatura digital nunca verificou | Aceita |

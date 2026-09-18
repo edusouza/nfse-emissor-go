@@ -143,8 +143,13 @@ func (s *XMLSigner) SignDPS(dpsXML string) (string, error) {
 	// Append the signature element after infDPS
 	dps.AddChild(signature)
 
-	// Serialize the signed document
-	doc.Indent(2)
+	// Serialize WITHOUT re-indenting.
+	//
+	// Canonical XML is whitespace-sensitive. Indenting here would insert text
+	// nodes into infDPS and SignedInfo after their digests had been computed,
+	// invalidating both the reference digest and the signature itself. Every
+	// document signed by the previous version failed verification for exactly
+	// this reason.
 	signedXML, err := doc.WriteToString()
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize signed XML: %w", err)
@@ -302,10 +307,13 @@ func (s *XMLSigner) buildSignatureElement(signedInfo *etree.Element, signatureBa
 	signature := etree.NewElement("Signature")
 	signature.CreateAttr("xmlns", NamespaceXMLDSig)
 
-	// Copy SignedInfo (without the xmlns since it will be inherited)
-	signedInfoCopy := signedInfo.Copy()
-	signedInfoCopy.RemoveAttr("xmlns")
-	signature.AddChild(signedInfoCopy)
+	// Keep the xmlns declaration on SignedInfo.
+	//
+	// It was signed with that declaration present, and exclusive
+	// canonicalization renders a declaration only where it appears. Dropping it
+	// here to "inherit" from Signature would make the verifier canonicalize a
+	// different byte sequence than the one that was signed.
+	signature.AddChild(signedInfo.Copy())
 
 	// SignatureValue
 	signatureValue := signature.CreateElement("SignatureValue")
@@ -441,8 +449,8 @@ func (s *XMLSigner) SignDPSWithResult(dpsXML string) (*SigningResult, error) {
 	signature := s.buildSignatureElement(signedInfo, signatureBase64, certBase64)
 	dps.AddChild(signature)
 
-	// Serialize
-	doc.Indent(2)
+	// Serialize without re-indenting: added whitespace would invalidate both
+	// the reference digest and the signature. See SignDPS.
 	signedXML, err := doc.WriteToString()
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize signed XML: %w", err)

@@ -62,7 +62,10 @@ func NewCertificateValidator() *CertificateValidator {
 //  2. Certificate is present
 //  3. Certificate has not expired (NotAfter > now)
 //  4. Certificate is valid (NotBefore <= now)
-//  5. Private key is present
+//
+// It deliberately does NOT require a private key. Verifying a signature only
+// ever has the public certificate from KeyInfo, and requiring a key here made
+// every verification fail. The private key is checked by ValidateForSigning.
 func (v *CertificateValidator) Validate(cert *CertificateInfo) error {
 	if cert == nil {
 		return ErrCertificateNil
@@ -88,11 +91,6 @@ func (v *CertificateValidator) Validate(cert *CertificateInfo) error {
 		return fmt.Errorf("%w: valid from %s", ErrCertificateNotYetValid, cert.Certificate.NotBefore.Format(time.RFC3339))
 	}
 
-	// Check for private key
-	if cert.PrivateKey == nil {
-		return ErrCertificateMissingPrivateKey
-	}
-
 	return nil
 }
 
@@ -113,6 +111,11 @@ func (v *CertificateValidator) ValidateForSigning(cert *CertificateInfo) error {
 	// First perform basic validation
 	if err := v.Validate(cert); err != nil {
 		return err
+	}
+
+	// Signing, unlike verification, genuinely needs the private key.
+	if cert.PrivateKey == nil {
+		return ErrCertificateMissingPrivateKey
 	}
 
 	// Check key usage if specified

@@ -20,18 +20,36 @@ const (
     <dCompet>2024-01-15</dCompet>
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
-    <subst>2</subst>
     <prest>
       <CNPJ>12345678000190</CNPJ>
       <xNome>Provider Company Ltd</xNome>
+      <regTrib>
+        <opSimpNac>2</opSimpNac>
+        <regEspTrib>0</regEspTrib>
+      </regTrib>
     </prest>
     <serv>
-      <cTribNac>010101</cTribNac>
-      <xDescServ>Software development services</xDescServ>
-      <cLocPrest>3550308</cLocPrest>
+      <locPrest>
+        <cLocPrestacao>3550308</cLocPrestacao>
+      </locPrest>
+      <cServ>
+        <cTribNac>010101</cTribNac>
+        <xDescServ>Software development services</xDescServ>
+      </cServ>
     </serv>
     <valores>
-      <vServPrest>1000.00</vServPrest>
+      <vServPrest>
+        <vServ>1000.00</vServ>
+      </vServPrest>
+      <trib>
+        <tribMun>
+          <tribISSQN>1</tribISSQN>
+          <tpRetISSQN>1</tpRetISSQN>
+        </tribMun>
+        <totTrib>
+          <indTotTrib>0</indTotTrib>
+        </totTrib>
+      </trib>
     </valores>
   </infDPS>
 </DPS>`

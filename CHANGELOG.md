@@ -20,9 +20,37 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   `NFSE_CERT_SENHA` ou por prompt interativo, nessa ordem.
 - Esteira de CI: formatação, `go mod tidy` limpo, `go vet`, build, testes com
   detector de corrida e relatório de cobertura.
+- `nfse config init` — gera um `nfse.yaml` comentado; `nfse config check`
+  verifica se está completo e coerente.
+- `nfse emitir` — monta, valida e assina o XML da DPS. Os dados vêm da seção
+  `padroes` do `nfse.yaml`, de um arquivo passado em `--yaml` e das flags, cada
+  camada sobrescrevendo a anterior, de modo que quem sempre emite o mesmo tipo
+  de serviço só precisa informar número e valor. `--sem-assinar` gera o XML sem
+  assinatura, para inspeção.
+- Campos desconhecidos no YAML são rejeitados: num emissor fiscal, um `aliquota_iss`
+  digitado no lugar de `iss_aliquota` produziria uma nota errada em silêncio.
 - Registro de decisões de arquitetura em [`docs/decisoes/`](docs/decisoes/).
 
 ### Corrigido
+
+- **A assinatura digital nunca verificou.** Três defeitos somados faziam com que
+  toda DPS assinada fosse rejeitada: o documento era reindentado depois de
+  assinado (invalidando digest e assinatura), a canonicalização perdia a
+  declaração de namespace no ápice da subárvore, e a verificação exigia chave
+  privada — que quem verifica nunca tem. Não existia nenhum teste que assinasse
+  e depois verificasse; agora existe, cobrindo os três caminhos de assinatura e
+  a detecção de adulteração.
+  Ver [ADR 0004](docs/decisoes/0004-assinatura-que-nao-verificava.md).
+- **O XML da DPS não seguia o schema oficial.** Sete divergências em relação a
+  `DPS_v1.00.xsd`, entre elas `regEspTrib` e `tpRetISSQN` ausentes (ambos
+  obrigatórios), descontos no elemento errado, `xDescServ` fora de `cServ`,
+  `totTrib` no nível errado e com dois filhos onde o schema admite um, `subst`
+  emitido como `<subst>2</subst>`, e base de cálculo e valor de ISS inventados
+  dentro do elemento de benefício municipal — campos que a DPS não tem, porque
+  quem os calcula é o governo.
+  Ver [ADR 0003](docs/decisoes/0003-xml-conforme-o-xsd.md).
+- O validador estrutural procurava `cTribNac`, `cLocPrest` e `vServPrest` em
+  caminhos que não existem no schema, e exigia `subst`, que é opcional.
 
 - **Certificados A1 em formato moderno não eram lidos.** `ParsePFX` usava
   `golang.org/x/crypto/pkcs12`, que só decodifica PKCS#12 com 3DES e MAC SHA-1.
@@ -61,7 +89,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - O cliente da Sefin Nacional implementa um contrato **SOAP incorreto**; a API
   real é REST/JSON. Nenhuma emissão real funciona até isso ser corrigido.
   Ver [#3](https://github.com/edusouza/nfse-emissor-go/issues/3).
-- A validação chamada de "XSD" é estrutural e não lê os schemas oficiais.
+- A validação chamada de "XSD" é estrutural e não lê os schemas oficiais. O tipo
+  foi renomeado para `StructuralValidator` e o parâmetro `schemaDir`, que era
+  ignorado, foi removido.
   Ver [#4](https://github.com/edusouza/nfse-emissor-go/issues/4).
 - A alíquota de ISS é informada pelo usuário, sem consulta aos parâmetros
   municipais. Ver [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).

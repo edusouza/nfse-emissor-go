@@ -39,11 +39,20 @@ func TestCertificateValidator_Validate(t *testing.T) {
 		}
 	})
 
-	t.Run("nil private key", func(t *testing.T) {
+	t.Run("nil private key is accepted", func(t *testing.T) {
+		// Verifying a signature only has the public certificate from KeyInfo.
+		// Requiring a private key here made every verification fail.
 		certInfo := generateValidCertificate(t)
 		certInfo.PrivateKey = nil
-		err := validator.Validate(certInfo)
-		if err != ErrCertificateMissingPrivateKey {
+		if err := validator.Validate(certInfo); err != nil {
+			t.Errorf("Expected no error without a private key, got: %v", err)
+		}
+	})
+
+	t.Run("nil private key is rejected for signing", func(t *testing.T) {
+		certInfo := generateValidCertificate(t)
+		certInfo.PrivateKey = nil
+		if err := validator.ValidateForSigning(certInfo); err != ErrCertificateMissingPrivateKey {
 			t.Errorf("Expected ErrCertificateMissingPrivateKey, got: %v", err)
 		}
 	})

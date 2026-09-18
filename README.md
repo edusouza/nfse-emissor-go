@@ -7,9 +7,8 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual:** em desenvolvimento. O envio à Sefin Nacional ainda **não**
-> está disponível — veja o [roadmap](#roadmap). O que já funciona está descrito
-> abaixo.
+> **Estado atual:** o CLI monta, valida e assina a DPS. O envio à Sefin Nacional
+> ainda **não** está disponível — veja o [roadmap](#roadmap).
 
 ## Instalação
 
@@ -56,6 +55,68 @@ Certificado apto a assinar uma DPS.
 O comando sai com código diferente de zero se o certificado não puder assinar
 uma DPS — útil para usar em script.
 
+### Emitir uma nota
+
+Crie a configuração e preencha os campos obrigatórios:
+
+```bash
+nfse config init     # gera um nfse.yaml comentado
+$EDITOR nfse.yaml
+nfse config check    # confere se está completo
+```
+
+No `nfse.yaml`, a seção `padroes` guarda tudo que se repete — código do serviço,
+município, alíquota, e o tomador não identificado quando você vende ao público
+em geral. Com ela preenchida, emitir é uma linha:
+
+```bash
+nfse emitir --numero 42 --valor 1500 --descricao "Consultoria - agosto/2026"
+```
+
+```
+DPS DPS410690211234567800019900001000000000000042
+  Ambiente       producao-restrita
+  Valor          R$ 1500.00
+  Servico        Consultoria - agosto/2026
+  Assinatura     aplicada
+  Arquivo        notas/DPS4106902...042-dps.xml
+```
+
+Para identificar o cliente, use as flags do tomador:
+
+```bash
+nfse emitir --numero 43 --valor 2400 --descricao "Manutencao mensal"   --tomador-cnpj 98765432000188 --tomador-nome "CLIENTE EXEMPLO SA"
+```
+
+Para notas com muitos campos, ou para versionar a nota junto do projeto, use um
+arquivo:
+
+```yaml
+# nota.yaml
+numero: "44"
+competencia: "2026-08-01"
+servico:
+  descricao: Desenvolvimento de API de pagamentos
+valores:
+  valor_servico: 8500.00
+  desconto_incondicionado: 500.00
+tomador:
+  cnpj: "98765432000188"
+  nome: CLIENTE EXEMPLO SA
+  email: financeiro@exemplo.com.br
+```
+
+```bash
+nfse emitir --yaml nota.yaml
+```
+
+As três camadas se combinam nesta ordem — `padroes` do `nfse.yaml`, depois o
+arquivo de `--yaml`, depois as flags. Cada uma sobrescreve a anterior, então
+`--valor` na linha de comando vence o que estiver no arquivo.
+
+`--sem-assinar` gera o XML sem assinatura, para inspecionar antes de gastar o
+certificado.
+
 ### A senha do certificado
 
 Há três formas de informá-la, nesta ordem de precedência:
@@ -72,7 +133,7 @@ sistema, e costumam ficar gravados no histórico do shell.
 
 | Versão | Entrega | Estado |
 |--------|---------|--------|
-| v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | em andamento |
+| v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
 | v0.2.0 | Envio à Sefin Nacional | planejado |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | planejado |
 | v0.4.0 | Cancelamento e substituição | planejado |

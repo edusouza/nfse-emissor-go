@@ -35,8 +35,10 @@ type DPSConfig struct {
 	// MunicipalityCode is the 7-digit IBGE code where the DPS is emitted
 	MunicipalityCode string
 
-	// Substitution: 1 = yes, 2 = no
-	Substitution int
+	// Substitution, when set, marks this DPS as replacing an existing NFS-e.
+	// It is omitted from the XML for an ordinary emission: the schema models
+	// subst as a structure carrying the replaced key, not as a yes/no flag.
+	Substitution *DPSSubstitution
 
 	// Provider information
 	Provider DPSProvider
@@ -57,6 +59,27 @@ type DPSProvider struct {
 	Name                  string
 	TaxRegime             string // "mei" or "me_epp"
 	MunicipalRegistration string
+
+	// SpecialTaxRegime is regEspTrib, required by the schema.
+	// 0 = none, 1 = cooperative act, 2 = estimate, 3 = municipal micro-company,
+	// 4 = notary, 5 = self-employed professional, 6 = professional society.
+	SpecialTaxRegime int
+
+	// SimplesApuracao is regApTribSN, which the schema expects when the
+	// provider is an ME/EPP opting into Simples Nacional. Defaults to 1.
+	SimplesApuracao int
+}
+
+// DPSSubstitution identifies the NFS-e being replaced by this DPS.
+type DPSSubstitution struct {
+	// AccessKey is the 50-character key of the NFS-e being replaced.
+	AccessKey string
+
+	// ReasonCode is the substitution justification code (cMotivo).
+	ReasonCode string
+
+	// ReasonText is the free-text justification (xMotivo), optional.
+	ReasonText string
 }
 
 // DPSTaker contains taker information for the DPS.
@@ -90,35 +113,45 @@ type DPSValues struct {
 	// ServiceValue is the gross value of the service (vServ).
 	ServiceValue float64
 
-	// UnconditionalDiscount is a discount applied regardless of payment conditions (vDescIncond).
-	// Reduces the tax base.
+	// AmountReceived is the amount actually received (vReceb), optional.
+	AmountReceived float64
+
+	// UnconditionalDiscount is a discount applied regardless of payment
+	// conditions (vDescIncond). It reduces the tax base.
 	UnconditionalDiscount float64
 
-	// ConditionalDiscount is a discount conditional on payment terms (vDescCond).
-	// Does NOT reduce the tax base.
+	// ConditionalDiscount is a discount conditional on payment terms
+	// (vDescCond). It does NOT reduce the tax base.
 	ConditionalDiscount float64
 
 	// Deductions are legally permitted deductions from the service value (vDR).
-	// Reduces the tax base.
 	Deductions float64
 
-	// DeductionPercentage is the deduction as a percentage of service value (pDR).
-	// Calculated as (Deductions / ServiceValue) * 100.
-	// If set to 0 and Deductions > 0, it will be calculated automatically.
+	// DeductionPercentage is the deduction as a percentage of service value
+	// (pDR). Computed from Deductions when left at zero.
 	DeductionPercentage float64
 
-	// TaxBase is the calculated tax base for ISS (vBCCalc).
-	// If set to 0, it will be calculated automatically.
-	TaxBase float64
-
-	// ISSRate is the ISS tax rate percentage (pAliq).
-	// Can be 0 for SIMPLES NACIONAL MEI providers.
+	// ISSRate is the ISS tax rate percentage (pAliq). Zero is valid and is the
+	// normal case for an MEI, who pays ISS through the DAS.
 	ISSRate float64
 
-	// ISSAmount is the calculated ISS tax amount (vISS).
-	// If set to 0 and ISSRate > 0, it will be calculated automatically.
-	ISSAmount float64
+	// ISSQNTaxation is tribISSQN: 1 = taxable operation, 2 = service export,
+	// 3 = non-incidence, 4 = immunity. Defaults to 1.
+	ISSQNTaxation int
+
+	// ISSRetention is tpRetISSQN: 1 = not withheld, 2 = withheld by the taker,
+	// 3 = withheld by the intermediary. Defaults to 1.
+	ISSRetention int
+
+	// TotalTaxPercentSN is pTotTribSN, the Simples Nacional total tax
+	// percentage. When zero, the DPS declares indTotTrib = 0 ("not informed")
+	// instead, which the schema allows.
+	TotalTaxPercentSN float64
 }
+
+// Note: the tax base (vBCCalc) and the ISS amount (vISS) are deliberately
+// absent. They are not DPS fields — the government computes them and returns
+// them on the resulting NFS-e. Sending them was a defect.
 
 // DPSBuildResult contains the result of building a DPS XML.
 type DPSBuildResult struct {
@@ -157,9 +190,7 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 	if b.config.EmitterType == 0 {
 		b.config.EmitterType = 1 // Default to provider
 	}
-	if b.config.Substitution == 0 {
-		b.config.Substitution = 2 // Default to no substitution
-	}
+	// A nil Substitution means an ordinary emission and omits <subst> entirely.
 
 	// Generate DPS ID
 	dpsID, err := GenerateDPSID(DPSIDConfig{
@@ -187,7 +218,7 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 			DCompet:  formatDate(b.config.CompetenceDate),
 			TpEmit:   b.config.EmitterType,
 			CLocEmi:  b.config.MunicipalityCode,
-			Subst:    b.config.Substitution,
+			Subst:    b.buildSubstitution(),
 			Prest:    b.buildProvider(),
 			Toma:     b.buildTaker(),
 			Serv:     b.buildService(),
@@ -213,17 +244,26 @@ func (b *DPSBuilder) Build() (*DPSBuildResult, error) {
 
 // buildProvider creates the provider (prestador) XML element.
 func (b *DPSBuilder) buildProvider() prestXML {
-	// Convert tax regime to opSimpNac value
-	opSimpNac := 2 // MEI
+	// opSimpNac: 1 = not a Simples Nacional opter, 2 = MEI, 3 = ME/EPP.
+	opSimpNac := 2
+	regApTribSN := 0
 	if b.config.Provider.TaxRegime == "me_epp" {
-		opSimpNac = 3 // ME/EPP
+		opSimpNac = 3
+		// regApTribSN is expected for ME/EPP; default to 1 when unset.
+		regApTribSN = b.config.Provider.SimplesApuracao
+		if regApTribSN == 0 {
+			regApTribSN = 1
+		}
 	}
 
 	prest := prestXML{
 		CNPJ:  cleanTaxID(b.config.Provider.CNPJ),
 		XNome: b.config.Provider.Name,
 		RegTrib: regTribXML{
-			OpSimpNac: opSimpNac,
+			OpSimpNac:   opSimpNac,
+			RegApTribSN: regApTribSN,
+			// regEspTrib is required by the schema; 0 means "no special regime".
+			RegEspTrib: b.config.Provider.SpecialTaxRegime,
 		},
 	}
 
@@ -232,6 +272,19 @@ func (b *DPSBuilder) buildProvider() prestXML {
 	}
 
 	return prest
+}
+
+// buildSubstitution creates the <subst> element, or nil for a normal emission.
+func (b *DPSBuilder) buildSubstitution() *substXML {
+	sub := b.config.Substitution
+	if sub == nil {
+		return nil
+	}
+	return &substXML{
+		ChSubstda: sub.AccessKey,
+		CMotivo:   sub.ReasonCode,
+		XMotivo:   sub.ReasonText,
+	}
 }
 
 // buildTaker creates the taker (tomador) XML element.
@@ -335,26 +388,39 @@ func cleanPostalCode(postal string) string {
 // buildService creates the service (serv) XML element.
 func (b *DPSBuilder) buildService() servXML {
 	return servXML{
+		// locPrest is a choice: a municipality code for a domestic service, or
+		// a country code for one provided abroad.
 		LocPrest: locPrestXML{
 			CLocPrestacao: b.config.Service.MunicipalityCode,
 		},
+		// xDescServ belongs inside cServ, not beside it.
 		CServ: cServXML{
-			CTribNac: b.config.Service.NationalCode,
+			CTribNac:  b.config.Service.NationalCode,
+			XDescServ: b.config.Service.Description,
 		},
-		XDescServ: b.config.Service.Description,
 	}
 }
 
-// buildValues creates the values (valores) XML element with complete discount,
-// deduction, and tax calculation sections according to Brazilian NFS-e rules.
+// buildValues creates the <valores> element.
+//
+// The layout follows TCInfoValores in tiposComplexos_v1.00.xsd:
+//
+//	valores
+//	  vServPrest       (vReceb?, vServ)
+//	  vDescCondIncond? (vDescIncond?, vDescCond?)
+//	  vDedRed?
+//	  trib             (tribMun, tribFed?, totTrib)
 func (b *DPSBuilder) buildValues() valoresXML {
 	valores := valoresXML{
 		VServPrest: b.buildServiceValues(),
 		Trib:       b.buildTaxSection(),
-		TotTrib:    b.buildTotalTaxSection(),
 	}
 
-	// Add deduction section if deductions are present
+	// Discounts live in their own element, as siblings of vServPrest.
+	if b.config.Values.UnconditionalDiscount > 0 || b.config.Values.ConditionalDiscount > 0 {
+		valores.VDescCondIncond = b.buildDiscountSection()
+	}
+
 	if b.config.Values.Deductions > 0 {
 		valores.VDedRed = b.buildDeductionSection()
 	}
@@ -362,93 +428,88 @@ func (b *DPSBuilder) buildValues() valoresXML {
 	return valores
 }
 
-// buildServiceValues creates the service values (vServPrest) section.
+// buildServiceValues creates the vServPrest section.
 func (b *DPSBuilder) buildServiceValues() vServPrestXML {
-	vServPrest := vServPrestXML{
+	v := vServPrestXML{
 		VServ: formatMoney(b.config.Values.ServiceValue),
 	}
-
-	// Add unconditional discount if present
-	if b.config.Values.UnconditionalDiscount > 0 {
-		vServPrest.VDescIncond = formatMoney(b.config.Values.UnconditionalDiscount)
+	if b.config.Values.AmountReceived > 0 {
+		v.VReceb = formatMoney(b.config.Values.AmountReceived)
 	}
-
-	// Add conditional discount if present
-	if b.config.Values.ConditionalDiscount > 0 {
-		vServPrest.VDescCond = formatMoney(b.config.Values.ConditionalDiscount)
-	}
-
-	return vServPrest
+	return v
 }
 
-// buildDeductionSection creates the deduction (vDedRed) section.
+// buildDiscountSection creates the vDescCondIncond section.
+func (b *DPSBuilder) buildDiscountSection() *vDescCondIncondXML {
+	d := &vDescCondIncondXML{}
+	if b.config.Values.UnconditionalDiscount > 0 {
+		d.VDescIncond = formatMoney(b.config.Values.UnconditionalDiscount)
+	}
+	if b.config.Values.ConditionalDiscount > 0 {
+		d.VDescCond = formatMoney(b.config.Values.ConditionalDiscount)
+	}
+	return d
+}
+
+// buildDeductionSection creates the vDedRed section.
 func (b *DPSBuilder) buildDeductionSection() *vDedRedXML {
 	if b.config.Values.Deductions <= 0 {
 		return nil
 	}
 
-	// Calculate deduction percentage if not provided
-	deductionPercentage := b.config.Values.DeductionPercentage
-	if deductionPercentage == 0 && b.config.Values.ServiceValue > 0 {
-		deductionPercentage = (b.config.Values.Deductions / b.config.Values.ServiceValue) * 100
+	percentage := b.config.Values.DeductionPercentage
+	if percentage == 0 && b.config.Values.ServiceValue > 0 {
+		percentage = (b.config.Values.Deductions / b.config.Values.ServiceValue) * 100
 	}
 
 	return &vDedRedXML{
 		VDR: formatMoney(b.config.Values.Deductions),
-		PDR: formatMoney(deductionPercentage),
+		PDR: formatMoney(percentage),
 	}
 }
 
-// buildTaxSection creates the tax (trib) section with municipal tax (ISSQN) details.
+// buildTaxSection creates the <trib> element.
+//
+// It carries no tax base and no ISS amount: the schema has no place for them
+// in a DPS. The government computes vBCCalc and vISS and returns them on the
+// NFS-e.
 func (b *DPSBuilder) buildTaxSection() tribXML {
-	// Calculate tax base if not provided
-	taxBase := b.config.Values.TaxBase
-	if taxBase == 0 {
-		taxBase = b.config.Values.ServiceValue -
-			b.config.Values.UnconditionalDiscount -
-			b.config.Values.Deductions
+	taxation := b.config.Values.ISSQNTaxation
+	if taxation == 0 {
+		taxation = 1 // taxable operation
 	}
 
-	// Ensure tax base is not negative
-	if taxBase < 0 {
-		taxBase = 0
+	retention := b.config.Values.ISSRetention
+	if retention == 0 {
+		retention = 1 // not withheld
 	}
 
-	// Calculate ISS amount if not provided
-	issAmount := b.config.Values.ISSAmount
-	if issAmount == 0 && b.config.Values.ISSRate > 0 {
-		issAmount = taxBase * b.config.Values.ISSRate / 100
+	tribMun := tribMunXML{
+		TribISSQN:  taxation,
+		TpRetISSQN: retention,
 	}
-
-	// Determine tribISSQN value based on tax regime
-	// tribISSQN: 1 = Operação tributável
-	// For SIMPLES NACIONAL MEI, ISS is typically not charged (use tribISSQN = 1 anyway)
-	tribISSQN := 1
+	if b.config.Values.ISSRate > 0 {
+		tribMun.PAliq = formatMoney(b.config.Values.ISSRate)
+	}
 
 	return tribXML{
-		TribMun: tribMunXML{
-			TribISSQN:   tribISSQN,
-			CPaisResult: "BR", // Service result country code
-			BM: bmXML{
-				VBCCalc: formatMoney(taxBase),
-				PAliq:   formatMoney(b.config.Values.ISSRate),
-				VISS:    formatMoney(issAmount),
-			},
-		},
+		TribMun: tribMun,
+		TotTrib: b.buildTotalTaxSection(),
 	}
 }
 
-// buildTotalTaxSection creates the total tax (totTrib) section.
-// For SIMPLES NACIONAL providers (MEI/ME/EPP), total taxes are typically 0.
+// buildTotalTaxSection creates the <totTrib> element.
+//
+// The schema models totTrib as a choice of exactly one of vTotTrib, pTotTrib,
+// indTotTrib or pTotTribSN, so only one may be emitted. A Simples Nacional
+// provider who knows their rate declares pTotTribSN; otherwise indTotTrib = 0
+// declares that the totals are not being informed.
 func (b *DPSBuilder) buildTotalTaxSection() totTribXML {
-	return totTribXML{
-		IndTotTrib: 0, // 0 = Not informed
-		PTotTrib: pTotTribXML{
-			PTotTribFed: formatMoney(0),
-			PTotTribEst: formatMoney(0),
-			PTotTribMun: formatMoney(0),
-		},
+	if b.config.Values.TotalTaxPercentSN > 0 {
+		return totTribXML{PTotTribSN: formatMoney(b.config.Values.TotalTaxPercentSN)}
 	}
+	notInformed := 0
+	return totTribXML{IndTotTrib: &notInformed}
 }
 
 // XML structure types for marshaling
@@ -460,6 +521,8 @@ type dpsXML struct {
 	InfDPS  infDPSXML `xml:"infDPS"`
 }
 
+// infDPSXML mirrors TCInfDPS. Element order is significant: the schema declares
+// a sequence, so the fields must stay in this order.
 type infDPSXML struct {
 	ID       string     `xml:"Id,attr"`
 	TpAmb    int        `xml:"tpAmb"`
@@ -470,24 +533,39 @@ type infDPSXML struct {
 	DCompet  string     `xml:"dCompet"`
 	TpEmit   int        `xml:"tpEmit"`
 	CLocEmi  string     `xml:"cLocEmi"`
-	Subst    int        `xml:"subst"`
+	Subst    *substXML  `xml:"subst,omitempty"`
 	Prest    prestXML   `xml:"prest"`
 	Toma     *tomaXML   `xml:"toma,omitempty"`
 	Serv     servXML    `xml:"serv"`
 	Valores  valoresXML `xml:"valores"`
 }
 
+// substXML mirrors TCSubstituicao.
+type substXML struct {
+	ChSubstda string `xml:"chSubstda"`
+	CMotivo   string `xml:"cMotivo"`
+	XMotivo   string `xml:"xMotivo,omitempty"`
+}
+
+// prestXML mirrors TCInfoPrestador.
 type prestXML struct {
 	CNPJ    string     `xml:"CNPJ"`
 	IM      string     `xml:"IM,omitempty"`
-	XNome   string     `xml:"xNome"`
+	XNome   string     `xml:"xNome,omitempty"`
 	RegTrib regTribXML `xml:"regTrib"`
 }
 
+// regTribXML mirrors TCRegTrib.
+//
+// RegEspTrib carries no omitempty: 0 is the valid encoding for "no special
+// regime", and the element is mandatory.
 type regTribXML struct {
-	OpSimpNac int `xml:"opSimpNac"`
+	OpSimpNac   int `xml:"opSimpNac"`
+	RegApTribSN int `xml:"regApTribSN,omitempty"`
+	RegEspTrib  int `xml:"regEspTrib"`
 }
 
+// tomaXML mirrors TCInfoPessoa for the taker.
 type tomaXML struct {
 	CNPJ  string  `xml:"CNPJ,omitempty"`
 	CPF   string  `xml:"CPF,omitempty"`
@@ -498,6 +576,7 @@ type tomaXML struct {
 	Email string  `xml:"email,omitempty"`
 }
 
+// endXML mirrors TCEndereco.
 type endXML struct {
 	XLgr    string `xml:"xLgr"`
 	Nro     string `xml:"nro"`
@@ -506,72 +585,72 @@ type endXML struct {
 	CMun    string `xml:"cMun,omitempty"`
 	UF      string `xml:"UF,omitempty"`
 	CEP     string `xml:"CEP,omitempty"`
-	CPais   string `xml:"cPais"`
+	CPais   string `xml:"cPais,omitempty"`
 }
 
+// servXML mirrors TCServ.
 type servXML struct {
-	LocPrest  locPrestXML `xml:"locPrest"`
-	CServ     cServXML    `xml:"cServ"`
-	XDescServ string      `xml:"xDescServ"`
+	LocPrest locPrestXML `xml:"locPrest"`
+	CServ    cServXML    `xml:"cServ"`
 }
 
+// locPrestXML mirrors TCLocPrest, which is a choice: exactly one of the two.
 type locPrestXML struct {
-	CLocPrestacao string `xml:"cLocPrestacao"`
+	CLocPrestacao  string `xml:"cLocPrestacao,omitempty"`
+	CPaisPrestacao string `xml:"cPaisPrestacao,omitempty"`
 }
 
+// cServXML mirrors TCCServ.
 type cServXML struct {
-	CTribNac string `xml:"cTribNac"`
+	CTribNac  string `xml:"cTribNac"`
+	XDescServ string `xml:"xDescServ"`
 }
 
+// valoresXML mirrors TCInfoValores.
 type valoresXML struct {
-	VServPrest vServPrestXML `xml:"vServPrest"`
-	VDedRed    *vDedRedXML   `xml:"vDedRed,omitempty"`
-	Trib       tribXML       `xml:"trib"`
-	TotTrib    totTribXML    `xml:"totTrib"`
+	VServPrest      vServPrestXML       `xml:"vServPrest"`
+	VDescCondIncond *vDescCondIncondXML `xml:"vDescCondIncond,omitempty"`
+	VDedRed         *vDedRedXML         `xml:"vDedRed,omitempty"`
+	Trib            tribXML             `xml:"trib"`
 }
 
+// vServPrestXML mirrors TCVServPrest.
 type vServPrestXML struct {
-	VServ       string `xml:"vServ"`
+	VReceb string `xml:"vReceb,omitempty"`
+	VServ  string `xml:"vServ"`
+}
+
+// vDescCondIncondXML mirrors TCVDescCondIncond. Discounts belong here, as a
+// sibling of vServPrest, not nested inside it.
+type vDescCondIncondXML struct {
 	VDescIncond string `xml:"vDescIncond,omitempty"`
 	VDescCond   string `xml:"vDescCond,omitempty"`
 }
 
-// vDedRedXML represents the deduction section in the valores element.
+// vDedRedXML mirrors TCInfoDedRed.
 type vDedRedXML struct {
 	VDR string `xml:"vDR"`
 	PDR string `xml:"pDR"`
 }
 
-// tribXML represents the tax section in the valores element.
+// tribXML mirrors TCInfoTributacao.
 type tribXML struct {
 	TribMun tribMunXML `xml:"tribMun"`
+	TotTrib totTribXML `xml:"totTrib"`
 }
 
-// tribMunXML represents the municipal tax (ISSQN) details.
+// tribMunXML mirrors TCTribMunicipal.
 type tribMunXML struct {
-	TribISSQN   int    `xml:"tribISSQN"`
-	CPaisResult string `xml:"cPaisResult"`
-	BM          bmXML  `xml:"BM"`
+	TribISSQN  int    `xml:"tribISSQN"`
+	TpRetISSQN int    `xml:"tpRetISSQN"`
+	PAliq      string `xml:"pAliq,omitempty"`
 }
 
-// bmXML represents the tax base calculation details.
-type bmXML struct {
-	VBCCalc string `xml:"vBCCalc"`
-	PAliq   string `xml:"pAliq"`
-	VISS    string `xml:"vISS"`
-}
-
-// totTribXML represents the total tax information section.
+// totTribXML mirrors TCTribTotal, a choice of exactly one child. IndTotTrib is
+// a pointer so that the valid value 0 is still emitted.
 type totTribXML struct {
-	IndTotTrib int         `xml:"indTotTrib"`
-	PTotTrib   pTotTribXML `xml:"pTotTrib"`
-}
-
-// pTotTribXML represents the total tax percentages by jurisdiction.
-type pTotTribXML struct {
-	PTotTribFed string `xml:"pTotTribFed"`
-	PTotTribEst string `xml:"pTotTribEst"`
-	PTotTribMun string `xml:"pTotTribMun"`
+	IndTotTrib *int   `xml:"indTotTrib,omitempty"`
+	PTotTribSN string `xml:"pTotTribSN,omitempty"`
 }
 
 // Helper functions

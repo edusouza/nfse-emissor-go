@@ -23,8 +23,8 @@ const (
 	XSDErrorInvalidEnvironment = "INVALID_ENVIRONMENT"
 )
 
-// XSDValidationError represents a single XSD validation error.
-type XSDValidationError struct {
+// StructuralError represents a single XSD validation error.
+type StructuralError struct {
 	// Code is a machine-readable error code.
 	Code string `json:"code"`
 
@@ -39,7 +39,7 @@ type XSDValidationError struct {
 }
 
 // Error implements the error interface.
-func (e XSDValidationError) Error() string {
+func (e StructuralError) Error() string {
 	if e.Value != "" {
 		return fmt.Sprintf("%s [%s]: %s (value: %s)", e.Code, e.Element, e.Message, e.Value)
 	}
@@ -51,28 +51,23 @@ const (
 	NFSeNamespace = "http://www.sped.fazenda.gov.br/nfse"
 )
 
-// XSDValidator validates DPS XML documents against the NFS-e schema.
-// Note: This is a structural validator that checks required elements,
-// data types, and formats. It does not perform full XSD schema validation
-// which would require an external library.
-type XSDValidator struct {
-	// SchemaDir is the directory containing XSD schema files.
-	// Currently not used as we implement structural validation.
-	SchemaDir string
-}
+// StructuralValidator checks a DPS document for required elements, data types
+// and formats.
+//
+// It is NOT an XSD validator: the .xsd files under docs/schemas are never read,
+// so cardinality, element order, enumerations and patterns go unchecked. Treat
+// it as a cheap first pass that catches obvious mistakes before a certificate
+// and a network round-trip are spent; the authoritative validation is the
+// government's. See https://github.com/edusouza/nfse-emissor-go/issues/4.
+type StructuralValidator struct{}
 
-// NewXSDValidator creates a new XSD validator.
+// NewStructuralValidator creates a validator for DPS documents.
 //
-// Parameters:
-//   - schemaDir: The directory containing XSD schema files (for future use)
-//
-// Returns:
-//   - *XSDValidator: A new validator instance
-//   - error: Always nil in current implementation
-func NewXSDValidator(schemaDir string) (*XSDValidator, error) {
-	return &XSDValidator{
-		SchemaDir: schemaDir,
-	}, nil
+// It deliberately takes no arguments. The previous constructor accepted a
+// schema directory that it stored and never used, which made the validation
+// look broader than it is.
+func NewStructuralValidator() *StructuralValidator {
+	return &StructuralValidator{}
 }
 
 // ValidateDPS validates a DPS XML document against the NFS-e schema.
@@ -85,14 +80,14 @@ func NewXSDValidator(schemaDir string) (*XSDValidator, error) {
 //   - dpsXML: The DPS XML document as a string
 //
 // Returns:
-//   - []XSDValidationError: A slice of validation errors (empty if valid)
-func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
-	var errors []XSDValidationError
+//   - []StructuralError: A slice of validation errors (empty if valid)
+func (v *StructuralValidator) ValidateDPS(dpsXML string) []StructuralError {
+	var errors []StructuralError
 
 	// Parse the XML document
 	doc := etree.NewDocument()
 	if err := doc.ReadFromString(dpsXML); err != nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidFormat,
 			Element: "document",
 			Message: fmt.Sprintf("failed to parse XML: %v", err),
@@ -103,7 +98,7 @@ func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
 	// Find the root DPS element
 	dps := doc.Root()
 	if dps == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "DPS",
 			Message: "root DPS element not found",
@@ -113,7 +108,7 @@ func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
 
 	// Validate root element name
 	if dps.Tag != "DPS" {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "DPS",
 			Message: fmt.Sprintf("expected root element 'DPS', found '%s'", dps.Tag),
@@ -128,7 +123,7 @@ func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
 	// Find infDPS element
 	infDPS := dps.FindElement("infDPS")
 	if infDPS == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "DPS/infDPS",
 			Message: "required element 'infDPS' not found",
@@ -138,7 +133,7 @@ func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
 
 	// Validate infDPS has Id attribute
 	if infDPS.SelectAttr("Id") == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingAttribute,
 			Element: "DPS/infDPS",
 			Message: "required attribute 'Id' not found on infDPS",
@@ -152,8 +147,8 @@ func (v *XSDValidator) ValidateDPS(dpsXML string) []XSDValidationError {
 }
 
 // validateNamespace checks if the DPS element has the correct namespace.
-func (v *XSDValidator) validateNamespace(dps *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateNamespace(dps *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	// Check element's namespace
 	hasValidNS := false
@@ -176,7 +171,7 @@ func (v *XSDValidator) validateNamespace(dps *etree.Element) []XSDValidationErro
 	}
 
 	if !hasValidNS {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidNamespace,
 			Element: "DPS",
 			Message: fmt.Sprintf("DPS element should have namespace '%s'", NFSeNamespace),
@@ -187,8 +182,8 @@ func (v *XSDValidator) validateNamespace(dps *etree.Element) []XSDValidationErro
 }
 
 // validateInfDPS validates the infDPS element and its required children.
-func (v *XSDValidator) validateInfDPS(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateInfDPS(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	// Validate tpAmb (environment type) - required
 	errors = append(errors, v.validateTpAmb(infDPS)...)
@@ -230,12 +225,12 @@ func (v *XSDValidator) validateInfDPS(infDPS *etree.Element) []XSDValidationErro
 }
 
 // validateTpAmb validates the tpAmb (environment type) element.
-func (v *XSDValidator) validateTpAmb(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateTpAmb(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	tpAmb := infDPS.FindElement("tpAmb")
 	if tpAmb == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/tpAmb",
 			Message: "required element 'tpAmb' (environment type) not found",
@@ -245,7 +240,7 @@ func (v *XSDValidator) validateTpAmb(infDPS *etree.Element) []XSDValidationError
 
 	value := strings.TrimSpace(tpAmb.Text())
 	if value != "1" && value != "2" {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidValue,
 			Element: "infDPS/tpAmb",
 			Message: "tpAmb must be '1' (production) or '2' (homologation)",
@@ -257,12 +252,12 @@ func (v *XSDValidator) validateTpAmb(infDPS *etree.Element) []XSDValidationError
 }
 
 // validateDhEmi validates the dhEmi (emission date/time) element.
-func (v *XSDValidator) validateDhEmi(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateDhEmi(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	dhEmi := infDPS.FindElement("dhEmi")
 	if dhEmi == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/dhEmi",
 			Message: "required element 'dhEmi' (emission date/time) not found",
@@ -272,7 +267,7 @@ func (v *XSDValidator) validateDhEmi(infDPS *etree.Element) []XSDValidationError
 
 	value := strings.TrimSpace(dhEmi.Text())
 	if !isValidXSDDateTime(value) {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidDataType,
 			Element: "infDPS/dhEmi",
 			Message: "dhEmi must be a valid ISO 8601 datetime (e.g., 2024-01-15T10:30:00-03:00)",
@@ -284,12 +279,12 @@ func (v *XSDValidator) validateDhEmi(infDPS *etree.Element) []XSDValidationError
 }
 
 // validateSerie validates the serie element.
-func (v *XSDValidator) validateSerie(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateSerie(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	serie := infDPS.FindElement("serie")
 	if serie == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/serie",
 			Message: "required element 'serie' not found",
@@ -300,7 +295,7 @@ func (v *XSDValidator) validateSerie(infDPS *etree.Element) []XSDValidationError
 	value := strings.TrimSpace(serie.Text())
 	// Series should be 5 digits
 	if !regexp.MustCompile(`^\d{5}$`).MatchString(value) {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidFormat,
 			Element: "infDPS/serie",
 			Message: "serie must be exactly 5 digits",
@@ -312,12 +307,12 @@ func (v *XSDValidator) validateSerie(infDPS *etree.Element) []XSDValidationError
 }
 
 // validateNDPS validates the nDPS (DPS number) element.
-func (v *XSDValidator) validateNDPS(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateNDPS(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	nDPS := infDPS.FindElement("nDPS")
 	if nDPS == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/nDPS",
 			Message: "required element 'nDPS' (DPS number) not found",
@@ -328,7 +323,7 @@ func (v *XSDValidator) validateNDPS(infDPS *etree.Element) []XSDValidationError 
 	value := strings.TrimSpace(nDPS.Text())
 	// DPS number should be 1-15 digits
 	if !regexp.MustCompile(`^\d{1,15}$`).MatchString(value) {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidFormat,
 			Element: "infDPS/nDPS",
 			Message: "nDPS must be 1 to 15 digits",
@@ -340,12 +335,12 @@ func (v *XSDValidator) validateNDPS(infDPS *etree.Element) []XSDValidationError 
 }
 
 // validateDCompet validates the dCompet (competence date) element.
-func (v *XSDValidator) validateDCompet(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateDCompet(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	dCompet := infDPS.FindElement("dCompet")
 	if dCompet == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/dCompet",
 			Message: "required element 'dCompet' (competence date) not found",
@@ -355,7 +350,7 @@ func (v *XSDValidator) validateDCompet(infDPS *etree.Element) []XSDValidationErr
 
 	value := strings.TrimSpace(dCompet.Text())
 	if !isValidXSDDate(value) {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidDataType,
 			Element: "infDPS/dCompet",
 			Message: "dCompet must be a valid date in YYYY-MM-DD format",
@@ -367,12 +362,12 @@ func (v *XSDValidator) validateDCompet(infDPS *etree.Element) []XSDValidationErr
 }
 
 // validateTpEmit validates the tpEmit (emitter type) element.
-func (v *XSDValidator) validateTpEmit(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateTpEmit(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	tpEmit := infDPS.FindElement("tpEmit")
 	if tpEmit == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/tpEmit",
 			Message: "required element 'tpEmit' (emitter type) not found",
@@ -383,7 +378,7 @@ func (v *XSDValidator) validateTpEmit(infDPS *etree.Element) []XSDValidationErro
 	value := strings.TrimSpace(tpEmit.Text())
 	// Valid emitter types: 1 (provider), 2 (taker), 3 (intermediary)
 	if value != "1" && value != "2" && value != "3" {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidValue,
 			Element: "infDPS/tpEmit",
 			Message: "tpEmit must be '1' (provider), '2' (taker), or '3' (intermediary)",
@@ -395,12 +390,12 @@ func (v *XSDValidator) validateTpEmit(infDPS *etree.Element) []XSDValidationErro
 }
 
 // validateCLocEmi validates the cLocEmi (emission municipality code) element.
-func (v *XSDValidator) validateCLocEmi(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateCLocEmi(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	cLocEmi := infDPS.FindElement("cLocEmi")
 	if cLocEmi == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/cLocEmi",
 			Message: "required element 'cLocEmi' (emission municipality code) not found",
@@ -411,7 +406,7 @@ func (v *XSDValidator) validateCLocEmi(infDPS *etree.Element) []XSDValidationErr
 	value := strings.TrimSpace(cLocEmi.Text())
 	// IBGE municipality code: 7 digits
 	if !regexp.MustCompile(`^\d{7}$`).MatchString(value) {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidFormat,
 			Element: "infDPS/cLocEmi",
 			Message: "cLocEmi must be exactly 7 digits (IBGE municipality code)",
@@ -423,40 +418,41 @@ func (v *XSDValidator) validateCLocEmi(infDPS *etree.Element) []XSDValidationErr
 }
 
 // validateSubst validates the subst (substitution) element.
-func (v *XSDValidator) validateSubst(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateSubst(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
+	// subst is optional (minOccurs="0") and is present only when this DPS
+	// replaces an existing NFS-e. It is a structure, not a yes/no flag: the
+	// previous code required it and expected the text "1" or "2".
 	subst := infDPS.FindElement("subst")
 	if subst == nil {
-		errors = append(errors, XSDValidationError{
-			Code:    XSDErrorMissingElement,
-			Element: "infDPS/subst",
-			Message: "required element 'subst' (substitution) not found",
-		})
-		return errors
+		return nil
 	}
 
-	value := strings.TrimSpace(subst.Text())
-	// Valid substitution values: 1 (substitution), 2 (no substitution)
-	if value != "1" && value != "2" {
-		errors = append(errors, XSDValidationError{
-			Code:    XSDErrorInvalidValue,
-			Element: "infDPS/subst",
-			Message: "subst must be '1' (substitution) or '2' (no substitution)",
-			Value:   value,
-		})
+	for _, req := range []struct{ name, desc string }{
+		{"chSubstda", "access key of the NFS-e being replaced"},
+		{"cMotivo", "substitution reason code"},
+	} {
+		el := subst.FindElement(req.name)
+		if el == nil || strings.TrimSpace(el.Text()) == "" {
+			errors = append(errors, StructuralError{
+				Code:    XSDErrorMissingElement,
+				Element: "infDPS/subst/" + req.name,
+				Message: fmt.Sprintf("required element for %s not found", req.desc),
+			})
+		}
 	}
 
 	return errors
 }
 
 // validatePrest validates the prest (provider) element.
-func (v *XSDValidator) validatePrest(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validatePrest(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	prest := infDPS.FindElement("prest")
 	if prest == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/prest",
 			Message: "required element 'prest' (provider) not found",
@@ -468,7 +464,7 @@ func (v *XSDValidator) validatePrest(infDPS *etree.Element) []XSDValidationError
 	cnpj := prest.FindElement("CNPJ")
 	cpf := prest.FindElement("CPF")
 	if cnpj == nil && cpf == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/prest",
 			Message: "provider must have either CNPJ or CPF",
@@ -479,7 +475,7 @@ func (v *XSDValidator) validatePrest(infDPS *etree.Element) []XSDValidationError
 	if cnpj != nil {
 		value := strings.TrimSpace(cnpj.Text())
 		if !regexp.MustCompile(`^\d{14}$`).MatchString(value) {
-			errors = append(errors, XSDValidationError{
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidFormat,
 				Element: "infDPS/prest/CNPJ",
 				Message: "CNPJ must be exactly 14 digits",
@@ -492,7 +488,7 @@ func (v *XSDValidator) validatePrest(infDPS *etree.Element) []XSDValidationError
 	if cpf != nil {
 		value := strings.TrimSpace(cpf.Text())
 		if !regexp.MustCompile(`^\d{11}$`).MatchString(value) {
-			errors = append(errors, XSDValidationError{
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidFormat,
 				Element: "infDPS/prest/CPF",
 				Message: "CPF must be exactly 11 digits",
@@ -505,80 +501,89 @@ func (v *XSDValidator) validatePrest(infDPS *etree.Element) []XSDValidationError
 }
 
 // validateServ validates the serv (service) element.
-func (v *XSDValidator) validateServ(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateServ(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	serv := infDPS.FindElement("serv")
 	if serv == nil {
-		errors = append(errors, XSDValidationError{
+		return append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/serv",
 			Message: "required element 'serv' (service) not found",
 		})
-		return errors
 	}
 
-	// Validate cTribNac (national service code)
-	cTribNac := serv.FindElement("cTribNac")
-	if cTribNac == nil {
-		errors = append(errors, XSDValidationError{
+	// Paths follow TCServ / TCCServ / TCLocPrest in tiposComplexos_v1.00.xsd:
+	// cTribNac and xDescServ are children of cServ, and the municipality code
+	// is cLocPrestacao inside locPrest.
+	if cTribNac := serv.FindElement("cServ/cTribNac"); cTribNac == nil {
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
-			Element: "infDPS/serv/cTribNac",
+			Element: "infDPS/serv/cServ/cTribNac",
 			Message: "required element 'cTribNac' (national service code) not found",
 		})
 	} else {
 		value := strings.TrimSpace(cTribNac.Text())
 		if !regexp.MustCompile(`^\d{6}$`).MatchString(value) {
-			errors = append(errors, XSDValidationError{
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidFormat,
-				Element: "infDPS/serv/cTribNac",
+				Element: "infDPS/serv/cServ/cTribNac",
 				Message: "cTribNac must be exactly 6 digits",
 				Value:   value,
 			})
 		}
 	}
 
-	// Validate xDescServ (service description)
-	xDescServ := serv.FindElement("xDescServ")
-	if xDescServ == nil {
-		errors = append(errors, XSDValidationError{
+	if xDescServ := serv.FindElement("cServ/xDescServ"); xDescServ == nil {
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
-			Element: "infDPS/serv/xDescServ",
+			Element: "infDPS/serv/cServ/xDescServ",
 			Message: "required element 'xDescServ' (service description) not found",
 		})
 	} else {
 		value := strings.TrimSpace(xDescServ.Text())
-		if len(value) == 0 {
-			errors = append(errors, XSDValidationError{
+		switch {
+		case len(value) == 0:
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidValue,
-				Element: "infDPS/serv/xDescServ",
+				Element: "infDPS/serv/cServ/xDescServ",
 				Message: "service description cannot be empty",
 			})
-		} else if len(value) > 2000 {
-			errors = append(errors, XSDValidationError{
+		case len(value) > 2000:
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidValue,
-				Element: "infDPS/serv/xDescServ",
+				Element: "infDPS/serv/cServ/xDescServ",
 				Message: "service description cannot exceed 2000 characters",
 				Value:   fmt.Sprintf("%d characters", len(value)),
 			})
 		}
 	}
 
-	// Validate cLocPrest (service location municipality code)
-	cLocPrest := serv.FindElement("cLocPrest")
-	if cLocPrest == nil {
-		errors = append(errors, XSDValidationError{
+	// locPrest is a choice: cLocPrestacao for a domestic service, or
+	// cPaisPrestacao for one provided abroad. Exactly one must be present.
+	cLocPrestacao := serv.FindElement("locPrest/cLocPrestacao")
+	cPaisPrestacao := serv.FindElement("locPrest/cPaisPrestacao")
+
+	switch {
+	case cLocPrestacao == nil && cPaisPrestacao == nil:
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
-			Element: "infDPS/serv/cLocPrest",
-			Message: "required element 'cLocPrest' (service location municipality code) not found",
+			Element: "infDPS/serv/locPrest",
+			Message: "locPrest must contain either 'cLocPrestacao' or 'cPaisPrestacao'",
 		})
-	} else {
-		value := strings.TrimSpace(cLocPrest.Text())
+	case cLocPrestacao != nil && cPaisPrestacao != nil:
+		errors = append(errors, StructuralError{
+			Code:    XSDErrorInvalidValue,
+			Element: "infDPS/serv/locPrest",
+			Message: "locPrest accepts only one of 'cLocPrestacao' or 'cPaisPrestacao'",
+		})
+	case cLocPrestacao != nil:
+		value := strings.TrimSpace(cLocPrestacao.Text())
 		if !regexp.MustCompile(`^\d{7}$`).MatchString(value) {
-			errors = append(errors, XSDValidationError{
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidFormat,
-				Element: "infDPS/serv/cLocPrest",
-				Message: "cLocPrest must be exactly 7 digits (IBGE municipality code)",
+				Element: "infDPS/serv/locPrest/cLocPrestacao",
+				Message: "cLocPrestacao must be exactly 7 digits (IBGE municipality code)",
 				Value:   value,
 			})
 		}
@@ -588,69 +593,90 @@ func (v *XSDValidator) validateServ(infDPS *etree.Element) []XSDValidationError 
 }
 
 // validateValores validates the valores (values) element.
-func (v *XSDValidator) validateValores(infDPS *etree.Element) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateValores(infDPS *etree.Element) []StructuralError {
+	var errors []StructuralError
 
 	valores := infDPS.FindElement("valores")
 	if valores == nil {
-		errors = append(errors, XSDValidationError{
+		return append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: "infDPS/valores",
 			Message: "required element 'valores' (values) not found",
 		})
-		return errors
 	}
 
-	// Validate vServPrest (service value)
-	vServPrest := valores.FindElement("vServPrest")
-	if vServPrest == nil {
-		// Try alternative element name
-		vServPrest = valores.FindElement("vServ")
-	}
-	if vServPrest == nil {
-		errors = append(errors, XSDValidationError{
+	// vServPrest is a container (TCVServPrest); the amount is in its vServ child.
+	if vServ := valores.FindElement("vServPrest/vServ"); vServ == nil {
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
-			Element: "infDPS/valores/vServPrest",
-			Message: "required element 'vServPrest' (service value) not found",
+			Element: "infDPS/valores/vServPrest/vServ",
+			Message: "required element 'vServ' (service value) not found",
 		})
 	} else {
-		value := strings.TrimSpace(vServPrest.Text())
+		value := strings.TrimSpace(vServ.Text())
 		if !isValidDecimal(value) {
-			errors = append(errors, XSDValidationError{
+			errors = append(errors, StructuralError{
 				Code:    XSDErrorInvalidDataType,
-				Element: "infDPS/valores/vServPrest",
-				Message: "vServPrest must be a valid decimal number",
+				Element: "infDPS/valores/vServPrest/vServ",
+				Message: "vServ must be a valid decimal number",
 				Value:   value,
 			})
-		} else {
-			// Check if value is positive
-			if val, err := strconv.ParseFloat(value, 64); err == nil && val <= 0 {
-				errors = append(errors, XSDValidationError{
-					Code:    XSDErrorInvalidValue,
-					Element: "infDPS/valores/vServPrest",
-					Message: "vServPrest must be greater than zero",
-					Value:   value,
-				})
-			}
+		} else if val, err := strconv.ParseFloat(value, 64); err == nil && val <= 0 {
+			errors = append(errors, StructuralError{
+				Code:    XSDErrorInvalidValue,
+				Element: "infDPS/valores/vServPrest/vServ",
+				Message: "vServ must be greater than zero",
+				Value:   value,
+			})
 		}
+	}
+
+	// tribMun carries two mandatory codes that are easy to omit.
+	for _, req := range []struct{ path, desc string }{
+		{"trib/tribMun/tribISSQN", "ISSQN taxation type"},
+		{"trib/tribMun/tpRetISSQN", "ISSQN withholding type"},
+	} {
+		if valores.FindElement(req.path) == nil {
+			errors = append(errors, StructuralError{
+				Code:    XSDErrorMissingElement,
+				Element: "infDPS/valores/" + req.path,
+				Message: fmt.Sprintf("required element for %s not found", req.desc),
+			})
+		}
+	}
+
+	// totTrib is a choice of exactly one child.
+	if totTrib := valores.FindElement("trib/totTrib"); totTrib == nil {
+		errors = append(errors, StructuralError{
+			Code:    XSDErrorMissingElement,
+			Element: "infDPS/valores/trib/totTrib",
+			Message: "required element 'totTrib' (total taxes) not found",
+		})
+	} else if n := len(totTrib.ChildElements()); n != 1 {
+		errors = append(errors, StructuralError{
+			Code:    XSDErrorInvalidValue,
+			Element: "infDPS/valores/trib/totTrib",
+			Message: "totTrib must contain exactly one of vTotTrib, pTotTrib, indTotTrib or pTotTribSN",
+			Value:   fmt.Sprintf("%d elements", n),
+		})
 	}
 
 	return errors
 }
 
 // validateRequiredElement validates that a required element exists.
-func (v *XSDValidator) validateRequiredElement(parent *etree.Element, elementName, description string) []XSDValidationError {
-	var errors []XSDValidationError
+func (v *StructuralValidator) validateRequiredElement(parent *etree.Element, elementName, description string) []StructuralError {
+	var errors []StructuralError
 
 	element := parent.FindElement(elementName)
 	if element == nil {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorMissingElement,
 			Element: fmt.Sprintf("%s/%s", parent.Tag, elementName),
 			Message: fmt.Sprintf("required element '%s' (%s) not found", elementName, description),
 		})
 	} else if strings.TrimSpace(element.Text()) == "" {
-		errors = append(errors, XSDValidationError{
+		errors = append(errors, StructuralError{
 			Code:    XSDErrorInvalidValue,
 			Element: fmt.Sprintf("%s/%s", parent.Tag, elementName),
 			Message: fmt.Sprintf("element '%s' (%s) cannot be empty", elementName, description),

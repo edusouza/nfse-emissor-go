@@ -19,18 +19,32 @@ const (
     <dCompet>2024-01-15</dCompet>
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
-    <subst>2</subst>
     <prest>
       <CNPJ>12345678000190</CNPJ>
       <xNome>Provider Company Ltd</xNome>
     </prest>
     <serv>
-      <cTribNac>010101</cTribNac>
-      <xDescServ>Software development services</xDescServ>
-      <cLocPrest>3550308</cLocPrest>
+      <locPrest>
+        <cLocPrestacao>3550308</cLocPrestacao>
+      </locPrest>
+      <cServ>
+        <cTribNac>010101</cTribNac>
+        <xDescServ>Software development services</xDescServ>
+      </cServ>
     </serv>
     <valores>
-      <vServPrest>1000.00</vServPrest>
+      <vServPrest>
+        <vServ>1000.00</vServ>
+      </vServPrest>
+      <trib>
+        <tribMun>
+          <tribISSQN>1</tribISSQN>
+          <tpRetISSQN>1</tpRetISSQN>
+        </tribMun>
+        <totTrib>
+          <indTotTrib>0</indTotTrib>
+        </totTrib>
+      </trib>
     </valores>
   </infDPS>
 </DPS>`
@@ -46,17 +60,31 @@ const (
     <dCompet>2024-01-15</dCompet>
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
-    <subst>2</subst>
     <prest>
       <CNPJ>12345678000190</CNPJ>
     </prest>
     <serv>
-      <cTribNac>010101</cTribNac>
-      <xDescServ>Test</xDescServ>
-      <cLocPrest>3550308</cLocPrest>
+      <locPrest>
+        <cLocPrestacao>3550308</cLocPrestacao>
+      </locPrest>
+      <cServ>
+        <cTribNac>010101</cTribNac>
+        <xDescServ>Test</xDescServ>
+      </cServ>
     </serv>
     <valores>
-      <vServPrest>1000.00</vServPrest>
+      <vServPrest>
+        <vServ>1000.00</vServ>
+      </vServPrest>
+      <trib>
+        <tribMun>
+          <tribISSQN>1</tribISSQN>
+          <tpRetISSQN>1</tpRetISSQN>
+        </tribMun>
+        <totTrib>
+          <indTotTrib>0</indTotTrib>
+        </totTrib>
+      </trib>
     </valores>
   </infDPS>
 </DPS>`
@@ -76,39 +104,44 @@ const (
     <dCompet>2024-01-15</dCompet>
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
-    <subst>2</subst>
     <prest>
       <CNPJ>12345678000190</CNPJ>
     </prest>
     <serv>
-      <cTribNac>010101</cTribNac>
-      <xDescServ>Test</xDescServ>
-      <cLocPrest>3550308</cLocPrest>
+      <locPrest>
+        <cLocPrestacao>3550308</cLocPrestacao>
+      </locPrest>
+      <cServ>
+        <cTribNac>010101</cTribNac>
+        <xDescServ>Test</xDescServ>
+      </cServ>
     </serv>
     <valores>
-      <vServPrest>1000.00</vServPrest>
+      <vServPrest>
+        <vServ>1000.00</vServ>
+      </vServPrest>
+      <trib>
+        <tribMun>
+          <tribISSQN>1</tribISSQN>
+          <tpRetISSQN>1</tpRetISSQN>
+        </tribMun>
+        <totTrib>
+          <indTotTrib>0</indTotTrib>
+        </totTrib>
+      </trib>
     </valores>
   </infDPS>
 </DPS>`
 )
 
-func TestNewXSDValidator(t *testing.T) {
-	validator, err := NewXSDValidator("/path/to/schemas")
-	if err != nil {
-		t.Fatalf("NewXSDValidator should not return error: %v", err)
-	}
-
-	if validator == nil {
-		t.Fatal("NewXSDValidator returned nil")
-	}
-
-	if validator.SchemaDir != "/path/to/schemas" {
-		t.Errorf("Expected SchemaDir to be '/path/to/schemas', got '%s'", validator.SchemaDir)
+func TestNewStructuralValidator(t *testing.T) {
+	if NewStructuralValidator() == nil {
+		t.Fatal("NewStructuralValidator returned nil")
 	}
 }
 
 func TestXSDValidator_ValidateDPS_ValidDocument(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS(validDPSXML)
 
@@ -118,7 +151,7 @@ func TestXSDValidator_ValidateDPS_ValidDocument(t *testing.T) {
 }
 
 func TestXSDValidator_ValidateDPS_InvalidXML(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS("<invalid xml")
 
@@ -139,7 +172,7 @@ func TestXSDValidator_ValidateDPS_InvalidXML(t *testing.T) {
 }
 
 func TestXSDValidator_ValidateDPS_EmptyDocument(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS("")
 
@@ -149,7 +182,7 @@ func TestXSDValidator_ValidateDPS_EmptyDocument(t *testing.T) {
 }
 
 func TestXSDValidator_ValidateDPS_MissingInfDPS(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS(missingInfDPSXML)
 
@@ -170,7 +203,7 @@ func TestXSDValidator_ValidateDPS_MissingInfDPS(t *testing.T) {
 }
 
 func TestXSDValidator_ValidateDPS_InvalidEnvironment(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS(invalidEnvironmentXML)
 
@@ -190,7 +223,7 @@ func TestXSDValidator_ValidateDPS_InvalidEnvironment(t *testing.T) {
 }
 
 func TestXSDValidator_ValidateDPS_InvalidSeries(t *testing.T) {
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 
 	errors := validator.ValidateDPS(invalidSeriesXML)
 
@@ -221,22 +254,36 @@ func TestXSDValidator_ValidateDPS_MissingNamespace(t *testing.T) {
     <dCompet>2024-01-15</dCompet>
     <tpEmit>1</tpEmit>
     <cLocEmi>3550308</cLocEmi>
-    <subst>2</subst>
     <prest>
       <CNPJ>12345678000190</CNPJ>
     </prest>
     <serv>
-      <cTribNac>010101</cTribNac>
-      <xDescServ>Test</xDescServ>
-      <cLocPrest>3550308</cLocPrest>
+      <locPrest>
+        <cLocPrestacao>3550308</cLocPrestacao>
+      </locPrest>
+      <cServ>
+        <cTribNac>010101</cTribNac>
+        <xDescServ>Test</xDescServ>
+      </cServ>
     </serv>
     <valores>
-      <vServPrest>1000.00</vServPrest>
+      <vServPrest>
+        <vServ>1000.00</vServ>
+      </vServPrest>
+      <trib>
+        <tribMun>
+          <tribISSQN>1</tribISSQN>
+          <tpRetISSQN>1</tpRetISSQN>
+        </tribMun>
+        <totTrib>
+          <indTotTrib>0</indTotTrib>
+        </totTrib>
+      </trib>
     </valores>
   </infDPS>
 </DPS>`
 
-	validator, _ := NewXSDValidator("")
+	validator := NewStructuralValidator()
 	errors := validator.ValidateDPS(noNamespaceXML)
 
 	found := false
@@ -254,12 +301,12 @@ func TestXSDValidator_ValidateDPS_MissingNamespace(t *testing.T) {
 func TestXSDValidationError_Error(t *testing.T) {
 	tests := []struct {
 		name     string
-		err      XSDValidationError
+		err      StructuralError
 		expected string
 	}{
 		{
 			name: "with value",
-			err: XSDValidationError{
+			err: StructuralError{
 				Code:    XSDErrorInvalidValue,
 				Element: "tpAmb",
 				Message: "must be 1 or 2",
@@ -269,7 +316,7 @@ func TestXSDValidationError_Error(t *testing.T) {
 		},
 		{
 			name: "without value",
-			err: XSDValidationError{
+			err: StructuralError{
 				Code:    XSDErrorMissingElement,
 				Element: "infDPS",
 				Message: "required element not found",
