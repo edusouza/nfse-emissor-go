@@ -9,6 +9,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **`nfse consultar <chave-de-acesso>`** — busca a NFS-e na Sefin Nacional e
+  grava o XML.
+- **`nfse consultar --dps <id>`** — recupera a chave de acesso pelo
+  identificador da declaracao, para reconciliar uma emissao interrompida.
+  Com `--existe`, responde apenas se a nota foi gerada: o governo atende essa
+  pergunta a qualquer certificado valido, enquanto a chave so e informada a
+  quem consta na nota.
+- Uma negativa por sigilo fiscal (403) e explicada em vez de repassada como
+  status cru.
 - **`nfse emitir --enviar`** — transmite a DPS assinada para a Sefin Nacional e
   grava a NFS-e autorizada, nomeada pela chave de acesso. A emissão é síncrona:
   o governo valida e devolve a nota ou a rejeição na mesma requisição.
@@ -86,6 +95,10 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   Ver [ADR 0003](docs/decisoes/0003-xml-conforme-o-xsd.md).
 - O validador estrutural procurava `cTribNac`, `cLocPrest` e `vServPrest` em
   caminhos que não existem no schema, e exigia `subst`, que é opcional.
+- **A validação da chave de acesso exigia um prefixo `NFSe` inexistente.** O
+  XSD define `TSChaveNFSe` como `[0-9]{50}` e a especificação da Sefin diz o
+  mesmo ("deve conter 50 números"): são 50 dígitos, sem prefixo. A regra
+  anterior teria rejeitado toda chave real.
 
 - **Certificados A1 em formato moderno não eram lidos.** `ParsePFX` usava
   `golang.org/x/crypto/pkcs12`, que só decodifica PKCS#12 com 3DES e MAC SHA-1.

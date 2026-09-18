@@ -132,3 +132,81 @@ func parseErrorBody(status int, body []byte) error {
 	}
 	return &HTTPError{StatusCode: status, Body: string(body)}
 }
+
+// nfseResponse is NFSeGetResponseSucesso.
+type nfseResponse struct {
+	envelope
+
+	ChaveAcesso string `json:"chaveAcesso"`
+	NFSeGZipB64 string `json:"nfseXmlGZipB64"`
+}
+
+// NFSeResult is an invoice fetched by its access key.
+type NFSeResult struct {
+	AccessKey       string
+	NFSeXML         []byte
+	EnvironmentCode int
+	AppVersion      string
+	ProcessedAt     time.Time
+}
+
+// dpsResponse is DpsGetResponse.
+type dpsResponse struct {
+	envelope
+
+	IDDPS       string `json:"idDps"`
+	ChaveAcesso string `json:"chaveAcesso"`
+}
+
+// DPSLookup is the access key of the invoice generated from a declaration.
+type DPSLookup struct {
+	DPSID           string
+	AccessKey       string
+	EnvironmentCode int
+	AppVersion      string
+	ProcessedAt     time.Time
+}
+
+func parseNFSe(body []byte) (*NFSeResult, error) {
+	var resp nfseResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("resposta da Sefin nao e um JSON reconhecido: %w", err)
+	}
+	if rejections := resp.rejections(); len(rejections) > 0 {
+		return nil, &RejectionError{Rejections: rejections, Warnings: resp.Alertas}
+	}
+	if resp.NFSeGZipB64 == "" {
+		return nil, fmt.Errorf("a Sefin respondeu sem erros e sem o campo %q", fieldAuthorizedNFSe)
+	}
+
+	nfseXML, err := decodeGzipBase64(resp.NFSeGZipB64)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel ler a NFS-e retornada: %w", err)
+	}
+
+	return &NFSeResult{
+		AccessKey:       resp.ChaveAcesso,
+		NFSeXML:         nfseXML,
+		EnvironmentCode: resp.TipoAmbiente,
+		AppVersion:      resp.VersaoAplicativo,
+		ProcessedAt:     resp.DataHoraProcessamento,
+	}, nil
+}
+
+func parseDPSLookup(body []byte) (*DPSLookup, error) {
+	var resp dpsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("resposta da Sefin nao e um JSON reconhecido: %w", err)
+	}
+	if rejections := resp.rejections(); len(rejections) > 0 {
+		return nil, &RejectionError{Rejections: rejections, Warnings: resp.Alertas}
+	}
+
+	return &DPSLookup{
+		DPSID:           resp.IDDPS,
+		AccessKey:       resp.ChaveAcesso,
+		EnvironmentCode: resp.TipoAmbiente,
+		AppVersion:      resp.VersaoAplicativo,
+		ProcessedAt:     resp.DataHoraProcessamento,
+	}, nil
+}

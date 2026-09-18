@@ -175,13 +175,38 @@ Há três formas de informá-la, nesta ordem de precedência:
 ficam visíveis para qualquer processo que consiga ler a lista de processos do
 sistema, e costumam ficar gravados no histórico do shell.
 
+### Consultar uma nota emitida
+
+```bash
+nfse consultar 41069021123456780001950000100000000000004212345
+```
+
+```
+NFS-e encontrada
+  Chave de acesso  41069021123456780001950000100000000000004212345
+  Ambiente         producao-restrita
+  Arquivo          notas/4106902...4212345-nfse.xml
+```
+
+Se uma emissão foi interrompida e você não sabe se a nota saiu, consulte pelo
+identificador da declaração:
+
+```bash
+nfse consultar --dps DPS410690211234567800019500001000000000000042 --existe
+```
+
+`--existe` responde apenas sim ou não — o governo atende essa pergunta a
+qualquer certificado válido. Sem a flag, ele devolve a chave de acesso, que por
+sigilo fiscal só é informada a quem consta na nota (prestador, tomador ou
+intermediário).
+
 ## Roadmap
 
 | Versão | Entrega | Estado |
 |--------|---------|--------|
 | v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
 | v0.2.0 | Envio à Sefin Nacional | pronto |
-| v0.3.0 | Consulta de NFS-e por chave de acesso | planejado |
+| v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
 | v0.4.0 | Cancelamento e substituição | planejado |
 
 Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).

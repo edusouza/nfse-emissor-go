@@ -282,3 +282,137 @@ func keys(m map[string]string) []string {
 	}
 	return out
 }
+
+func TestFetchNFSe(t *testing.T) {
+	const nfseXML = `<?xml version="1.0"?><NFSe><infNFSe Id="NFS1"/></NFSe>`
+	accessKey := strings.Repeat("3", 50)
+
+	var gotPath string
+	client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		encoded, _ := encodeGzipBase64([]byte(nfseXML))
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          EnvCodeProduction,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"chaveAcesso":           accessKey,
+			"nfseXmlGZipB64":        encoded,
+		})
+	})
+
+	result, err := client.FetchNFSe(context.Background(), accessKey)
+	if err != nil {
+		t.Fatalf("FetchNFSe falhou: %v", err)
+	}
+	if want := "/nfse/" + accessKey; gotPath != want {
+		t.Errorf("caminho = %q, esperava %q", gotPath, want)
+	}
+	if string(result.NFSeXML) != nfseXML {
+		t.Error("a NFS-e nao foi descompactada corretamente")
+	}
+	if result.EnvironmentCode != EnvCodeProduction {
+		t.Errorf("tipoAmbiente = %d", result.EnvironmentCode)
+	}
+}
+
+// TestFetchNFSe_Forbidden covers fiscal secrecy: the government answers only
+// for a certificate belonging to a party named on the invoice.
+func TestFetchNFSe_Forbidden(t *testing.T) {
+	client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	_, err := client.FetchNFSe(context.Background(), strings.Repeat("3", 50))
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("erro = %v, esperava ErrForbidden", err)
+	}
+}
+
+func TestLookupDPS(t *testing.T) {
+	accessKey := strings.Repeat("4", 50)
+
+	var gotPath string
+	client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          EnvCodeRestrictedProduction,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"idDps":                 "DPS123",
+			"chaveAcesso":           accessKey,
+		})
+	})
+
+	result, err := client.LookupDPS(context.Background(), "DPS123")
+	if err != nil {
+		t.Fatalf("LookupDPS falhou: %v", err)
+	}
+	if gotPath != "/dps/DPS123" {
+		t.Errorf("caminho = %q", gotPath)
+	}
+	if result.AccessKey != accessKey {
+		t.Errorf("chave = %q", result.AccessKey)
+	}
+}
+
+// TestLookupDPS_SingularErrorForm exercises ResponseErro on a lookup, which is
+// where the single "erro" object appears rather than the "erros" array.
+func TestLookupDPS_SingularErrorForm(t *testing.T) {
+	client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          EnvCodeRestrictedProduction,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"erro":                  map[string]string{"codigo": "E100", "descricao": "Identificador invalido"},
+		})
+	})
+
+	_, err := client.LookupDPS(context.Background(), "invalido")
+	if !errors.Is(err, ErrRejected) {
+		t.Fatalf("erro = %v, esperava ErrRejected", err)
+	}
+	if !strings.Contains(err.Error(), "E100") {
+		t.Errorf("a mensagem nao traz o codigo: %v", err)
+	}
+}
+
+func TestDPSExists(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		want    bool
+		wantErr bool
+	}{
+		{name: "existe", status: http.StatusOK, want: true},
+		{name: "nao existe", status: http.StatusNotFound, want: false},
+		{name: "identificador invalido", status: http.StatusBadRequest, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotMethod string
+			client := serve(t, func(w http.ResponseWriter, r *http.Request) {
+				gotMethod = r.Method
+				w.WriteHeader(tc.status)
+			})
+
+			got, err := client.DPSExists(context.Background(), "DPS123")
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("esperava erro")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DPSExists falhou: %v", err)
+			}
+			if gotMethod != http.MethodHead {
+				t.Errorf("metodo = %q, esperava HEAD", gotMethod)
+			}
+			if got != tc.want {
+				t.Errorf("existe = %v, esperava %v", got, tc.want)
+			}
+		})
+	}
+}

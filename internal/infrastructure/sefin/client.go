@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -175,4 +176,87 @@ func (c *Client) classify(status int, body []byte) error {
 	default:
 		return parseErrorBody(status, body)
 	}
+}
+
+// FetchNFSe retrieves an issued invoice by its 50-character access key.
+//
+// Fiscal secrecy applies: the government only answers for a certificate that
+// identifies the provider, the taker or the intermediary named on the invoice.
+// Anyone else gets ErrForbidden.
+func (c *Client) FetchNFSe(ctx context.Context, accessKey string) (*NFSeResult, error) {
+	body, status, err := c.get(ctx, c.baseURL+pathNFSe+url.PathEscape(accessKey))
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status > 299 {
+		return nil, c.classify(status, body)
+	}
+	return parseNFSe(body)
+}
+
+// LookupDPS returns the access key of the invoice generated from a declaration
+// identifier, which is how an interrupted emission is reconciled: if the
+// government issued the invoice before the connection dropped, the key is here.
+func (c *Client) LookupDPS(ctx context.Context, dpsID string) (*DPSLookup, error) {
+	body, status, err := c.get(ctx, c.baseURL+pathDPS+url.PathEscape(dpsID))
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status > 299 {
+		return nil, c.classify(status, body)
+	}
+	return parseDPSLookup(body)
+}
+
+// DPSExists reports whether an invoice was issued from a declaration
+// identifier, without returning the access key.
+//
+// The government serves this to any valid certificate, while LookupDPS is
+// restricted to the parties on the invoice — so this answers "did my emission
+// go through?" even when the caller cannot read the document itself.
+func (c *Client) DPSExists(ctx context.Context, dpsID string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL+pathDPS+url.PathEscape(dpsID), nil)
+	if err != nil {
+		return false, fmt.Errorf("falha ao montar a requisicao: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+	}
+	defer resp.Body.Close()
+	// A HEAD response carries no body, but draining keeps the connection reusable.
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		return true, nil
+	case resp.StatusCode == http.StatusNotFound:
+		return false, nil
+	case resp.StatusCode == http.StatusBadRequest:
+		return false, fmt.Errorf("identificador de DPS invalido: %q", dpsID)
+	default:
+		return false, c.classify(resp.StatusCode, nil)
+	}
+}
+
+// get performs a single GET and returns the body and status.
+func (c *Client) get(ctx context.Context, url string) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("falha ao montar a requisicao: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("falha ao ler a resposta da Sefin Nacional: %w", err)
+	}
+	return body, resp.StatusCode, nil
 }
