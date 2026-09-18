@@ -13,6 +13,45 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.5.2] - 2026-09-18
+
+### Corrigido
+
+- **A assinatura de toda DPS era inválida: o digest era calculado sem a
+  declaração de namespace.** A Sefin recusava cada emissão com
+  `[E0714] Arquivo enviado com erro na assinatura`.
+
+  `CanonicalizeSigned` — a função sobre cuja saída o digest da referência é
+  calculado — copiava o elemento para um documento novo antes de
+  canonicalizá-lo. Isso o desliga dos ancestrais, e o `infDPS` perde o
+  `xmlns` que herda do `DPS`:
+
+  ```
+  o que assinávamos:    <infDPS Id="DPS4106902...">
+  o que o mundo assina: <infDPS xmlns="http://www.sped.fazenda.gov.br/nfse" Id="DPS4106902...">
+  ```
+
+  É o defeito do [ADR 0004](docs/decisoes/0004-assinatura-que-nao-verificava.md)
+  voltando por outra porta: a correção de namespace tinha sido aplicada a
+  `Canonicalize`, e `CanonicalizeSigned` destruía o contexto antes de chamá-la.
+  Ver [ADR 0008](docs/decisoes/0008-digest-sem-namespace.md).
+
+  **Toda DPS assinada por uma versão anterior é inválida** e precisa ser
+  emitida de novo. Não há conserto no arquivo — a assinatura é parte do que o
+  governo valida.
+
+### Adicionado
+
+- Testes de canonicalização ancorados numa **implementação externa**: a forma
+  canônica esperada foi produzida pelo libxml2 (via lxml), não por este pacote,
+  e o comentário registra o comando que a reproduz. Mais uma asserção que teria
+  pegado o defeito sozinha: sem assinatura envelopada para remover,
+  `CanonicalizeSigned` e `Canonicalize` precisam produzir bytes idênticos.
+
+  O teste de ida e volta que o ADR 0004 introduziu não podia detectar isto: o
+  verificador usa a mesma função do assinador, então os dois concordavam entre
+  si e com mais ninguém.
+
 ## [0.5.1] - 2026-09-18
 
 ### Corrigido

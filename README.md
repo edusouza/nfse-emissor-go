@@ -7,12 +7,16 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.5.0**, a primeira versão publicada
-> ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida, assina e envia a DPS à
-> Sefin Nacional. A conexão com o ambiente real já foi exercitada — foi assim
-> que apareceu o defeito de renegociação TLS corrigido nesta versão. O que
-> ainda falta confirmar é uma emissão completa, do `POST` até a NFS-e
-> autorizada; é por isso que a numeração segue em `0.x`. Veja o
+> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O CLI monta, valida,
+> assina e envia a DPS à Sefin Nacional.
+>
+> As emissões reais já chegaram ao governo, e foi assim que os dois últimos
+> defeitos apareceram: a renegociação TLS (v0.5.0) e o digest da assinatura
+> calculado sem a declaração de namespace (v0.5.2). **Toda DPS assinada antes
+> da v0.5.2 é inválida** e precisa ser emitida de novo.
+>
+> O que ainda falta confirmar é uma emissão que atravesse inteira, do `POST`
+> até a NFS-e autorizada. É por isso que a numeração segue em `0.x`. Veja o
 > [roadmap](#roadmap).
 
 ## Instalação
@@ -21,7 +25,7 @@ depender de portal web.
 go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
 ```
 
-Para fixar a versão, troque `@latest` por `@v0.5.0`. O `nfse versao` mostra o
+Para fixar a versão, troque `@latest` por `@v0.5.2`. O `nfse versao` mostra o
 que está instalado — e é o mesmo identificador que vai no `verAplic` de cada
 declaração.
 
@@ -349,7 +353,9 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.2.0 | Envio à Sefin Nacional | pronto |
 | v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
 | v0.4.0 | Cancelamento de NFS-e | pronto |
-| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | **lançada** |
+| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
+| v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
+| v0.5.2 | Correção: o digest da assinatura era calculado sem o namespace | **lançada** |
 | v0.6.0 | Substituição de NFS-e | planejado |
 | v1.0.0 | Depois da primeira emissão real confirmada em produção | planejado |
 
