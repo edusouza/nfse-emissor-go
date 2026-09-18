@@ -1,289 +1,133 @@
-# NFS-e Emissor Go
+# nfse
 
-Backend REST API para emissão de NFS-e (Nota Fiscal de Serviço Eletrônica) através do Sistema Nacional NFS-e do Brasil.
+Emissor de NFS-e (Nota Fiscal de Serviço eletrônica) em linha de comando, para o
+**Sistema Nacional NFS-e**.
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
+querem emitir as próprias notas a partir do terminal ou de um script, sem
+depender de portal web.
 
-## Visão Geral
+> **Estado atual:** em desenvolvimento. O envio à Sefin Nacional ainda **não**
+> está disponível — veja o [roadmap](#roadmap). O que já funciona está descrito
+> abaixo.
 
-Este projeto implementa uma API REST para emissão de notas fiscais de serviço eletrônicas, focado em prestadores do **SIMPLES NACIONAL** (MEI, ME e EPP). A solução oferece:
-
-- **Emissão de NFS-e** via JSON com assinatura digital automática
-- **Submissão de XML pré-assinado** para integradores com sua própria assinatura
-- **Processamento assíncrono** com notificações via webhook
-- **Rastreamento de status** em tempo real
-- **Tradução de erros** do governo para mensagens amigáveis
-
-## Arquitetura
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Client    │────▶│   API       │────▶│   Queue     │
-│  (JSON/XML) │     │   (Gin)     │     │  (Asynq)    │
-└─────────────┘     └─────────────┘     └──────┬──────┘
-                           │                    │
-                           ▼                    ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │  MongoDB    │     │   Worker    │
-                    │  (Status)   │     │ (Processor) │
-                    └─────────────┘     └──────┬──────┘
-                                               │
-                           ┌───────────────────┼───────────────────┐
-                           ▼                   ▼                   ▼
-                    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-                    │  XMLDSig    │     │   SEFIN     │     │  Webhook    │
-                    │  (Signing)  │     │   (Gov API) │     │  (Callback) │
-                    └─────────────┘     └─────────────┘     └─────────────┘
-```
-
-## Stack Tecnológico
-
-| Componente | Tecnologia | Propósito |
-|------------|------------|-----------|
-| **Runtime** | Go 1.21+ | Linguagem principal |
-| **HTTP** | Gin | Framework web |
-| **Queue** | Asynq (Redis) | Processamento assíncrono |
-| **Database** | MongoDB | Persistência de status e chaves |
-| **Cache** | Redis | Fila de jobs e rate limiting |
-| **XML** | etree + crypto/x509 | Assinatura XMLDSig (sem CGO) |
-
-## Quick Start
-
-### Pré-requisitos
-
-- Go 1.21+
-- Docker e Docker Compose
-- Git
-
-### Instalação
+## Instalação
 
 ```bash
-# Clone o repositório
-git clone git@github.com:edusouza/nfse-emissor-go.git
+go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
+```
+
+Ou compilando a partir do código:
+
+```bash
+git clone https://github.com/edusouza/nfse-emissor-go.git
 cd nfse-emissor-go
-
-# Configure o ambiente
-cd src
-cp .env.example .env
-
-# Inicie a infraestrutura
-docker compose up -d mongodb redis
-
-# Execute a API
-go run ./cmd/api
-
-# Em outro terminal, execute o worker
-go run ./cmd/worker
+go build -o nfse ./cmd/nfse
 ```
 
-A API estará disponível em `http://localhost:8080`.
+Requer Go 1.25 ou superior. O resultado é um binário único, sem `cgo` e sem
+dependência de serviço externo.
 
-### Verificar Instalação
+## Uso
+
+### Verificar o certificado
+
+Antes de emitir qualquer coisa, confirme que seu certificado A1 está legível e
+dentro da validade:
 
 ```bash
-# Health check
-curl http://localhost:8080/health
-
-# Resposta esperada:
-{
-  "status": "healthy",
-  "version": "1.0.0",
-  "components": {
-    "mongodb": "healthy",
-    "redis": "healthy"
-  }
-}
+export NFSE_CERT_SENHA='sua-senha'
+nfse cert info --arquivo certificado.pfx
 ```
 
-## Endpoints da API
+```
+Titular                 EMPRESA EXEMPLO LTDA:12345678000199
+Emissor                 AC CERTISIGN RFB G5
+Numero de serie         4A3B2C1D...
+Valido de               10/03/2026 09:14
+Valido ate              10/03/2027 09:14
+Dias restantes          173
+Tamanho da chave        2048 bits
+Certificados na cadeia  2
 
-### Públicos
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/health` | Health check completo |
-| GET | `/health/live` | Liveness probe (K8s) |
-| GET | `/health/ready` | Readiness probe (K8s) |
-| GET | `/metrics` | Métricas Prometheus |
-
-### Protegidos (requer `X-API-Key`)
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/v1/nfse` | Submeter emissão (JSON + certificado) |
-| POST | `/v1/nfse/xml` | Submeter XML pré-assinado |
-| GET | `/v1/nfse/status/{id}` | Consultar status da emissão |
-
-## Exemplo de Uso
-
-### Emitir NFS-e
-
-```bash
-curl -X POST http://localhost:8080/v1/nfse \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: sua-chave-api" \
-  -d '{
-    "provider": {
-      "cnpj": "12345678000199",
-      "tax_regime": "mei",
-      "name": "Empresa Teste LTDA"
-    },
-    "service": {
-      "national_code": "010101",
-      "description": "Consultoria em tecnologia",
-      "municipality_code": "3550308"
-    },
-    "values": {
-      "service_value": 1500.00
-    },
-    "dps": {
-      "series": "00001",
-      "number": "1"
-    },
-    "certificate": {
-      "pfx_base64": "<certificado-base64>",
-      "password": "senha-certificado"
-    }
-  }'
+Certificado apto a assinar uma DPS.
 ```
 
-### Resposta
+O comando sai com código diferente de zero se o certificado não puder assinar
+uma DPS — útil para usar em script.
 
-```json
-{
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "pending",
-  "message": "Request queued for processing",
-  "status_url": "http://localhost:8080/v1/nfse/status/550e8400-e29b-41d4-a716-446655440000"
-}
-```
+### A senha do certificado
 
-## Funcionalidades Implementadas
+Há três formas de informá-la, nesta ordem de precedência:
 
-### User Stories
+1. `--senha` — direto na linha de comando;
+2. `NFSE_CERT_SENHA` — variável de ambiente;
+3. prompt interativo, quando nenhuma das anteriores é usada e há um terminal.
 
-- [x] **US1**: Emissão básica de NFS-e (P1)
-- [x] **US2**: XML assinado pelo serviço com certificados (P1)
-- [x] **US3**: Submissão de XML pré-assinado (P2)
-- [x] **US4**: Informações do tomador (P2)
-- [x] **US5**: Descontos e deduções (P3)
-
-### Capacidades
-
-| Feature | Descrição |
-|---------|-----------|
-| **Autenticação** | API Key com hash SHA-256 |
-| **Rate Limiting** | GCRA por chave (100 req/min default) |
-| **XMLDSig** | Assinatura RSA-SHA256 com exc-c14n |
-| **Certificados** | Suporte a PFX/P12 (A1) |
-| **Validação** | CNPJ/CPF/NIF com dígitos verificadores |
-| **Cálculo Fiscal** | Base de cálculo com descontos/deduções |
-| **Webhooks** | Callbacks HMAC-SHA256 com retry |
-| **Métricas** | Prometheus para observabilidade |
-
-## Estrutura do Projeto
-
-```
-.
-├── docs/                    # Documentação do governo (PDFs, XSDs)
-├── specs/                   # Especificações Speckit
-│   └── 001-nfse-emission-core/
-│       ├── spec.md          # Especificação funcional
-│       ├── plan.md          # Plano de implementação
-│       ├── tasks.md         # Breakdown de tarefas
-│       └── contracts/       # OpenAPI spec
-├── src/                     # Código fonte
-│   ├── cmd/
-│   │   ├── api/             # Entry point do servidor HTTP
-│   │   └── worker/          # Entry point do worker assíncrono
-│   ├── internal/
-│   │   ├── api/             # Handlers, middleware, rotas
-│   │   ├── domain/          # Entidades e validação
-│   │   ├── infrastructure/  # MongoDB, Redis, Sefin, Webhook
-│   │   └── jobs/            # Processador de emissão
-│   └── pkg/
-│       ├── cnpjcpf/         # Validação CNPJ/CPF
-│       └── xmlbuilder/      # Construção de DPS XML
-└── CLAUDE.md                # Contexto para Claude Code
-```
-
-## Testes
-
-```bash
-cd src
-
-# Executar todos os testes
-go test ./...
-
-# Com cobertura
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-
-# Testes específicos
-go test -v ./internal/domain/...
-```
-
-## Docker
-
-### Desenvolvimento
-
-```bash
-cd src
-docker compose up -d
-```
-
-### Produção
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-## Variáveis de Ambiente
-
-| Variável | Default | Descrição |
-|----------|---------|-----------|
-| `PORT` | `8080` | Porta do servidor |
-| `ENV` | `development` | Ambiente |
-| `MONGODB_URI` | `mongodb://localhost:27017` | URI do MongoDB |
-| `REDIS_URL` | `redis://localhost:6379` | URL do Redis |
-| `SEFIN_API_URL` | `https://hom.nfse.gov.br/api` | URL da API do governo |
-| `SEFIN_ENVIRONMENT` | `homologacao` | Ambiente SEFIN |
-| `LOG_LEVEL` | `info` | Nível de log |
-| `WORKER_CONCURRENCY` | `10` | Jobs paralelos |
-
-Veja [src/.env.example](src/.env.example) para lista completa.
-
-## Documentação
-
-- [README detalhado](src/README.md) - Documentação técnica completa
-- [OpenAPI Spec](specs/001-nfse-emission-core/contracts/openapi.yaml) - Especificação da API
-- [Quickstart](specs/001-nfse-emission-core/quickstart.md) - Guia rápido
+**Prefira a variável de ambiente ou o prompt.** Argumentos de linha de comando
+ficam visíveis para qualquer processo que consiga ler a lista de processos do
+sistema, e costumam ficar gravados no histórico do shell.
 
 ## Roadmap
 
-### Próximos EPICs
+| Versão | Entrega | Estado |
+|--------|---------|--------|
+| v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | em andamento |
+| v0.2.0 | Envio à Sefin Nacional | planejado |
+| v0.3.0 | Consulta de NFS-e por chave de acesso | planejado |
+| v0.4.0 | Cancelamento e substituição | planejado |
 
-- [ ] **002-nfse-query**: Consulta e recuperação de NFS-e
-- [ ] **003-nfse-events**: Eventos (cancelamento, substituição)
-- [ ] **004-municipal-parameters**: Parâmetros municipais
+Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 
-## Contribuição
+## Como o projeto está organizado
 
-1. Fork o projeto
-2. Crie sua feature branch (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
+```
+cmd/nfse/          binário do CLI
+internal/
+  cli/             comandos e apresentação
+  domain/          regras de negócio (cálculo de valores, validações, rejeições)
+  infrastructure/
+    xmlsigner/     assinatura XMLDSig e leitura do certificado A1
+    sefin/         cliente da API do governo
+pkg/
+  xmlbuilder/      montagem do XML da DPS
+  cnpjcpf/         validação de CNPJ e CPF
+  dpsid/           identificador da DPS (42 caracteres)
+docs/
+  decisoes/        registro de decisões de arquitetura (ADRs)
+  markdown/        manuais oficiais convertidos para markdown
+  schemas/         XSDs oficiais
+```
+
+## Desenvolvimento
+
+```bash
+go test ./...          # suíte completa (~75s: inclui testes de backoff reais)
+go test -short ./...   # rápida (~2s), pulando os testes dependentes de relógio
+go vet ./...
+gofmt -l ./cmd ./internal ./pkg
+```
+
+## O que a validação local cobre
+
+O CLI valida a DPS antes de assinar, mas essa validação **não substitui** a da
+Sefin Nacional. Ela confere estrutura, tipos, formatos e regras de valores
+monetários; não faz validação XSD completa nem conhece as parametrizações
+municipais. A palavra final é sempre do governo.
+
+Veja as issues [#4](https://github.com/edusouza/nfse-emissor-go/issues/4) e
+[#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
+
+## Glossário
+
+| Termo | Significado |
+|-------|-------------|
+| **DPS** | Declaração de Prestação de Serviço — o XML que você envia |
+| **NFS-e** | Nota Fiscal de Serviço eletrônica — o XML que o governo devolve |
+| **chaveAcesso** | Identificador de 50 caracteres da NFS-e emitida |
+| **cTribNac** | Código nacional do serviço, 6 dígitos (LC 116/2003) |
+| **A1** | Certificado digital em arquivo (`.pfx`/`.p12`), válido por 1 ano |
 
 ## Licença
 
-Este projeto está sob a licença MIT. Veja [LICENSE](LICENSE) para mais detalhes.
-
-## Suporte
-
-Para dúvidas e sugestões, abra uma [issue](https://github.com/edusouza/nfse-emissor-go/issues).
-
----
-
-Desenvolvido com Go e Claude Code
+[MIT](LICENSE).

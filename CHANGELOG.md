@@ -5,122 +5,78 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Unreleased]
+## [Não lançado]
 
-### Planejado
-- **002-nfse-query**: Consulta e recuperação de NFS-e emitidas
-- **003-nfse-events**: Eventos de cancelamento e substituição
-- **004-municipal-parameters**: Configurações específicas por município
+### Adicionado
+
+- **CLI `nfse`** — binário único, sem `cgo`, instalável com
+  `go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest`.
+- `nfse versao` — versão, plataforma e versão do Go.
+- `nfse cert info` — inspeciona um certificado A1 (PFX/P12): titular, emissor,
+  validade, dias restantes, tamanho da chave e cadeia. Sai com código de erro
+  quando o certificado não pode assinar uma DPS, e avisa quando faltam menos de
+  30 dias para o vencimento.
+- Resolução da senha do certificado por `--senha`, pela variável de ambiente
+  `NFSE_CERT_SENHA` ou por prompt interativo, nessa ordem.
+- Esteira de CI: formatação, `go mod tidy` limpo, `go vet`, build, testes com
+  detector de corrida e relatório de cobertura.
+- Registro de decisões de arquitetura em [`docs/decisoes/`](docs/decisoes/).
+
+### Corrigido
+
+- **Certificados A1 em formato moderno não eram lidos.** `ParsePFX` usava
+  `golang.org/x/crypto/pkcs12`, que só decodifica PKCS#12 com 3DES e MAC SHA-1.
+  Arquivos gerados pelo OpenSSL 3 (AES-256-CBC, MAC SHA-256) — o padrão atual —
+  falhavam com `unknown digest algorithm`, e a mensagem sugeria erroneamente que
+  a senha estava errada. Migrado para `software.sslmate.com/src/go-pkcs12`, com
+  teste de regressão cobrindo os dois formatos.
+  Ver [ADR 0002](docs/decisoes/0002-parser-pkcs12.md).
+- A cadeia de certificados intermediários passa a ser extraída do PFX; antes era
+  descartada (`Chain: nil`).
+
+### Alterado
+
+- **O projeto deixou de ser uma API REST e passou a ser um CLI.**
+  Ver [ADR 0001](docs/decisoes/0001-cli-em-vez-de-api.md).
+- Módulo Go renomeado de `github.com/eduardo/nfse-nacional` para
+  `github.com/edusouza/nfse-emissor-go`, agora coincidindo com o repositório —
+  requisito para `go install` funcionar.
+- Código Go movido de `src/` para a raiz do repositório, como é convenção em Go.
+- Dependências diretas reduzidas de 12 para 4 (`etree`, `cobra`, `go-pkcs12`,
+  `golang.org/x/{crypto,term}`).
+- Testes dependentes de relógio agora são pulados com `-short`, reduzindo a
+  suíte local de ~75s para ~2s.
+
+### Removido
+
+- API REST (Gin), worker assíncrono (Asynq), MongoDB, Redis, envio de webhooks,
+  autenticação por chave de API, *rate limiting*, métricas Prometheus,
+  health checks e `docker-compose.yml`.
+- `internal/config`, que lia apenas variáveis de ambiente de servidor.
+- Entidades de persistência em `internal/domain/entities.go`, mantidos apenas
+  `Address` e `Values`, que são usados pelo domínio.
+
+### Problemas conhecidos
+
+- O cliente da Sefin Nacional implementa um contrato **SOAP incorreto**; a API
+  real é REST/JSON. Nenhuma emissão real funciona até isso ser corrigido.
+  Ver [#3](https://github.com/edusouza/nfse-emissor-go/issues/3).
+- A validação chamada de "XSD" é estrutural e não lê os schemas oficiais.
+  Ver [#4](https://github.com/edusouza/nfse-emissor-go/issues/4).
+- A alíquota de ISS é informada pelo usuário, sem consulta aos parâmetros
+  municipais. Ver [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
 
 ---
 
 ## [1.0.0] - 2026-01-08
 
+Versão da API REST, anterior à mudança para CLI. Mantida aqui como registro
+histórico; o código correspondente está no histórico do git.
+
 ### Adicionado
 
-#### API REST
-- `POST /v1/nfse` - Submissão de emissão via JSON com certificado
-- `POST /v1/nfse/xml` - Submissão de XML DPS pré-assinado
-- `GET /v1/nfse/status/{requestId}` - Consulta de status da emissão
-- `GET /health` - Health check com status dos componentes
-- `GET /health/live` - Liveness probe para Kubernetes
-- `GET /health/ready` - Readiness probe para Kubernetes
-- `GET /metrics` - Métricas no formato Prometheus
-
-#### Autenticação e Segurança
-- Autenticação via API Key no header `X-API-Key`
-- Hash SHA-256 das chaves na base de dados
-- Rate limiting por chave (GCRA algorithm)
-- Headers `X-RateLimit-*` nas respostas
-- Resposta 429 com `Retry-After` quando limite excedido
-
-#### Assinatura Digital (XMLDSig)
-- Parser de certificados PFX/P12 (A1)
-- Validação de certificados (expiração, uso de chave)
-- Assinatura RSA-SHA256 com canonicalização exc-c14n
-- Verificação de assinaturas em XML pré-assinado
-- Implementação pure Go (sem dependência CGO)
-
-#### Processamento Assíncrono
-- Fila de jobs com Redis/Asynq
-- Worker com concorrência configurável
-- Retry automático com backoff exponencial
-- Graceful shutdown para API e Worker
-
-#### Webhooks
-- Notificações de sucesso e falha
-- Assinatura HMAC-SHA256 no header `X-Webhook-Signature`
-- Retry com backoff exponencial (3 tentativas)
-- Registro de tentativas de entrega
-
-#### Validação
-- CNPJ com verificação de dígitos (módulo 11)
-- CPF com verificação de dígitos (módulo 11)
-- NIF para tomadores estrangeiros
-- Código de serviço nacional (cTribNac)
-- Código de município (IBGE 7 dígitos)
-- Regime tributário (MEI, ME/EPP)
-
-#### Cálculo Fiscal
-- Valor do serviço com precisão de 2 casas decimais
-- Desconto incondicional (reduz base de cálculo)
-- Desconto condicional (não reduz base)
-- Deduções conforme legislação
-- Cálculo automático da base de cálculo
-- Percentual de dedução (pDR)
-
-#### Construção de XML
-- Geração de DPS conforme schema XSD v1.00
-- ID do DPS no formato padrão nacional
-- Seção de prestador com regime tributário
-- Seção de tomador (CNPJ/CPF/NIF)
-- Seção de serviço com códigos
-- Seção de valores com tributos
-- Endereços nacionais e estrangeiros
-
-#### Infraestrutura
-- Docker Compose com MongoDB, Redis, API e Worker
-- Dockerfiles multi-stage para builds otimizados
-- Configuração via variáveis de ambiente
-- Logging estruturado (JSON)
-- Métricas Prometheus para observabilidade
-
-#### Documentação
-- README com quick start e exemplos
-- OpenAPI 3.1 specification
-- Quickstart guide para desenvolvedores
-- Documentação de variáveis de ambiente
-
-### Técnico
-
-#### Dependências Principais
-- `github.com/gin-gonic/gin` v1.11.0 - Framework HTTP
-- `github.com/hibiken/asynq` v0.25.1 - Fila de jobs
-- `go.mongodb.org/mongo-driver` v1.17.6 - Driver MongoDB
-- `github.com/redis/go-redis/v9` v9.17.2 - Cliente Redis
-- `github.com/go-redis/redis_rate/v10` v10.0.1 - Rate limiting
-- `github.com/beevik/etree` v1.6.0 - Manipulação XML
-- `github.com/google/uuid` v1.6.0 - Geração de UUIDs
-- `golang.org/x/crypto` v0.40.0 - Criptografia
-
-#### Schemas XSD Incluídos
-- `DPS_v1.00.xsd` - Declaração de Prestação de Serviço
-- `NFSe_v1.00.xsd` - Nota Fiscal de Serviço Eletrônica
-- `evento_v1.00.xsd` - Eventos (cancelamento, etc.)
-- `tiposComplexos_v1.00.xsd` - Tipos complexos
-- `tiposSimples_v1.00.xsd` - Tipos simples
-- `xmldsig-core-schema.xsd` - Assinatura digital XML
-
----
-
-## Tipos de Mudanças
-
-- **Adicionado** para novas funcionalidades
-- **Modificado** para mudanças em funcionalidades existentes
-- **Obsoleto** para funcionalidades que serão removidas em breve
-- **Removido** para funcionalidades removidas
-- **Corrigido** para correções de bugs
-- **Segurança** para correções de vulnerabilidades
-
-[Unreleased]: https://github.com/edusouza/nfse-emissor-go/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/edusouza/nfse-emissor-go/releases/tag/v1.0.0
+- API REST para emissão de NFS-e com processamento assíncrono, autenticação por
+  chave de API, *rate limiting*, webhooks de notificação e métricas Prometheus.
+- Assinatura XMLDSig (RSA-SHA256, canonicalização exc-c14n) e leitura de
+  certificados A1.
+- Montagem do XML da DPS, cálculo de valores e tradução de códigos de rejeição.
