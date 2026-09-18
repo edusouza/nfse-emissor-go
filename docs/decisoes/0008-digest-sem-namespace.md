@@ -166,6 +166,18 @@ autorizada, com chave de acesso de 50 dígitos que o validador do próprio proje
 aceita. É a primeira nota que este emissor produziu de fato, em produção
 restrita.
 
+Depois dela, o resto do ciclo: consultar pela chave, consultar pelo
+identificador da DPS, e cancelar. O cancelamento passou de primeira, embora use
+a mesma `CanonicalizeSigned` que estava quebrada — o `infPedReg` herda o
+namespace do `pedRegEvento` exatamente como o `infDPS` herda do `DPS`, então a
+correção o cobria. Foi verificado antes do envio, pela mesma implementação
+independente.
+
+Duas previsões minhas erraram nessa sequência: a de que o certificado explicava
+o E0714, e a de que o evento de cancelamento traria alguma rejeição de conteúdo.
+A segunda era um palpite sobre um anexo que eu não tinha lido — e vale registrar
+que um palpite anunciado com confiança não vale mais que um não anunciado.
+
 O que ainda não foi exercitado é o ambiente de produção, com valor fiscal.
 Tecnicamente é o mesmo caminho — muda o endereço e a consequência de errar.
 

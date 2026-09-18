@@ -291,3 +291,40 @@ func TestWriteNew_MensagemNaoAssumeEmissao(t *testing.T) {
 		t.Errorf("a mensagem deveria dizer como prosseguir: %v", err)
 	}
 }
+
+// The real service omits idDps, although DpsGetResponse marks it required. The
+// first lookup against the government printed a blank line where the identifier
+// belongs, and the existing test could not see it: its stub was written from
+// the swagger, and here the swagger is what is wrong.
+//
+// The caller typed the identifier, so it is known without asking.
+func TestConsultar_PorDPS_QuandoOServidorOmiteOIdentificador(t *testing.T) {
+	chave := strings.Repeat("8", 50)
+	const dpsID = "DPS410690221234567800019500001000000000000009"
+
+	stubQuery(t, func(w http.ResponseWriter, r *http.Request) {
+		// Faithful to what the Sefin actually answers: no idDps.
+		json.NewEncoder(w).Encode(map[string]any{
+			"tipoAmbiente":          2,
+			"versaoAplicativo":      "1.0.0",
+			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
+			"chaveAcesso":           chave,
+		})
+	})
+
+	dir := workspace(t)
+	out, err := runConsulta(t, dir, "--dps", dpsID)
+	if err != nil {
+		t.Fatalf("consulta falhou: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, dpsID) {
+		t.Errorf("a saida nao traz o identificador da DPS:\n%s", out)
+	}
+	if strings.Contains(out, "DPS              \n") {
+		t.Errorf("a linha da DPS saiu vazia:\n%s", out)
+	}
+	if !strings.Contains(out, chave) {
+		t.Errorf("a saida nao traz a chave de acesso:\n%s", out)
+	}
+}

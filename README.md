@@ -7,10 +7,10 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O ciclo completo
-> funciona: a v0.5.2 é a primeira versão que **emitiu uma NFS-e de verdade**,
-> em produção restrita — DPS montada, validada, assinada, aceita pela Sefin
-> Nacional e devolvida como nota autorizada.
+> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O ciclo inteiro foi
+> exercitado contra a Sefin Nacional em produção restrita — `emitir`, `enviar`,
+> `consultar` por chave e por identificador da DPS, e `cancelar`. A v0.5.2 é a
+> primeira versão que **emitiu uma NFS-e de verdade**.
 >
 > Chegar aqui custou cinco defeitos, e cada um foi encontrado por uma rejeição
 > do governo, nunca por inspeção: a renegociação TLS (v0.5.0), e na v0.5.2 o

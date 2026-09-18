@@ -153,8 +153,17 @@ func consultarPorDPS(cmd *cobra.Command, cfg *config.Config, f *consultarFlags, 
 		return explainQueryError(err)
 	}
 
+	// The swagger marks idDps as required in DpsGetResponse, and the service
+	// leaves it out: the first real lookup printed a blank line where the
+	// identifier belongs. It is not worth a round trip to learn something the
+	// caller just typed, so the queried identifier fills in for it.
+	dpsID := lookup.DPSID
+	if dpsID == "" {
+		dpsID = f.dpsID
+	}
+
 	fmt.Fprintf(out, "NFS-e gerada a partir da DPS\n")
-	fmt.Fprintf(out, "  DPS              %s\n", lookup.DPSID)
+	fmt.Fprintf(out, "  DPS              %s\n", dpsID)
 	fmt.Fprintf(out, "  Chave de acesso  %s\n", lookup.AccessKey)
 	fmt.Fprintf(out, "  Ambiente         %s\n", sefin.EnvironmentName(lookup.EnvironmentCode))
 	fmt.Fprintf(out, "\nBaixe o XML com:\n  nfse consultar %s\n", lookup.AccessKey)

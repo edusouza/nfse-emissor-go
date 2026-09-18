@@ -16,9 +16,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [0.5.2] - 2026-09-18
 
 **A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o
-ciclo completo atravessou: DPS montada, validada, assinada, aceita pela Sefin
-Nacional e devolvida como nota autorizada, com chave de acesso de 50 dígitos que
-o próprio validador do projeto aceita.
+ciclo inteiro foi exercitado contra a Sefin Nacional, ponta a ponta:
+
+```
+emitir → enviar → consultar <chave> → consultar --dps → cancelar
+```
+
+A DPS foi montada, validada, assinada, aceita e devolvida como nota autorizada,
+com chave de acesso de 50 dígitos que o próprio validador do projeto aceita. O
+cancelamento — outro XML, outra raiz, outro endpoint — foi registrado na
+primeira tentativa.
 
 Quatro correções que, juntas, eram tudo que impedia isso. Cada uma foi
 encontrada por uma rejeição real do governo, uma depois da outra, e nenhuma
@@ -114,6 +121,14 @@ teria sido encontrada por inspeção ou por cobertura de testes.
   emitida de novo. Não há conserto no arquivo — a assinatura é parte do que o
   governo valida.
 
+- **`nfse consultar --dps` imprimia o identificador em branco.** O `DpsGetResponse`
+  do swagger marca `idDps` como obrigatório na resposta, e o serviço real não o
+  envia. O teste que existia não podia ver isso: o *stub* dele foi escrito a
+  partir do swagger, e aqui é o swagger que está errado.
+
+  Não vale uma viagem de ida e volta para descobrir algo que o usuário acabou de
+  digitar — o identificador consultado preenche a linha quando a resposta o
+  omite. Há um teste novo fiel ao que o governo devolve de fato.
 - **`nfse consultar` recusava consultar a mesma nota duas vezes**, com uma
   mensagem de emissão: *"o numero da DPS provavelmente ja foi usado. Use outro
   --numero"* — numa consulta, que não tem número de DPS nem a flag `--numero`.
