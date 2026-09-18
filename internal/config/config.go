@@ -65,12 +65,40 @@ type Certificado struct {
 	// in a file that is easy to commit by mistake.
 }
 
+// Regime de apuração values for a Simples Nacional ME/EPP (regApTribSN).
+//
+// They matter when the provider has crossed a Simples sublimit, moving part of
+// the taxes out of the regime. The choice changes whether pAliq may or must be
+// declared, so it is not cosmetic.
+const (
+	// ApuracaoSN is 1: federal and municipal taxes assessed under the Simples.
+	ApuracaoSN = "sn"
+
+	// ApuracaoISSMunicipio is 2: federal taxes under the Simples, ISSQN under
+	// the municipality's own legislation.
+	ApuracaoISSMunicipio = "iss-municipio"
+
+	// ApuracaoFora is 3: both federal and municipal taxes outside the Simples.
+	ApuracaoFora = "fora-do-sn"
+)
+
+// apuracaoCodes maps the readable names onto regApTribSN.
+var apuracaoCodes = map[string]int{
+	ApuracaoSN:           1,
+	ApuracaoISSMunicipio: 2,
+	ApuracaoFora:         3,
+}
+
 // Prestador is the service provider: you.
 type Prestador struct {
 	CNPJ               string `yaml:"cnpj"`
 	Nome               string `yaml:"nome"`
 	RegimeTributario   string `yaml:"regime_tributario"`
 	InscricaoMunicipal string `yaml:"inscricao_municipal"`
+
+	// RegimeApuracao is regApTribSN, meaningful only for ME/EPP. Defaults to
+	// ApuracaoSN, which is the case for anyone within the Simples limits.
+	RegimeApuracao string `yaml:"regime_apuracao"`
 
 	// Municipio is the 7-digit IBGE code of the municipality where the DPS is
 	// issued.
@@ -110,6 +138,28 @@ type Servico struct {
 	Descricao string `yaml:"descricao"`
 }
 
+// ISSQN withholding values (tpRetISSQN).
+//
+// Withholding belongs to the taker, not the provider: when it applies, whoever
+// takes the service pays the ISS. It also flips whether pAliq may be declared.
+const (
+	// RetencaoNenhuma is 1: not withheld.
+	RetencaoNenhuma = "nao"
+
+	// RetencaoTomador is 2: withheld by the taker.
+	RetencaoTomador = "tomador"
+
+	// RetencaoIntermediario is 3: withheld by the intermediary.
+	RetencaoIntermediario = "intermediario"
+)
+
+// retencaoCodes maps the readable names onto tpRetISSQN.
+var retencaoCodes = map[string]int{
+	RetencaoNenhuma:       1,
+	RetencaoTomador:       2,
+	RetencaoIntermediario: 3,
+}
+
 // Valores holds the monetary amounts.
 type Valores struct {
 	ValorServico           float64 `yaml:"valor_servico"`
@@ -121,6 +171,10 @@ type Valores struct {
 	// through the DAS, so pAliq is legitimately zero. Without the pointer an
 	// explicit 0 would be indistinguishable from "not set" during merging.
 	ISSAliquota *float64 `yaml:"iss_aliquota"`
+
+	// RetencaoISSQN is tpRetISSQN: "nao", "tomador" or "intermediario".
+	// It varies per invoice, because it depends on who the client is.
+	RetencaoISSQN string `yaml:"retencao_issqn"`
 }
 
 // Tomador is the party taking the service.
@@ -214,6 +268,19 @@ func (c *Config) applyDefaults() {
 	if c.DPS.Serie == "" {
 		c.DPS.Serie = "00001"
 	}
+	if c.Prestador.RegimeApuracao == "" {
+		c.Prestador.RegimeApuracao = ApuracaoSN
+	}
+}
+
+// RegimeApuracaoCode returns regApTribSN for the configured regime.
+//
+// An empty value means the default: everything assessed under the Simples.
+func (c *Config) RegimeApuracaoCode() int {
+	if code, ok := apuracaoCodes[c.Prestador.RegimeApuracao]; ok {
+		return code
+	}
+	return apuracaoCodes[ApuracaoSN]
 }
 
 // EnvironmentCode returns the tpAmb value used in the DPS: 1 for production,
@@ -275,6 +342,16 @@ func (c *Config) Validate() error {
 	default:
 		problems = append(problems, fmt.Sprintf("prestador.regime_tributario: %q e invalido (use %q ou %q)",
 			c.Prestador.RegimeTributario, RegimeMEI, RegimeMEEPP))
+	}
+
+	// Empty means "not specified" and resolves to the default; only an
+	// unrecognised value is a mistake worth reporting.
+	if r := c.Prestador.RegimeApuracao; r != "" {
+		if _, ok := apuracaoCodes[r]; !ok {
+			problems = append(problems, fmt.Sprintf(
+				"prestador.regime_apuracao: %q e invalido (use %q, %q ou %q)",
+				r, ApuracaoSN, ApuracaoISSMunicipio, ApuracaoFora))
+		}
 	}
 
 	if len(c.DPS.Serie) != 5 {

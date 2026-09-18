@@ -249,7 +249,9 @@ func (b *DPSBuilder) buildProvider() prestXML {
 	regApTribSN := 0
 	if b.config.Provider.TaxRegime == "me_epp" {
 		opSimpNac = 3
-		// regApTribSN is expected for ME/EPP; default to 1 when unset.
+		// regApTribSN says which taxes are still assessed under the Simples.
+		// It decides whether pAliq may be declared, so the caller's choice
+		// matters; 1 (everything under the Simples) is the common case.
 		regApTribSN = b.config.Provider.SimplesApuracao
 		if regApTribSN == 0 {
 			regApTribSN = 1

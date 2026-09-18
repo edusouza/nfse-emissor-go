@@ -10,14 +10,24 @@ import (
 
 	"github.com/beevik/etree"
 
+	"github.com/edusouza/nfse-emissor-go/internal/config"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 )
 
 const testCertPassword = "senha-de-teste"
 
 // workspace prepares a directory containing a valid nfse.yaml and a throwaway
-// certificate, and returns its path.
+// certificate, and returns its path. The provider is a MEI, which is the common
+// case in these tests.
 func workspace(t *testing.T) string {
+	t.Helper()
+	return workspaceRegime(t, config.RegimeMEI)
+}
+
+// workspaceRegime builds a workspace for a given tax regime. The regime decides
+// whether an ISS rate may be declared at all, so tests that exercise pAliq need
+// to pick one explicitly.
+func workspaceRegime(t *testing.T, regime string) string {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -39,7 +49,7 @@ certificado:
 prestador:
   cnpj: "12345678000195"
   nome: EMPRESA EXEMPLO LTDA
-  regime_tributario: mei
+  regime_tributario: ` + regime + `
   inscricao_municipal: "1234567"
   municipio: "4106902"
 dps:
@@ -160,11 +170,13 @@ func TestEmitir_SignatureIsValid(t *testing.T) {
 }
 
 func TestEmitir_FlagsOverrideConfigDefaults(t *testing.T) {
-	dir := workspace(t)
+	// A ME/EPP with withheld ISSQN is the one case where declaring a rate is
+	// allowed, so it is the only one where the override is observable.
+	dir := workspaceRegime(t, config.RegimeMEEPP)
 
 	// The config default sets iss_aliquota to 0; the flag must win.
 	if out, err := runEmit(t, dir, "--numero", "7", "--valor", "1000",
-		"--descricao", "Servico", "--iss-aliquota", "2.5"); err != nil {
+		"--descricao", "Servico", "--retencao", "tomador", "--iss-aliquota", "2.5"); err != nil {
 		t.Fatalf("emissao falhou: %v\n%s", err, out)
 	}
 
@@ -178,6 +190,82 @@ func TestEmitir_FlagsOverrideConfigDefaults(t *testing.T) {
 	}
 	if el.Text() != "2.50" {
 		t.Errorf("pAliq = %q, esperava 2.50", el.Text())
+	}
+}
+
+func TestEmitir_RetencaoAppearsInXML(t *testing.T) {
+	dir := workspaceRegime(t, config.RegimeMEEPP)
+
+	if out, err := runEmit(t, dir, "--numero", "8", "--valor", "1000",
+		"--descricao", "Servico", "--retencao", "tomador", "--iss-aliquota", "3"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(onlyXML(t, dir)); err != nil {
+		t.Fatal(err)
+	}
+	el := doc.FindElement("DPS/infDPS/valores/trib/tribMun/tpRetISSQN")
+	if el == nil {
+		t.Fatal("tpRetISSQN ausente")
+	}
+	if el.Text() != "2" {
+		t.Errorf("tpRetISSQN = %q, esperava 2 (retido pelo tomador)", el.Text())
+	}
+}
+
+// The rules below are the ones the Sefin applies on receipt. Catching them here
+// is the difference between a message on the terminal and a rejected invoice.
+
+func TestEmitir_RejectsISSRateFromMEI(t *testing.T) {
+	dir := workspace(t)
+
+	out, err := runEmit(t, dir, "--numero", "11", "--valor", "1000",
+		"--descricao", "Servico", "--iss-aliquota", "2.5")
+	if err == nil {
+		t.Fatalf("esperava recusa: MEI nao informa aliquota\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "E0600") {
+		t.Errorf("a mensagem deveria citar a regra E0600: %v", err)
+	}
+}
+
+func TestEmitir_RejectsISSRateWithoutRetencao(t *testing.T) {
+	dir := workspaceRegime(t, config.RegimeMEEPP)
+
+	out, err := runEmit(t, dir, "--numero", "12", "--valor", "1000",
+		"--descricao", "Servico", "--iss-aliquota", "3")
+	if err == nil {
+		t.Fatalf("esperava recusa: ME/EPP sem retencao nao informa aliquota\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "E0625") {
+		t.Errorf("a mensagem deveria citar a regra E0625: %v", err)
+	}
+}
+
+func TestEmitir_RejectsRetencaoWithoutISSRate(t *testing.T) {
+	dir := workspaceRegime(t, config.RegimeMEEPP)
+
+	out, err := runEmit(t, dir, "--numero", "13", "--valor", "1000",
+		"--descricao", "Servico", "--retencao", "tomador")
+	if err == nil {
+		t.Fatalf("esperava recusa: com retencao a aliquota e obrigatoria\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "E0621") {
+		t.Errorf("a mensagem deveria citar a regra E0621: %v", err)
+	}
+}
+
+func TestEmitir_RejectsUnknownRetencao(t *testing.T) {
+	dir := workspaceRegime(t, config.RegimeMEEPP)
+
+	out, err := runEmit(t, dir, "--numero", "14", "--valor", "1000",
+		"--descricao", "Servico", "--retencao", "parcial")
+	if err == nil {
+		t.Fatalf("esperava recusa de um valor invalido de --retencao\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "retencao_issqn") {
+		t.Errorf("a mensagem deveria apontar o campo: %v", err)
 	}
 }
 

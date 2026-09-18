@@ -9,6 +9,23 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- **Validação da alíquota do ISS antes de assinar.** O `emitir` passa a recusar
+  as combinações que a Sefin rejeita na recepção: MEI informando alíquota
+  (E0600), ME/EPP do Simples informando alíquota sem retenção (E0625), ME/EPP
+  com retenção sem informar alíquota ou abaixo de 1,8% (E0621), e qualquer
+  alíquota acima de 5% (E0595). A mensagem diz o que fazer e cita o código da
+  regra. As regras vêm da planilha oficial em `docs/anexos/`. Ver
+  [ADR 0006](docs/decisoes/0006-validacao-de-aliquota-do-iss.md).
+- **`--retencao`** (`nao` | `tomador` | `intermediario`) e
+  `padroes.valores.retencao_issqn`, que alimentam `tpRetISSQN`. Sem eles não
+  havia como declarar que o tomador retém o ISSQN — e, portanto, não havia como
+  emitir o único caso em que declarar a alíquota é obrigatório.
+- **`prestador.regime_apuracao`** (`sn` | `iss-municipio` | `fora-do-sn`), que
+  alimenta `regApTribSN`. O padrão é `sn`, o caso de quem está dentro dos
+  limites do Simples.
+- **`docs/convenio-municipal.md`** — como consultar se o convênio de um
+  município está ativo. Duas regras de alíquota (E0635 e E0640) dependem disso,
+  e a resposta não está na máquina: o emissor não opina nesses casos.
 - **Numeração automática da DPS.** `--numero` virou opcional: sem ele, o `nfse`
   segue a sequência da série. O último número usado fica em
   `.nfse-estado.json`, gravado de forma atômica e só depois do XML existir em

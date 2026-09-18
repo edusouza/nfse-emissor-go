@@ -19,6 +19,11 @@ prestador:
   cnpj: "12345678000195"
   nome: EMPRESA EXEMPLO LTDA
   regime_tributario: mei        # mei | me_epp
+  # So vale para me_epp. Diz quais tributos ainda sao apurados pelo Simples:
+  #   sn             (padrao) tudo pelo Simples — o ISS sai no DAS
+  #   iss-municipio  federais pelo Simples, ISSQN apurado pelo municipio
+  #   fora-do-sn     federais e municipais fora do Simples
+  # regime_apuracao: sn
   inscricao_municipal: "1234567"
   municipio: "4106902"          # Curitiba/PR (ANEXO_A, tabela do IBGE)
 
@@ -37,9 +42,17 @@ padroes:
     descricao: Desenvolvimento de software sob encomenda
 
   valores:
-    # MEI recolhe o ISS pelo DAS, entao a aliquota na nota e 0.
-    # ME/EPP: consulte a aliquota do seu municipio para o servico prestado.
+    # Quem pode informar aliquota depende do regime, e a Sefin rejeita a nota
+    # quando a combinacao esta errada. O comando verifica antes de enviar:
+    #   MEI                          nunca informa aliquota (E0600)
+    #   ME/EPP no Simples, sem retencao  nao pode informar (E0625)
+    #   ME/EPP no Simples, com retencao  precisa informar, >= 1.8% (E0621)
+    # Em qualquer caso a aliquota nao passa de 5% (E0595).
     iss_aliquota: 0
+
+    # Quem recolhe o ISSQN: nao (padrao) | tomador | intermediario.
+    # Tambem disponivel como --retencao na linha de comando.
+    # retencao_issqn: nao
 
   tomador:
     # Venda ao publico em geral: a nota sai sem identificar o cliente.

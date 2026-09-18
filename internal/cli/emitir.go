@@ -39,6 +39,7 @@ type emitirFlags struct {
 	deducoes               float64
 	issAliquota            float64
 
+	retencao     string
 	tomadorCNPJ  string
 	tomadorCPF   string
 	tomadorNome  string
@@ -97,6 +98,7 @@ confirmacao no terminal; use --confirmar para dispensa-la em scripts.`,
 	fl.Float64Var(&f.descontoCondicionado, "desconto-condicionado", 0, "desconto condicionado")
 	fl.Float64Var(&f.deducoes, "deducoes", 0, "deducoes permitidas")
 	fl.Float64Var(&f.issAliquota, "iss-aliquota", 0, "aliquota de ISS em porcentagem")
+	fl.StringVar(&f.retencao, "retencao", "", "retencao do ISSQN: nao | tomador | intermediario")
 
 	fl.StringVar(&f.tomadorCNPJ, "tomador-cnpj", "", "CNPJ do tomador")
 	fl.StringVar(&f.tomadorCPF, "tomador-cpf", "", "CPF do tomador")
@@ -135,6 +137,13 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return err
 	}
 	if err := nota.Validate(); err != nil {
+		return err
+	}
+
+	// Check the ISS rate against the government's own rules before building
+	// anything: a rate that is forbidden or missing is a certain rejection, and
+	// the error code alone would not say what to do about it.
+	if err := validation.ValidateISSRate(issRateContext(cfg, nota)); err != nil {
 		return err
 	}
 
@@ -297,6 +306,9 @@ func notaFromFlags(cmd *cobra.Command, f *emitirFlags) config.Nota {
 		rate := f.issAliquota
 		override.Valores.ISSAliquota = &rate
 	}
+	if fl.Changed("retencao") {
+		override.Valores.RetencaoISSQN = f.retencao
+	}
 
 	if fl.Changed("tomador-cnpj") || fl.Changed("tomador-cpf") ||
 		fl.Changed("tomador-nome") || fl.Changed("tomador-email") {
@@ -338,6 +350,7 @@ func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult,
 			Name:                  cfg.Prestador.Nome,
 			TaxRegime:             cfg.Prestador.RegimeTributario,
 			MunicipalRegistration: cfg.Prestador.InscricaoMunicipal,
+			SimplesApuracao:       cfg.RegimeApuracaoCode(),
 		},
 		Taker: takerFor(nota),
 		Service: xmlbuilder.DPSService{
@@ -351,6 +364,7 @@ func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult,
 			ConditionalDiscount:   nota.Valores.DescontoCondicionado,
 			Deductions:            nota.Valores.Deducoes,
 			ISSRate:               nota.ISSRate(),
+			ISSRetention:          nota.RetencaoCode(),
 		},
 	}
 
@@ -562,4 +576,19 @@ func reportEmission(cmd *cobra.Command, nota config.Nota, dpsID, dpsPath, nfsePa
 		fmt.Fprintf(out, "\nAmbiente de producao restrita: esta nota NAO tem valor fiscal.\n")
 	}
 	return nil
+}
+
+// issRateContext gathers what the ISS rate rules depend on.
+func issRateContext(cfg *config.Config, nota config.Nota) validation.ISSRateContext {
+	opSimpNac := 3 // ME/EPP
+	if cfg.Prestador.RegimeTributario == config.RegimeMEI {
+		opSimpNac = 2
+	}
+
+	return validation.ISSRateContext{
+		OpSimpNac:   opSimpNac,
+		RegApTribSN: cfg.RegimeApuracaoCode(),
+		TpRetISSQN:  nota.RetencaoCode(),
+		Rate:        nota.ISSRate(),
+	}
 }

@@ -50,6 +50,9 @@ func (n Nota) Merge(override Nota) Nota {
 	if override.Valores.ISSAliquota != nil {
 		merged.Valores.ISSAliquota = override.Valores.ISSAliquota
 	}
+	if override.Valores.RetencaoISSQN != "" {
+		merged.Valores.RetencaoISSQN = override.Valores.RetencaoISSQN
+	}
 
 	// The taker is replaced wholesale rather than field by field. Merging an
 	// identified taker over a "nao_identificado" default field by field would
@@ -72,6 +75,19 @@ func (n Nota) CompetenciaDate() (time.Time, error) {
 		return time.Time{}, fmt.Errorf("competencia %q invalida: use o formato AAAA-MM-DD", n.Competencia)
 	}
 	return t, nil
+}
+
+// RetencaoCode returns tpRetISSQN, defaulting to "not withheld".
+func (n Nota) RetencaoCode() int {
+	if code, ok := retencaoCodes[n.Valores.RetencaoISSQN]; ok {
+		return code
+	}
+	return retencaoCodes[RetencaoNenhuma]
+}
+
+// HasRetencao reports whether someone withholds the ISSQN.
+func (n Nota) HasRetencao() bool {
+	return n.RetencaoCode() != retencaoCodes[RetencaoNenhuma]
 }
 
 // ISSRate returns the ISS rate, treating an unset rate as zero.
@@ -109,6 +125,14 @@ func (n Nota) Validate() error {
 
 	if n.Valores.ValorServico <= 0 {
 		problems = append(problems, "valores.valor_servico: deve ser maior que zero (use --valor)")
+	}
+
+	if r := n.Valores.RetencaoISSQN; r != "" {
+		if _, ok := retencaoCodes[r]; !ok {
+			problems = append(problems, fmt.Sprintf(
+				"valores.retencao_issqn: %q e invalido (use %q, %q ou %q)",
+				r, RetencaoNenhuma, RetencaoTomador, RetencaoIntermediario))
+		}
 	}
 
 	if t := n.Tomador; t != nil && !t.NaoIdentificado {
