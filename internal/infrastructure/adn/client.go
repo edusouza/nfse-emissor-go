@@ -220,6 +220,19 @@ func (c *Client) statusError(status int, chave string, body []byte) error {
 		return fmt.Errorf("o ADN respondeu 501 em %s.\n"+
 			"O endereco do servico provavelmente mudou; informe o novo com --url.\n"+
 			"Resposta: %s", c.baseURL, resumo(body))
+
+	case http.StatusServiceUnavailable:
+		// 503 is not the same news as 404, and the difference matters enough to
+		// separate: a 404 says nothing is routed at this path, while a 503 says
+		// something is — the request reached a route and the backend behind it
+		// did not answer. That can be a passing outage, or a service that is
+		// simply not published in this environment. Telling the user to "try
+		// again later" would be wrong in the second case.
+		return fmt.Errorf("o ADN respondeu 503 em %s/%s.\n"+
+			"O endereco existe e esta roteado, mas o servico atras dele nao\n"+
+			"respondeu. Pode ser indisponibilidade passageira — tente de novo —\n"+
+			"ou o servico pode nao estar publicado neste ambiente.\n"+
+			"Resposta: %s", c.baseURL, chave, resumo(body))
 	}
 
 	if status >= 500 {

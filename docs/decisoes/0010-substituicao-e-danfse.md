@@ -90,33 +90,46 @@ declarar. Duas coisas na DANFSe vêm de inferência, não de especificação:
    `adn-contribuinte-swagger.json` que o repositório carrega tem apenas
    `/DFe/{NSU}` e `/NFSe/{ChaveAcesso}/Eventos`.
 2. **O host de produção.** `adn.producaorestrita.nfse.gov.br/danfse` está
-   escrito no 501 da própria Sefin; `adn.nfse.gov.br/danfse` é a mesma forma que
-   a Sefin usa para o par produção/restrita, aplicada por simetria.
-3. **O caminho, depois de um teste.** A página de documentação que o 501 da
-   Sefin indica — `.../danfse/docs/index.html` — **responde 404 hoje**,
-   confirmado por quem tem acesso à rede do governo. As outras áreas do ADN
-   seguem o padrão `/{área}/docs/index.html` e existem
-   (`/contribuintes/docs/index.html`, `/municipios/docs/index.html`), e o
-   `x-logo` do swagger de contribuinte aponta para `/contribuintes/images/...`,
-   o que indica que cada área é servida sob o próprio prefixo. É possível,
-   portanto, que o serviço esteja em `/contribuintes/danfse` ou
-   `/municipios/danfse`, e não na raiz.
+   escrito no 501 da própria Sefin; `adn.nfse.gov.br/danfse` foi inferido por
+   simetria com o par que a Sefin publica, e continua sendo um palpite: os
+   testes feitos até agora foram em páginas de documentação, não no serviço.
 
-O ambiente onde isto foi escrito não alcança `gov.br`, então nada disso pôde ser
-conferido. O cliente foi construído para essa incerteza:
+### O que dois testes de rede disseram — e o que não disseram
 
-- **Nunca grava o que não reconhece.** Um 200 cujo corpo não começa com `%PDF-`
-  vira erro com o `Content-Type` e um resumo do corpo, em vez de um `.pdf` que
-  leitor nenhum abre.
-- **403 e 401 explicam a hipótese mais provável** — o manual dos municípios — em
-  vez de um "acesso negado" que manda procurar no lugar errado.
-- **501 diz que o endereço mudou** e aponta para `--url`.
-- **404 nomeia as duas causas possíveis** — serviço fora desse endereço, ou
-  nota ausente do ADN — e sugere os dois prefixos alternativos, montados a
-  partir do `--url` em uso. Um 404 que dissesse só "NFS-e não encontrada"
-  mandaria procurar a nota quando o problema é o caminho.
-- **`--url` existe** para que um endereço errado seja contornável sem esperar uma
-  versão nova.
+Quem tem acesso à rede do governo abriu a **página de documentação** do serviço
+nos dois ambientes, e as respostas diferem:
+
+| Ambiente | `/danfse/docs/index.html` | |
+|---|---|---|
+| produção restrita | **404** | nada servido nesse caminho |
+| produção | **503** | algo responde, mas não atendeu |
+
+**São páginas de documentação, não o endpoint.** Isso limita muito o que se
+pode concluir: uma API pode funcionar sem publicar swagger no caminho que outro
+documento indica, e um 503 numa página estática pode vir de um *gateway* que
+responde 503 para qualquer coisa. Nenhum dos dois testes diz se
+`GET /danfse/{chaveAcesso}` funciona.
+
+O que dá para dizer, com cuidado:
+
+- O 501 da Sefin aponta para uma página que hoje **não está lá** na produção
+  restrita. Isso enfraquece aquele ponteiro como fonte do caminho do serviço,
+  sem provar que o caminho mudou.
+- A diferença entre 404 e 503 entre os dois ambientes é fraca demais para
+  inverter ou confirmar a inferência do host de produção. Ela fica como estava:
+  um palpite por simetria.
+
+**O teste decisivo é outro:** chamar o endpoint, com certificado e uma chave de
+acesso real. É exatamente o que `nfse danfse <chave>` faz, e é por isso que o
+comando foi entregue com `--url` e com mensagens de erro que antecipam cada
+hipótese, em vez de esperar por uma certeza que este ambiente não consegue
+obter.
+
+As outras áreas do ADN seguem o padrão `/{área}/docs/index.html` e existem
+(`/contribuintes/docs/index.html`, `/municipios/docs/index.html`), e o `x-logo`
+do swagger de contribuinte aponta para `/contribuintes/images/...`, o que indica
+que cada área é servida sob o próprio prefixo. É uma hipótese razoável para
+`--url`, não uma conclusão.
 
 ## Consequências
 

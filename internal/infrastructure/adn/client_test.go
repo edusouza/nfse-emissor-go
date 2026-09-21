@@ -75,6 +75,8 @@ func TestBaixarDANFSe_Status(t *testing.T) {
 		{http.StatusUnauthorized, ``, "manual dos municipios"},
 		{http.StatusNotImplemented, `movido`, "informe o novo com --url"},
 		{http.StatusBadGateway, ``, "indisponivel no momento"},
+		// 503 e noticia diferente de 404: algo esta roteado nesse caminho.
+		{http.StatusServiceUnavailable, ``, "existe e esta roteado"},
 		{http.StatusBadRequest, `chave invalida`, "respondeu 400"},
 	}
 

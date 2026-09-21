@@ -505,9 +505,10 @@ antigo responde 501. `--url` aponta para outro endereço se for preciso.
 
 > **Ainda não verificado contra o serviço real.** A API DANFSe é descrita no
 > manual dos municípios; o manual dos contribuintes não a menciona. Pode ser
-> que um certificado de prestador não seja aceito. E a página de documentação
-> que a Sefin indica para o serviço responde 404 hoje, então o caminho pode ter
-> mudado — se acontecer, o erro sugere `--url` com os prefixos alternativos.
+> que um certificado de prestador não seja aceito. A página de documentação que
+> a Sefin indica para o serviço responde 404 hoje, o que enfraquece esse
+> ponteiro sem dizer nada sobre o endpoint — se o caminho tiver mudado, o erro
+> sugere `--url` com os prefixos alternativos.
 > O comando nunca grava um arquivo que não seja um PDF de verdade.
 > [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
 
