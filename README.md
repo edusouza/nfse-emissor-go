@@ -7,21 +7,23 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.5.2** ([CHANGELOG](CHANGELOG.md)). O ciclo inteiro foi
-> exercitado contra a Sefin Nacional em produção restrita — `emitir`, `enviar`,
-> `consultar` por chave e por identificador da DPS, e `cancelar`. A v0.5.2 é a
-> primeira versão que **emitiu uma NFS-e de verdade**.
->
-> Chegar aqui custou cinco defeitos, e cada um foi encontrado por uma rejeição
-> do governo, nunca por inspeção: a renegociação TLS (v0.5.0), e na v0.5.2 o
-> digest da assinatura calculado sem a declaração de namespace, o tipo de
-> inscrição federal invertido no identificador, a razão social enviada onde a
-> regra a proíbe e o total de tributos escolhido pelo valor em vez do regime.
-> **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida de novo.
->
-> O que falta para a `1.0.0` é uma emissão em **produção** — com valor fiscal.
-> Tecnicamente é o mesmo caminho; a diferença é a consequência de errar. Veja o
-> [roadmap](#roadmap).
+## O que funciona
+
+O ciclo completo de uma nota — configurar, achar o código do serviço, montar,
+validar, assinar, transmitir, consultar e cancelar — exercitado ponta a ponta
+contra a Sefin Nacional em **produção restrita**: o ambiente real do governo,
+onde as notas não têm valor fiscal.
+
+## O que ainda não
+
+- **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
+  muda é a consequência de errar. É o que falta para a `1.0.0`.
+- **Substituição de NFS-e.**
+- **Validação XSD completa** e as regras que dependem do convênio do município
+  com o Sistema Nacional — veja
+  [o que a validação local cobre](#o-que-a-validação-local-cobre).
+- **Código IBGE offline**, para o `nfse onboard --sem-rede`, e um `onboard`
+  interativo.
 
 ## Instalação
 
@@ -29,9 +31,9 @@ depender de portal web.
 go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
 ```
 
-Para fixar a versão, troque `@latest` por `@v0.5.2`. O `nfse versao` mostra o
-que está instalado — e é o mesmo identificador que vai no `verAplic` de cada
-declaração.
+Para fixar uma versão, troque `@latest` pela tag desejada; as versões estão no
+[CHANGELOG](CHANGELOG.md). O `nfse versao` mostra o que está instalado — e é o
+mesmo identificador que vai no `verAplic` de cada declaração.
 
 Ou compilando a partir do código:
 
@@ -55,7 +57,9 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 
 | Comando | O que faz |
 |---------|-----------|
-| `nfse config init` / `check` | cria o `nfse.yaml` e confere o que está preenchido |
+| `nfse onboard` | cria o `nfse.yaml` já preenchido, a partir do certificado |
+| `nfse servico buscar` / `ver` / `listar` | acha o código do serviço (`cTribNac`) na lista nacional |
+| `nfse config init` / `check` | cria um `nfse.yaml` em branco e confere o que está preenchido |
 | `nfse cert info` | inspeciona o certificado A1 |
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
@@ -64,6 +68,107 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
 
 Todos aceitam `--help`.
+
+### Configurar em um comando
+
+O `nfse onboard` monta a configuração a partir do que já se sabe sobre você. O
+CNPJ sai do próprio certificado — o ICP-Brasil grava o titular como
+`RAZÃO SOCIAL:CNPJ` no A1 — e o resto vem do cadastro público da Receita
+Federal:
+
+```bash
+export NFSE_CERT_SENHA='sua-senha'
+nfse onboard --certificado certificado.pfx
+```
+
+```
+Certificado  certificado.pfx
+  Titular     EMPRESA EXEMPLO LTDA:12345678000195
+  Valido ate  10/03/2027
+
+Consultando o CNPJ 12.345.678/0001-95 no cadastro publico da Receita Federal, via brasilapi.com.br...
+  Razao social  EMPRESA EXEMPLO LTDA
+  Municipio     CURITIBA/PR (IBGE 4106902)
+  Regime        mei
+  Atividade     6209-1/00 Suporte tecnico, manutencao e outros servicos em tecnologia da informacao
+  Situacao      ATIVA
+
+Codigos de servico parecidos com a sua atividade (6209-1/00):
+  010701  Suporte tecnico em informatica, inclusive instalacao...
+  110501  Servicos relacionados ao monitoramento e rastreamento a...
+Sao palpites a partir do texto do CNAE, nao um mapeamento oficial.
+Confira com 'nfse servico ver <codigo>' ou procure com 'nfse servico buscar'.
+
+nfse.yaml criado.
+
+Falta preencher em nfse.yaml:
+  - padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional
+    (LC 116/2003); os candidatos acima estao no arquivo, comentados (o mais
+    proximo e 010701)
+  - padroes.servico.descricao — o que voce presta
+
+Depois:
+  nfse config check
+  nfse emitir --valor 100,00
+```
+
+O código IBGE do município — sete dígitos que ninguém sabe de cabeça — e a
+razão social exata vêm prontos. Se você já sabe o código do serviço, passe
+`--servico 010701` e ele sai conferido e comentado no arquivo.
+
+Sem o certificado em mãos, `--cnpj 12345678000195` faz o mesmo caminho. E a
+consulta é opcional:
+
+```bash
+nfse onboard --certificado certificado.pfx --sem-rede
+```
+
+A consulta manda **só o seu CNPJ** para um serviço de terceiros
+([BrasilAPI](https://brasilapi.com.br), que serve os dados abertos da Receita) —
+nada do certificado sai da máquina. O comando avisa antes de sair para a rede,
+`--sem-rede` desliga a consulta, e `--fonte` aponta para outro servidor, para
+quem roda a própria instância do
+[minhareceita](https://docs.minhareceita.org). Se a consulta falhar, o arquivo
+é gravado assim mesmo com o que o certificado informou. Por quê:
+[ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
+
+Quem prefere preencher tudo à mão continua com `nfse config init`, que escreve
+o mesmo arquivo em branco e comentado.
+
+### Achar o código do serviço
+
+O `cTribNac` é o único campo obrigatório que **nenhuma consulta responde**: ele
+diz o que você presta, não quem você é. O CNAE não serve para deduzi-lo — o
+CNAE classifica a atividade econômica da empresa para a Receita Federal, e o
+`cTribNac` classifica o serviço para efeito de ISS pela LC 116/2003. São duas
+taxonomias sem correspondência oficial, e o anexo do governo não tem coluna de
+CNAE.
+
+O que dá para fazer é procurar. Os 335 códigos da lista nacional estão
+embutidos no binário, então a busca é local:
+
+```bash
+nfse servico buscar suporte tecnico
+```
+
+```
+1 resultado para "suporte tecnico":
+
+  010701  (subitem 1.07 da LC 116/2003)
+    Suporte técnico em informática, inclusive instalação, configuração
+    e manutenção de programas de computação e bancos de dados.
+    item 1 — Serviços de Informática e congêneres.
+```
+
+A lista fala a língua da lei, que nem sempre é a do dia a dia: "aula" está lá
+como *ensino*, "software" como *programa de computação*. Quando a palavra não
+casa, o caminho é pelos grupos — `nfse servico listar` mostra os 41 itens da
+lei, e `nfse servico listar 1` abre os códigos de um deles.
+
+O `nfse config check` confirma depois o que os seis dígitos significam, e avisa
+se o código não estiver na lista que o binário carrega. Por quê, e por que o
+`onboard` sugere mas nunca preenche:
+[ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
 
 ### Verificar o certificado
 
@@ -93,10 +198,10 @@ uma DPS — útil para usar em script.
 
 ### Emitir uma nota
 
-Crie a configuração e preencha os campos obrigatórios:
+Com o `nfse.yaml` no lugar (veja [Configurar em um comando](#configurar-em-um-comando)),
+confira o que ficou faltando:
 
 ```bash
-nfse config init     # gera um nfse.yaml comentado
 $EDITOR nfse.yaml
 nfse config check    # confere se está completo
 ```
@@ -351,19 +456,13 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 
 ## Roadmap
 
-| Versão | Entrega | Estado |
-|--------|---------|--------|
-| v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
-| v0.2.0 | Envio à Sefin Nacional | pronto |
-| v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
-| v0.4.0 | Cancelamento de NFS-e | pronto |
-| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
-| v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
-| v0.5.2 | Quatro correções de emissão, todas encontradas por rejeições reais da Sefin | **lançada** |
-| v0.6.0 | Substituição de NFS-e | planejado |
-| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal | planejado |
+| Versão | Entrega |
+|--------|---------|
+| v0.8.0 | Substituição de NFS-e |
+| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
-Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
+O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na
+[issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 
 ## Como o projeto está organizado
 
@@ -375,6 +474,7 @@ internal/
   infrastructure/
     xmlsigner/     assinatura XMLDSig e leitura do certificado A1
     sefin/         cliente da API do governo
+    brasilapi/     consulta do cadastro publico de CNPJ (so no `onboard`)
 pkg/
   xmlbuilder/      montagem do XML da DPS
   cnpjcpf/         validação de CNPJ e CPF

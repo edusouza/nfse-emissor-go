@@ -3,11 +3,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 )
 
 func newConfigCommand() *cobra.Command {
@@ -78,6 +80,7 @@ func newConfigCheckCommand() *cobra.Command {
 			fmt.Fprintf(out, "  Regime      %s\n", cfg.Prestador.RegimeTributario)
 			fmt.Fprintf(out, "  Municipio   %s\n", cfg.Prestador.Municipio)
 			fmt.Fprintf(out, "  Serie       %s\n", cfg.DPS.Serie)
+			checarServico(out, cmd.ErrOrStderr(), cfg.Padroes.Servico.CodigoTributacaoNacional)
 
 			if cfg.Ambiente == config.EnvProducao {
 				fmt.Fprintf(out, "\nAtencao: ambiente de producao. As notas emitidas terao valor fiscal.\n")
@@ -88,4 +91,28 @@ func newConfigCheckCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&path, "arquivo", "a", config.DefaultFileName, "arquivo de configuracao")
 	return cmd
+}
+
+// checarServico says what the configured cTribNac stands for, and warns when
+// this binary does not know it.
+//
+// It warns rather than refuses. The national list is federal law and grows;
+// the copy embedded here is one dated annex. Refusing a code this binary has
+// not heard of would lock a user out of a service the government has already
+// published, which is a worse failure than an unchecked six digits — the Sefin
+// validates it anyway, on reception.
+func checarServico(out, errOut io.Writer, codigo string) {
+	if codigo == "" {
+		return
+	}
+
+	s, ok := servico.PorCodigo(codigo)
+	if !ok {
+		fmt.Fprintf(out, "  Servico     %s\n", codigo)
+		fmt.Fprintf(errOut, "\naviso: %s nao esta na lista nacional que este binario carrega\n"+
+			"       (%s). A Sefin recusa um cTribNac inexistente.\n"+
+			"       Confira com 'nfse servico buscar <termo>'.\n", codigo, servico.Anexo)
+		return
+	}
+	fmt.Fprintf(out, "  Servico     %s — %s\n", s.Codigo, umaLinha(s.Descricao, 54))
 }

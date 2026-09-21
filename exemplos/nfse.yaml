@@ -36,7 +36,7 @@ padroes:
   servico:
     # 010101 = Analise e desenvolvimento de sistemas.
     # Formato: 2 digitos de item + 2 de subitem + 2 de desdobro (LC 116/2003).
-    # A lista completa esta em docs/anexos/ANEXO_B-...LISTA_SERVICO_NACIONAL...
+    # A lista inteira esta embutida no binario: nfse servico buscar <termo>
     # Confira o codigo do SEU servico: errar aqui gera rejeicao.
     codigo_tributacao_nacional: "010101"
     descricao: Desenvolvimento de software sob encomenda

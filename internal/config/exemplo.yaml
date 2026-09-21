@@ -31,6 +31,7 @@ dps:
 padroes:
   servico:
     # Codigo de tributacao nacional, 6 digitos (LC 116/2003).
+    # Ache o seu com:  nfse servico buscar "o que voce faz"
     codigo_tributacao_nacional: ""
     # Onde o servico e prestado. Se vazio, usa prestador.municipio.
     municipio_prestacao: ""

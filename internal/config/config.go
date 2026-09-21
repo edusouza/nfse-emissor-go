@@ -197,7 +197,9 @@ func Load(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("arquivo de configuracao %q nao encontrado; rode 'nfse config init' para criar um", path)
+			return nil, fmt.Errorf("arquivo de configuracao %q nao encontrado; rode "+
+				"'nfse onboard --certificado seu-certificado.pfx' para criar um ja preenchido, "+
+				"ou 'nfse config init' para um modelo em branco", path)
 		}
 		return nil, fmt.Errorf("nao foi possivel ler %q: %w", path, err)
 	}

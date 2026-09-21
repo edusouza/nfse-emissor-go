@@ -13,6 +13,104 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.6.0] - 2026-09-21
+
+Menos digitação para começar, e o fim do último campo obrigatório que nenhuma
+consulta respondia. O emissor passa a montar a própria configuração a partir do
+certificado A1 e do cadastro público de CNPJ, e a procurar junto o código de
+tributação nacional do serviço — em vez de entregar um arquivo em branco com
+cinco campos para preencher à mão.
+
+A segunda metade nasceu do primeiro uso da primeira: sobrava o `cTribNac`, e a
+pergunta imediata foi *"e o CNAE primário, não serve?"*. Não serve. O CNAE
+classifica a atividade econômica da **empresa** para a Receita Federal, e o
+`cTribNac` classifica o **serviço** para efeito de ISS, segundo a LC 116/2003.
+Duas taxonomias, finalidades diferentes, nenhuma correspondência oficial — o
+`ANEXO_B` tem 335 códigos e nenhuma coluna de CNAE. O que dá para fazer é
+procurar junto, e é o que foi feito.
+
+### Adicionado
+
+- **`nfse onboard`** — grava um `nfse.yaml` já preenchido. O CNPJ e a razão
+  social saem do certificado A1, que o ICP-Brasil emite com o titular no formato
+  `RAZÃO SOCIAL:CNPJ`; o código IBGE do município e o regime tributário
+  (MEI ou ME/EPP) vêm de uma consulta ao cadastro público da Receita Federal,
+  servido pela [BrasilAPI](https://brasilapi.com.br). Sem o certificado em mãos,
+  `--cnpj` faz o mesmo caminho. O que a máquina não descobre fica em branco e é
+  listado no fim, com o campo e onde procurar.
+  Ver [ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
+- **`--sem-rede`**, para gerar a configuração sem consultar serviço nenhum, e
+  **`--fonte`**, para apontar a consulta a outro servidor — quem roda a própria
+  instância do [minhareceita](https://docs.minhareceita.org) não precisa falar
+  com terceiros. A consulta manda apenas o CNPJ, é anunciada na tela antes de
+  acontecer, e o arquivo gerado registra no cabeçalho de onde veio cada valor.
+- Uma falha na consulta **não interrompe** o comando: o arquivo é gravado com o
+  que o certificado informou e o resto entra na lista de pendências. Uma
+  indisponibilidade de terceiro não pode virar um beco sem saída para quem só
+  quer começar.
+- O `onboard` reaproveita `xmlsigner.CertificateInfo.SubjectCNPJ` e
+  `SubjectHolderName`, que a 0.5.1 introduziu para conferir se o certificado é
+  do prestador. A mesma leitura do titular serve para as duas coisas: recusar
+  uma emissão com o certificado errado e preencher a configuração sem digitação.
+- **A lista nacional de serviços embutida no binário** — os 335 códigos da
+  LC 116/2003, gerados do `ANEXO_B` que já estava em `docs/anexos/` por um
+  programa versionado junto. Sem dependência nova: um `.xlsx` é um zip de XML,
+  e `archive/zip` mais `encoding/xml` bastam. A consulta é local e funciona sem
+  rede. Ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
+- **`nfse servico buscar <termo>`** — procura o código pela descrição do
+  serviço, sem acento e no plural se for o caso. A busca pesa cada palavra pela
+  raridade dela na lista: "serviços" e "congêneres" aparecem em quase todo
+  código e não separam nada.
+- **`nfse servico ver <codigo>`** e **`nfse servico listar [item]`** — o que um
+  código significa, e os 41 itens da lei para quem não acerta a palavra que a
+  lista usa ("aula" está lá como "ensino").
+- **`nfse onboard --servico <codigo>`**, conferido contra a lista antes de
+  gravar, com a descrição oficial escrita como comentário ao lado do código.
+- **Sugestões de `cTribNac` no `onboard`**, ordenadas a partir do CNAE que o
+  cadastro público informa. Vão para a tela e para o `nfse.yaml`
+  **comentadas**, junto com o CNAE que as gerou e a ressalva de que são
+  palpite — o campo continua vazio. O motivo está na ADR: a expressão
+  "tecnologia da informação" aparece literalmente dentro de um código de
+  rastreamento veicular, e um emissor que escolhesse sozinho poria esse código
+  em toda nota de uma empresa de software **sem gerar rejeição nenhuma**.
+
+### Alterado
+
+- O erro de configuração ausente passa a sugerir `nfse onboard` antes de
+  `nfse config init`.
+- `nfse config init` continua como está, para quem prefere o modelo em branco.
+- **`nfse config check` diz o que o código de serviço significa**, e avisa —
+  sem recusar — quando o `cTribNac` configurado não está na lista embutida. A
+  lista é lei federal e cresce; a cópia embutida é um anexo datado, e recusar
+  um código que o governo já publicou seria pior que não conferir.
+- A lista de pendências do `onboard` deixa de citar o código de serviço quando
+  ele foi informado, e quebra linha em vez de estourar o terminal.
+- O README perdeu o histórico de defeitos e de versões: ficou com o que o
+  emissor faz, o que funciona e o que ainda não. O histórico é deste arquivo e
+  dos ADRs.
+
+### Verificação
+
+- Um teste regenera o `lista.csv` a partir do anexo e compara byte a byte: o
+  arquivo embutido só vale enquanto reproduzir a planilha oficial.
+- Um teste em `internal/docs` recusa qualquer `cTribNac` citado na documentação
+  ou nos `.yaml` de exemplo que não exista na lista — o mesmo tratamento que as
+  chaves de acesso já tinham desde que o README publicou uma com 47 dígitos.
+
+### Problemas conhecidos
+
+- O regime tributário só é preenchido quando o cadastro responde com certeza.
+  Um "não é MEI" sem informação sobre o Simples deixa o campo em branco, com
+  aviso: chutar poria um `opSimpNac` errado em toda nota emitida.
+- O mapeamento dos campos da resposta do cadastro de CNPJ ainda não foi
+  exercitado contra a API real — o ambiente de desenvolvimento não alcança
+  `brasilapi.com.br`. Isso vale também para `cnae_fiscal` e
+  `cnae_fiscal_descricao`, que alimentam as sugestões de serviço: se vierem com
+  outro nome, o `onboard` deixa de sugerir e a lista de pendências aponta a
+  busca. Ver [#12](https://github.com/edusouza/nfse-emissor-go/issues/12).
+
+Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+
 ## [0.5.2] - 2026-09-18
 
 **A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o
@@ -27,9 +125,13 @@ com chave de acesso de 50 dígitos que o próprio validador do projeto aceita. O
 cancelamento — outro XML, outra raiz, outro endpoint — foi registrado na
 primeira tentativa.
 
-Quatro correções que, juntas, eram tudo que impedia isso. Cada uma foi
-encontrada por uma rejeição real do governo, uma depois da outra, e nenhuma
-teria sido encontrada por inspeção ou por cobertura de testes.
+Seis correções. As **quatro primeiras** eram tudo que impedia a emissão de
+atravessar, cada uma encontrada por uma rejeição do governo, uma depois da
+outra. As **duas últimas** vieram logo em seguida, de usar o que passou a
+funcionar: consultar a nota recém-emitida.
+
+Nenhuma delas teria sido encontrada por inspeção ou por cobertura de testes — a
+suíte estava verde com as seis.
 
 ### Corrigido
 

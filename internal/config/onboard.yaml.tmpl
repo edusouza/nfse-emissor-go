@@ -1,0 +1,82 @@
+# Configuracao do emissor de NFS-e, gerada por 'nfse onboard'.
+#
+# De onde veio cada dado:
+{{- range .Origens }}
+#   {{ . }}
+{{- end }}
+#
+# Campos em branco ainda precisam ser preenchidos. Rode 'nfse config check'
+# para conferir o que falta.
+
+# Ambiente do Sistema Nacional NFS-e.
+#   producao-restrita  ambiente de testes; as notas NAO tem valor fiscal
+#   producao           ambiente real; as notas tem valor fiscal
+ambiente: {{ .Ambiente }}
+
+certificado:
+  # Caminho do seu certificado A1 (.pfx ou .p12).  OBRIGATORIO
+  arquivo: {{ q .CertificadoArquivo }}
+  # A senha nao fica aqui. Use a variavel de ambiente NFSE_CERT_SENHA
+  # ou deixe o nfse perguntar no terminal.
+
+prestador:
+  cnpj: {{ q .CNPJ }}
+  nome: {{ q .Nome }}
+  # mei | me_epp — define se a aliquota de ISS pode ser informada.
+  regime_tributario: {{ q .RegimeTributario }}
+  # Codigo IBGE do municipio do prestador, 7 digitos.
+  municipio: {{ q .Municipio }}
+  # Preencha se o seu municipio exigir inscricao municipal na nota.
+  inscricao_municipal: ""
+
+dps:
+  # Serie da DPS, 5 digitos.
+  serie: {{ q .Serie }}
+
+# Valores aplicados a toda nota, para nao precisar repeti-los na linha de
+# comando. Tudo aqui pode ser sobrescrito pelo arquivo passado em --yaml
+# ou por uma flag.
+padroes:
+  servico:
+    # Codigo de tributacao nacional, 6 digitos (LC 116/2003).   OBRIGATORIO
+{{- if .Servico }}
+    # {{ .ServicoDescricao }}
+    codigo_tributacao_nacional: {{ q .Servico }}
+{{- else }}
+    # Nenhuma consulta responde qual e o seu: o codigo depende do que voce
+    # presta, nao de quem voce e. Procure pela descricao:
+    #   nfse servico buscar "o que voce faz"
+{{- if .SugestoesServico }}
+    #
+    # O cadastro diz que a sua atividade principal e o CNAE {{ .CNAE }}:
+    #   {{ .CNAEDescricao }}
+    # Codigos de servico parecidos com ela:
+{{- range .SugestoesServico }}
+    #   {{ .Codigo }}  {{ .Descricao }}
+{{- end }}
+    #
+    # Isso e um palpite por palavras, nao um mapeamento oficial. Leia a
+    # descricao inteira com 'nfse servico ver <codigo>' antes de usar.
+{{- end }}
+    codigo_tributacao_nacional: ""
+{{- end }}
+    # Onde o servico e prestado. Se vazio, usa prestador.municipio.
+    municipio_prestacao: ""
+    # Descricao usada quando --descricao nao e informado.
+    descricao: ""
+
+  valores:
+    # Aliquota de ISS em porcentagem.
+    # MEI recolhe o ISS pelo DAS, entao a aliquota e 0.
+    # ME/EPP: so informe a aliquota quando o tomador retiver o ISSQN.
+    iss_aliquota: 0
+
+  tomador:
+    # Quando true, a nota sai sem identificacao do tomador — o caso de
+    # venda ao publico em geral. Para identificar o cliente, use as flags
+    # --tomador-cnpj / --tomador-cpf / --tomador-nome, ou um arquivo --yaml.
+    nao_identificado: true
+
+saida:
+  # Onde gravar os XMLs gerados.
+  diretorio: ./notas
