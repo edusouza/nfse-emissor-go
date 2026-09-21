@@ -18,7 +18,10 @@ onde as notas não têm valor fiscal.
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- **Substituição de NFS-e.**
+- **A DANFSe não foi exercitada contra o serviço real.** O comando existe e o
+  contrato vem do manual oficial, mas a API é descrita para municípios, não
+  para contribuintes — pode ser que o certificado de um prestador não seja
+  aceito. Um comando resolve a dúvida.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
@@ -65,6 +68,7 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
 | `nfse consultar <chave>` | busca a NFS-e, ou a chave a partir do identificador da DPS |
 | `nfse cancelar <chave>` | registra o evento de cancelamento |
+| `nfse danfse <chave>` | baixa o PDF da NFS-e para entregar ao cliente |
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
 
 Todos aceitam `--help`.
@@ -454,11 +458,65 @@ prática obriga a explicar o que aconteceu em vez de escrever "erro".
 
 Cancelar em `producao` pede confirmação no terminal — a operação é definitiva.
 
+### Substituir uma nota
+
+Substituição **não é cancelamento**. O cancelamento é um evento que anula a
+nota; a substituição emite uma nota nova no lugar da anterior, e por isso pede
+todos os dados de uma emissão:
+
+```bash
+nfse emitir --valor 1500 --descricao "Consultoria - agosto/2026"   --substitui 41069022212345678000195000000000000126081234567890   --motivo saiu-do-simples --enviar
+```
+
+Os motivos são um conjunto fechado, **diferente do conjunto do cancelamento**:
+
+| `--motivo` | Código | Quando |
+|---|---|---|
+| `saiu-do-simples` | 01 | desenquadramento do Simples Nacional |
+| `entrou-no-simples` | 02 | enquadramento no Simples Nacional |
+| `incluiu-isencao` | 03 | inclusão retroativa de imunidade/isenção |
+| `excluiu-isencao` | 04 | exclusão retroativa de imunidade/isenção |
+| `recusada-pelo-tomador` | 05 | rejeição pelo tomador ou intermediário responsável |
+| `outros` | 99 | outros — use `--motivo-texto` para explicar |
+
+Mandar um motivo de cancelamento aqui é recusado antes de qualquer coisa: os
+códigos são disjuntos e a DPS seria rejeitada pelo schema.
+
+### Entregar o PDF ao cliente
+
+```bash
+nfse danfse 41069022212345678000195000000000000126081234567890
+```
+
+```
+Baixando o DANFSe em https://adn.producaorestrita.nfse.gov.br/danfse...
+
+DANFSe salvo
+  Chave de acesso  41069022212345678000195000000000000126081234567890
+  Arquivo          notas/4106902...67890-danfse.pdf (48 KB)
+```
+
+O emissor **não desenha** o documento: quem gera o PDF é o governo, a partir do
+XML que já tem. Por isso o comando é um download e o binário não carrega
+biblioteca de PDF nenhuma.
+
+O serviço fica no Ambiente de Dados Nacional, não na Sefin — lá o endereço
+antigo responde 501. `--url` aponta para outro endereço se for preciso.
+
+> **Ainda não verificado contra o serviço real.** A API DANFSe é descrita no
+> manual dos municípios; o manual dos contribuintes não a menciona. Pode ser
+> que um certificado de prestador não seja aceito. A página de documentação que
+> a Sefin indica para o serviço responde 404 hoje, o que enfraquece esse
+> ponteiro sem dizer nada sobre o endpoint — se o caminho tiver mudado, o erro
+> sugere `--url` com os prefixos alternativos.
+> O comando nunca grava um arquivo que não seja um PDF de verdade.
+> [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
+
 ## Roadmap
 
 | Versão | Entrega |
 |--------|---------|
-| v0.8.0 | Substituição de NFS-e |
+| v0.8.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
 O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na

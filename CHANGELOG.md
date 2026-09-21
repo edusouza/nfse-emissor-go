@@ -13,65 +13,80 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
-Fecha o último campo obrigatório que nenhuma consulta respondia: o código de
-tributação nacional do serviço (`cTribNac`).
+## [0.7.0] - 2026-09-21
 
-A pergunta que originou esta parte foi *"fiz o onboarding pelo certificado, mas
-ficou faltando o código de tributação nacional — como usar o CNAE primário?"*.
-Não dá: o CNAE classifica a atividade econômica da **empresa** para a Receita
-Federal, e o `cTribNac` classifica o **serviço** para efeito de ISS, segundo a
-LC 116/2003. Duas taxonomias, finalidades diferentes, nenhuma correspondência
-oficial — o `ANEXO_B` tem 335 códigos e nenhuma coluna de CNAE. O que dá para
-fazer é procurar junto, e é o que foi feito.
+Fecha as duas lacunas que faltavam no ciclo de vida de uma nota: **substituir**
+e **entregar o PDF ao cliente**.
+
+Nenhuma das duas exigiu dependência nova, e as duas estavam mais perto do que o
+roadmap sugeria — uma porque metade já estava escrita e desligada, a outra
+porque quem gera o PDF é o governo.
+Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
 
 ### Adicionado
 
-- **A lista nacional de serviços embutida no binário** — os 335 códigos da
-  LC 116/2003, gerados do `ANEXO_B` que já estava em `docs/anexos/` por um
-  programa versionado junto. Sem dependência nova: um `.xlsx` é um zip de XML,
-  e `archive/zip` mais `encoding/xml` bastam. A consulta é local e funciona sem
-  rede. Ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
-- **`nfse servico buscar <termo>`** — procura o código pela descrição do
-  serviço, sem acento e no plural se for o caso. A busca pesa cada palavra pela
-  raridade dela na lista: "serviços" e "congêneres" aparecem em quase todo
-  código e não separam nada.
-- **`nfse servico ver <codigo>`** e **`nfse servico listar [item]`** — o que um
-  código significa, e os 41 itens da lei para quem não acerta a palavra que a
-  lista usa ("aula" está lá como "ensino").
-- **`nfse onboard --servico <codigo>`**, conferido contra a lista antes de
-  gravar, com a descrição oficial escrita como comentário ao lado do código.
-- **Sugestões de `cTribNac` no `onboard`**, ordenadas a partir do CNAE que o
-  cadastro público informa. Vão para a tela e para o `nfse.yaml`
-  **comentadas**, junto com o CNAE que as gerou e a ressalva de que são
-  palpite — o campo continua vazio. O motivo está na ADR: a expressão
-  "tecnologia da informação" aparece literalmente dentro de um código de
-  rastreamento veicular, e um emissor que escolhesse sozinho poria esse código
-  em toda nota de uma empresa de software **sem gerar rejeição nenhuma**.
+- **`nfse emitir --substitui <chave> --motivo <nome>`** — emite uma nota que
+  substitui outra. Não é comando próprio porque substituição **não é evento**:
+  o cancelamento é um pedido de registro de evento, a substituição é uma DPS
+  nova que aponta para a nota que troca, com todos os dados de uma emissão
+  inteira. `--motivo-texto` acrescenta a descrição livre.
+- Os nomes dos motivos são propositalmente diferentes dos do `cancelar`, porque
+  os conjuntos de códigos são disjuntos: `saiu-do-simples`, `entrou-no-simples`,
+  `incluiu-isencao`, `excluiu-isencao`, `recusada-pelo-tomador` e `outros`
+  (`TSCodJustSubst` 01..05 e 99). Mandar um código de cancelamento aqui produz
+  uma DPS que o schema recusa, então o comando recusa antes.
+- **`nfse danfse <chave>`** — baixa o PDF da NFS-e e grava em `notas/`. O
+  emissor não desenha o documento: o serviço fica no Ambiente de Dados Nacional
+  e gera o PDF a partir do XML que o governo já tem. Sem biblioteca de PDF, sem
+  leiaute para manter, sem QR Code para gerar.
+- `--url` no `nfse danfse`, para apontar o serviço a outro endereço.
 
 ### Alterado
 
-- **`nfse config check` diz o que o código de serviço significa**, e avisa —
-  sem recusar — quando o `cTribNac` configurado não está na lista embutida. A
-  lista é lei federal e cresce; a cópia embutida é um anexo datado, e recusar
-  um código que o governo já publicou seria pior que não conferir.
-- A lista de pendências do `onboard` deixa de citar o código de serviço quando
-  ele foi informado, e quebra linha em vez de estourar o terminal.
+- **A validação estrutural do `subst` passou a conferir os tipos**, e não só a
+  presença. A chave vai pela mesma regra de 50 dígitos que o resto do projeto
+  usa, e o motivo pela enumeração do XSD. Antes, um código de cancelamento
+  (`"1"`) passava: é uma string não vazia.
+- O `subst` deixa de ser código inalcançável. O `pkg/xmlbuilder` montava o
+  elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia — o próprio
+  `emitir.go` dizia isso num comentário.
 
-### Verificação
+### Problemas conhecidos
 
-- Um teste regenera o `lista.csv` a partir do anexo e compara byte a byte: o
-  arquivo embutido só vale enquanto reproduzir a planilha oficial.
-- Um teste em `internal/docs` recusa qualquer `cTribNac` citado na documentação
-  que não exista na lista — o mesmo tratamento que as chaves de acesso já
-  tinham desde que o README publicou uma com 47 dígitos.
+- **A DANFSe não foi exercitada contra o serviço real.** A API é descrita no
+  manual dos **municípios**; o manual dos contribuintes não a menciona e o
+  swagger de contribuinte não a traz, então não se sabe se o certificado de um
+  prestador é aceito. O host de produção (`adn.nfse.gov.br`) é inferido do de
+  produção restrita, que está escrito no 501 da própria Sefin.
+  O cliente foi feito para isso: nunca grava um corpo que não comece com
+  `%PDF-`, e um 403 explica essa hipótese em vez de dizer só "acesso negado".
+- **A página de documentação que o 501 da Sefin indica responde 404 na produção
+  restrita e 503 na produção.** São páginas de documentação, não o endpoint:
+  não dizem se `GET /danfse/{chaveAcesso}` funciona, e servem apenas para
+  enfraquecer aquele ponteiro como fonte do caminho. O teste que decide é
+  chamar o serviço com certificado e uma chave real — que é o que o comando
+  faz. O 404 e o 503 são tratados separadamente: o 404 distingue "serviço fora
+  desse endereço" de "nota não está no ADN" e sugere `/contribuintes/danfse` e
+  `/municipios/danfse`; o 503 diz que algo respondeu naquele endereço, em vez
+  de mandar só tentar de novo.
+- A substituição foi exercitada contra o XSD e ponta a ponta na geração do XML,
+  mas **não contra a Sefin**. Como toda emissão, o veredito final é do governo.
 
-Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+## [0.6.0] - 2026-09-21
 
-## [0.6.0] - 2026-09-18
+Menos digitação para começar, e o fim do último campo obrigatório que nenhuma
+consulta respondia. O emissor passa a montar a própria configuração a partir do
+certificado A1 e do cadastro público de CNPJ, e a procurar junto o código de
+tributação nacional do serviço — em vez de entregar um arquivo em branco com
+cinco campos para preencher à mão.
 
-Menos digitação para começar. O emissor passa a montar a própria configuração a
-partir do certificado A1 e do cadastro público de CNPJ, em vez de entregar um
-arquivo em branco com cinco campos obrigatórios.
+A segunda metade nasceu do primeiro uso da primeira: sobrava o `cTribNac`, e a
+pergunta imediata foi *"e o CNAE primário, não serve?"*. Não serve. O CNAE
+classifica a atividade econômica da **empresa** para a Receita Federal, e o
+`cTribNac` classifica o **serviço** para efeito de ISS, segundo a LC 116/2003.
+Duas taxonomias, finalidades diferentes, nenhuma correspondência oficial — o
+`ANEXO_B` tem 335 códigos e nenhuma coluna de CNAE. O que dá para fazer é
+procurar junto, e é o que foi feito.
 
 ### Adicionado
 
@@ -96,12 +111,50 @@ arquivo em branco com cinco campos obrigatórios.
   `SubjectHolderName`, que a 0.5.1 introduziu para conferir se o certificado é
   do prestador. A mesma leitura do titular serve para as duas coisas: recusar
   uma emissão com o certificado errado e preencher a configuração sem digitação.
+- **A lista nacional de serviços embutida no binário** — os 335 códigos da
+  LC 116/2003, gerados do `ANEXO_B` que já estava em `docs/anexos/` por um
+  programa versionado junto. Sem dependência nova: um `.xlsx` é um zip de XML,
+  e `archive/zip` mais `encoding/xml` bastam. A consulta é local e funciona sem
+  rede. Ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
+- **`nfse servico buscar <termo>`** — procura o código pela descrição do
+  serviço, sem acento e no plural se for o caso. A busca pesa cada palavra pela
+  raridade dela na lista: "serviços" e "congêneres" aparecem em quase todo
+  código e não separam nada.
+- **`nfse servico ver <codigo>`** e **`nfse servico listar [item]`** — o que um
+  código significa, e os 41 itens da lei para quem não acerta a palavra que a
+  lista usa ("aula" está lá como "ensino").
+- **`nfse onboard --servico <codigo>`**, conferido contra a lista antes de
+  gravar, com a descrição oficial escrita como comentário ao lado do código.
+- **Sugestões de `cTribNac` no `onboard`**, ordenadas a partir do CNAE que o
+  cadastro público informa. Vão para a tela e para o `nfse.yaml`
+  **comentadas**, junto com o CNAE que as gerou e a ressalva de que são
+  palpite — o campo continua vazio. O motivo está na ADR: a expressão
+  "tecnologia da informação" aparece literalmente dentro de um código de
+  rastreamento veicular, e um emissor que escolhesse sozinho poria esse código
+  em toda nota de uma empresa de software **sem gerar rejeição nenhuma**.
 
 ### Alterado
 
 - O erro de configuração ausente passa a sugerir `nfse onboard` antes de
   `nfse config init`.
 - `nfse config init` continua como está, para quem prefere o modelo em branco.
+- **`nfse config check` diz o que o código de serviço significa**, e avisa —
+  sem recusar — quando o `cTribNac` configurado não está na lista embutida. A
+  lista é lei federal e cresce; a cópia embutida é um anexo datado, e recusar
+  um código que o governo já publicou seria pior que não conferir.
+- A lista de pendências do `onboard` deixa de citar o código de serviço quando
+  ele foi informado, e quebra linha em vez de estourar o terminal.
+- O README perdeu o histórico de defeitos e de versões: ficou com o que o
+  emissor faz, o que funciona e o que ainda não. O histórico é deste arquivo e
+  dos ADRs.
+
+### Verificação
+
+- Um teste regenera o `lista.csv` a partir do anexo e compara byte a byte: o
+  arquivo embutido só vale enquanto reproduzir a planilha oficial.
+- Um teste em `internal/docs` recusa qualquer `cTribNac` citado na documentação
+  ou nos `.yaml` de exemplo que não exista na lista — o mesmo tratamento que as
+  chaves de acesso já tinham desde que o README publicou uma com 47 dígitos.
 
 ### Problemas conhecidos
 
@@ -110,12 +163,13 @@ arquivo em branco com cinco campos obrigatórios.
   aviso: chutar poria um `opSimpNac` errado em toda nota emitida.
 - O mapeamento dos campos da resposta do cadastro de CNPJ ainda não foi
   exercitado contra a API real — o ambiente de desenvolvimento não alcança
-  `brasilapi.com.br`. Ver
-  [#12](https://github.com/edusouza/nfse-emissor-go/issues/12).
-- Sobra um campo obrigatório que nenhuma consulta responde:
-  `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
-  Ver [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
-  *Resolvido em [Não lançado](#não-lançado).*
+  `brasilapi.com.br`. Isso vale também para `cnae_fiscal` e
+  `cnae_fiscal_descricao`, que alimentam as sugestões de serviço: se vierem com
+  outro nome, o `onboard` deixa de sugerir e a lista de pendências aponta a
+  busca. Ver [#12](https://github.com/edusouza/nfse-emissor-go/issues/12).
+
+Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+
 ## [0.5.2] - 2026-09-18
 
 **A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o
