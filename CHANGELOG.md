@@ -15,12 +15,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.7.0] - 2026-09-21
 
-Fecha as duas lacunas que faltavam no ciclo de vida de uma nota: **substituir**
-e **entregar o PDF ao cliente**.
-
-Nenhuma das duas exigiu dependência nova, e as duas estavam mais perto do que o
-roadmap sugeria — uma porque metade já estava escrita e desligada, a outra
-porque quem gera o PDF é o governo.
+Fecha a substituição de NFS-e. A DANFSe foi implementada e **removida antes do
+lançamento**, quando a nota técnica que a rege apareceu — ver abaixo.
 Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
 
 ### Adicionado
@@ -35,11 +31,6 @@ Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
   `incluiu-isencao`, `excluiu-isencao`, `recusada-pelo-tomador` e `outros`
   (`TSCodJustSubst` 01..05 e 99). Mandar um código de cancelamento aqui produz
   uma DPS que o schema recusa, então o comando recusa antes.
-- **`nfse danfse <chave>`** — baixa o PDF da NFS-e e grava em `notas/`. O
-  emissor não desenha o documento: o serviço fica no Ambiente de Dados Nacional
-  e gera o PDF a partir do XML que o governo já tem. Sem biblioteca de PDF, sem
-  leiaute para manter, sem QR Code para gerar.
-- `--url` no `nfse danfse`, para apontar o serviço a outro endereço.
 
 ### Alterado
 
@@ -48,8 +39,18 @@ Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
   usa, e o motivo pela enumeração do XSD. Antes, um código de cancelamento
   (`"1"`) passava: é uma string não vazia.
 - O `subst` deixa de ser código inalcançável. O `pkg/xmlbuilder` montava o
-  elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia — o próprio
-  `emitir.go` dizia isso num comentário.
+  elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia.
+
+### Removido
+
+- **`nfse danfse` não foi lançado.** O comando baixava o PDF da API do Ambiente
+  de Dados Nacional. A
+  [NT 008 v1.02, de 14/07/2026](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
+  determina que **essa API foi suspensa em 03/08/2026** e que a geração do
+  DANFSe passa aos softwares de emissão. O comando não tinha como funcionar, e
+  publicar um comando que não funciona é pior que não ter comando. O
+  `internal/infrastructure/adn` saiu inteiro; está no histórico.
+  Gerar o DANFSe localmente é a [issue #22](https://github.com/edusouza/nfse-emissor-go/issues/22).
 
 ### Documentação oficial atualizada
 
@@ -70,32 +71,18 @@ atual, e o que eles dizem vale mais que qualquer resumo de terceiros:
 - **O ANEXO I de regras passou de 322 para 441 códigos de rejeição.** Nenhuma
   das regras que o emissor trata hoje foi removida; as novas concentram-se na
   faixa E09xx, da reforma tributária.
-- **A API DANFSe continua documentada como serviço ativo.** O manual do ADN
-  baixado da página atual descreve `GET /danfse/{chaveAcesso}` nos mesmos
-  termos de antes — e é, byte a byte, o mesmo arquivo que já estava no
-  repositório. Não há Nota Técnica entre os documentos publicados que a
-  desligue, e o manual dos contribuintes continua sem mencioná-la.
+- **A NT 008 v1.02 foi incorporada** em `docs/notas-tecnicas/`. Ela suspende a
+  API de geração do DANFSe em 03/08/2026 e especifica o documento para quem
+  passa a gerá-lo: campos com origem no XML, coordenadas, QR Code, canhoto e
+  fontes. Os manuais do ADN, de outubro de 2025, ainda descrevem a API — uma
+  nota técnica os supera sem reescrevê-los.
 
 ### Problemas conhecidos
 
-- **A DANFSe não foi exercitada contra o serviço real.** A API é descrita no
-  manual dos **municípios**; o manual dos contribuintes não a menciona e o
-  swagger de contribuinte não a traz, então não se sabe se o certificado de um
-  prestador é aceito. O host de produção (`adn.nfse.gov.br`) é inferido do de
-  produção restrita, que está escrito no 501 da própria Sefin.
-  O cliente foi feito para isso: nunca grava um corpo que não comece com
-  `%PDF-`, e um 403 explica essa hipótese em vez de dizer só "acesso negado".
-- **A página de documentação que o 501 da Sefin indica responde 404 na produção
-  restrita e 503 na produção.** São páginas de documentação, não o endpoint:
-  não dizem se `GET /danfse/{chaveAcesso}` funciona, e servem apenas para
-  enfraquecer aquele ponteiro como fonte do caminho. O teste que decide é
-  chamar o serviço com certificado e uma chave real — que é o que o comando
-  faz. O 404 e o 503 são tratados separadamente: o 404 distingue "serviço fora
-  desse endereço" de "nota não está no ADN" e sugere `/contribuintes/danfse` e
-  `/municipios/danfse`; o 503 diz que algo respondeu naquele endereço, em vez
-  de mandar só tentar de novo.
 - A substituição foi exercitada contra o XSD e ponta a ponta na geração do XML,
   mas **não contra a Sefin**. Como toda emissão, o veredito final é do governo.
+
+Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
 
 ## [0.6.0] - 2026-09-21
 

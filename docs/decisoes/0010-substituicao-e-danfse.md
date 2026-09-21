@@ -1,13 +1,12 @@
-# 0010 — Substituição de NFS-e e DANFSe
+# 0010 — Substituição de NFS-e, e por que a DANFSe ficou de fora
 
 **Status:** Aceita
 **Data:** 2026-09-21
 
 ## Contexto
 
-Duas entregas que o roadmap tratava como distantes e que, olhando o código e os
-documentos já versionados, estavam mais perto do que pareciam — e por motivos
-opostos.
+Duas entregas pretendidas para a mesma versão. Uma foi feita. A outra foi
+construída, e então descartada quando o documento certo apareceu.
 
 **A substituição já tinha metade da fundação, desligada.** O `pkg/xmlbuilder`
 tinha `DPSSubstitution` e `buildSubstitution()`, espelhando `TCSubstituicao`; a
@@ -20,155 +19,107 @@ e o `emitir.go` dizia isso em voz alta:
 
 É o mesmo formato dos defeitos da [ADR 0008](0008-digest-sem-namespace.md):
 código internamente consistente, testado, e desconectado da única coisa que o
-exercitaria. A diferença é que aqui o buraco estava escrito no comentário, e
-não escondido.
+exercitaria.
 
-**A DANFSe não precisava ser desenhada.** O `GET /DANFSe` da Sefin Nacional
-responde 501 e o próprio swagger diz para onde foi. O manual do ADN, versionado
-em `docs/markdown/`, descreve o serviço:
-
-> 1.5. API DANFSe — Serviço que gera o arquivo PDF da NFS-e a partir de uma
-> consulta pela chave de acesso. **a) GET – /danfse/{chaveAcesso}**
-
-Quem gera o PDF é o governo, a partir do XML que já tem. Isso tira do escopo a
-biblioteca de PDF, o leiaute oficial e a geração de QR Code — e mantém o
-binário único, sem `cgo`, que a [ADR 0001](0001-cli-em-vez-de-api.md) preserva.
+**A DANFSe parecia ser só um download.** O `GET /DANFSe` da Sefin responde 501 e
+aponta para o ADN; o manual do ADN, versionado em `docs/markdown/`, descrevia
+`GET /danfse/{chaveAcesso}` devolvendo o PDF gerado pelo governo. Isso tirava do
+escopo a biblioteca de PDF, o leiaute e o QR Code.
 
 ## Decisão
 
-### Substituição
+### Substituição: entregue
 
 `nfse emitir --substitui <chave> --motivo <nome> [--motivo-texto ...]`.
 
 **Não é um comando novo.** Substituição não é evento: o cancelamento é um
-`pedRegEvento` com `e101101` num endpoint próprio, enquanto a substituição é
-uma **DPS nova** que carrega `subst/chSubstda` apontando para a nota que troca.
-Modelá-la como um `nfse substituir` esconderia que ela exige todos os dados de
-uma emissão inteira.
+`pedRegEvento` com `e101101` num endpoint próprio, enquanto a substituição é uma
+**DPS nova** que carrega `subst/chSubstda` apontando para a nota que troca.
 
-**Os nomes dos motivos são deliberadamente diferentes dos do cancelamento.** Os
-conjuntos de códigos são disjuntos — `TSCodJustCanc` é 1, 2, 9 e responde "por
-que esta nota não vale"; `TSCodJustSubst` é 01..05, 99 e responde "por que
-outra nota está tomando o lugar dela". Se o `emitir` aceitasse `erro-emissao`,
-alguém mandaria um código que o schema recusa.
+**Os nomes dos motivos são deliberadamente diferentes dos do cancelamento**,
+porque os conjuntos de códigos são disjuntos — `TSCodJustCanc` é 1, 2, 9;
+`TSCodJustSubst` é 01..05, 99.
 
-| `--motivo` | Código | Significado |
-|---|---|---|
-| `saiu-do-simples` | 01 | Desenquadramento do Simples Nacional |
-| `entrou-no-simples` | 02 | Enquadramento no Simples Nacional |
-| `incluiu-isencao` | 03 | Inclusão retroativa de imunidade/isenção |
-| `excluiu-isencao` | 04 | Exclusão retroativa de imunidade/isenção |
-| `recusada-pelo-tomador` | 05 | Rejeição pelo tomador ou intermediário responsável |
-| `outros` | 99 | Outros |
+| `--motivo` | Código |
+|---|---|
+| `saiu-do-simples` | 01 |
+| `entrou-no-simples` | 02 |
+| `incluiu-isencao` | 03 |
+| `excluiu-isencao` | 04 |
+| `recusada-pelo-tomador` | 05 |
+| `outros` | 99 |
 
 **A substituição não entra em `config.Nota`**, e portanto não é expressável em
-`padroes`. Ela chega ao `buildDPS` como parâmetro explícito. Se morasse no
-`Nota`, um `padroes.substituicao` esquecido no `nfse.yaml` substituiria uma nota
-a cada emissão, em silêncio — exatamente o tipo de erro que este projeto passou
-a versão inteira encontrando.
+`padroes`. Chega ao `buildDPS` como parâmetro explícito: um
+`padroes.substituicao` esquecido substituiria uma nota a cada emissão, em
+silêncio.
 
-**A validação passou a conferir os tipos, não só a presença.** `validateSubst`
-checava que `chSubstda` e `cMotivo` existiam e não eram vazios. Um código de
-cancelamento (`"1"`) é uma string não vazia e passava. Agora a chave vai por
-`query.ValidateAccessKey` e o motivo pela enumeração.
+**A validação passou a conferir tipos, não só presença.** Um código de
+cancelamento (`"1"`) é string não vazia e passava.
 
-### DANFSe
+### DANFSe: revertida
 
-`nfse danfse <chave>` baixa o PDF do ADN e grava em `notas/`.
+`nfse danfse` foi implementado — cliente do ADN, tratamento de status, testes —
+e **removido antes de ser lançado**. A
+[NT 008, versão 1.02, de 14 de julho de 2026](../notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
+é explícita:
 
-O cliente vive em `internal/infrastructure/adn`, separado do `sefin` porque é
-outro host e outro contrato. Reaproveita a renegociação TLS que a v0.5.0
-descobriu ser obrigatória.
+> Esta nota técnica servirá de base para a geração do DANFSe por meios de
+> softwares de emissão de NFS-e, ERPs e sistemas fiscais, motivo pelo qual, a
+> **API de geração do DANFSe** (https://adn.nfse.gov.br/danfse/docs/index.html)
+> **será sobrestada (suspensa) na data de 03 de agosto de 2026**.
 
-## O que não foi verificado, e como o código lida com isso
+A API está suspensa desde 3 de agosto. O comando não podia funcionar, e publicar
+um comando que não funciona é pior que não ter comando. A geração do DANFSe
+passa a ser responsabilidade do emissor, e isso é o escopo da
+[issue #22](https://github.com/edusouza/nfse-emissor-go/issues/22).
 
-Este é o ponto que a [ADR 0005](0005-contrato-da-sefin-verificado.md) obriga a
-declarar. Duas coisas na DANFSe vêm de inferência, não de especificação:
+## Como eu errei nesse caminho
 
-1. **Se o certificado de um prestador é aceito.** A API DANFSe é descrita no
-   manual **dos municípios**. O manual dos contribuintes não a menciona, e o
-   `adn-contribuinte-swagger.json` que o repositório carrega tem apenas
-   `/DFe/{NSU}` e `/NFSe/{ChaveAcesso}/Eventos`.
-2. **O host de produção.** `adn.producaorestrita.nfse.gov.br/danfse` está
-   escrito no 501 da própria Sefin; `adn.nfse.gov.br/danfse` foi inferido por
-   simetria com o par que a Sefin publica, e continua sendo um palpite: os
-   testes feitos até agora foram em páginas de documentação, não no serviço.
+Vale registrar, porque o erro foi de método e não de fato.
 
-### O que dois testes de rede disseram — e o que não disseram
+O contrato da DANFSe foi lido do manual do ADN — documento oficial, versionado
+aqui. Isso estava certo. O erro veio depois, quando surgiram indícios contrários
+e eu os interpretei a favor da conclusão que já tinha:
 
-Quem tem acesso à rede do governo abriu a **página de documentação** do serviço
-nos dois ambientes, e as respostas diferem:
+1. **A página de documentação do serviço dava 404 e 503.** Tratei como fraca
+   demais para concluir alguma coisa. Era, isoladamente. Mas a URL que a NT cita
+   como a API suspensa é exatamente aquela.
+2. **Um resumo de terceiro afirmou que a NT 008 desligou a API.** Conferi contra
+   os manuais do repositório, não achei menção, e escrevi que *"a afirmação não
+   se sustenta"*. Os manuais são de outubro de 2025; a NT é de julho de 2026.
+   **A ausência num documento mais antigo nunca foi evidência contra um mais
+   novo**, e eu usei como se fosse.
+3. **O manual do ADN continuava descrevendo a API.** Verdade, e irrelevante: um
+   manual não se reescreve sozinho quando uma nota técnica o supera.
 
-| Ambiente | `/danfse/docs/index.html` | |
-|---|---|---|
-| produção restrita | **404** | nada servido nesse caminho |
-| produção | **503** | algo responde, mas não atendeu |
+O ceticismo estava certo — o resumo vinha sem fonte e com detalhes vagos. O que
+faltou foi separar *"não posso confirmar"* de *"não se sustenta"*. A primeira
+frase é honesta; a segunda é uma conclusão que os meus dados não davam.
 
-**São páginas de documentação, não o endpoint.** Isso limita muito o que se
-pode concluir: uma API pode funcionar sem publicar swagger no caminho que outro
-documento indica, e um 503 numa página estática pode vir de um *gateway* que
-responde 503 para qualquer coisa. Nenhum dos dois testes diz se
-`GET /danfse/{chaveAcesso}` funciona.
-
-O que dá para dizer, com cuidado:
-
-- O 501 da Sefin aponta para uma página que hoje **não está lá** na produção
-  restrita. Isso enfraquece aquele ponteiro como fonte do caminho do serviço,
-  sem provar que o caminho mudou.
-- A diferença entre 404 e 503 entre os dois ambientes é fraca demais para
-  inverter ou confirmar a inferência do host de produção. Ela fica como estava:
-  um palpite por simetria.
-
-**O teste decisivo é outro:** chamar o endpoint, com certificado e uma chave de
-acesso real. É exatamente o que `nfse danfse <chave>` faz, e é por isso que o
-comando foi entregue com `--url` e com mensagens de erro que antecipam cada
-hipótese, em vez de esperar por uma certeza que este ambiente não consegue
-obter.
-
-As outras áreas do ADN seguem o padrão `/{área}/docs/index.html` e existem
-(`/contribuintes/docs/index.html`, `/municipios/docs/index.html`), e o `x-logo`
-do swagger de contribuinte aponta para `/contribuintes/images/...`, o que indica
-que cada área é servida sob o próprio prefixo. É uma hipótese razoável para
-`--url`, não uma conclusão.
+O que resolveu foi o documento primário, entregue por quem tinha acesso à rede.
+Nenhuma quantidade de raciocínio sobre documentos velhos substituiu ler a NT.
 
 ## Consequências
 
-- Nenhuma dependência nova. O PDF vem pronto do governo.
-- O `subst` deixa de ser código inalcançável: o que o `xmlbuilder` montava desde
-  a v0.1.0 passa a ter caminho de entrada e teste ponta a ponta.
+- A v0.7.0 entrega só a substituição.
+- O `subst` deixa de ser código inalcançável.
 - A validação estrutural ganhou o primeiro caso em que confere uma enumeração do
-  XSD, e não apenas presença e formato. Há mais campos assim; este abriu o
-  caminho.
-- O `nfse danfse` é o primeiro comando que fala com um serviço do governo que
-  **não** é a Sefin Nacional. A configuração não ganhou campo para o endereço do
-  ADN: `--url` cobre o caso raro, e inventar uma chave de configuração para algo
-  não verificado seria formalizar um palpite.
-
-## Alternativas consideradas
-
-**Gerar o DANFSe localmente.** Exigiria o leiaute oficial — que não está no
-repositório —, uma biblioteca de PDF e geração de QR Code. Três dependências e
-uma superfície de manutenção grande para reproduzir, com risco de divergir, um
-documento que o governo entrega pronto.
-
-**`nfse substituir` como comando próprio.** Rejeitado por descrever mal o que
-acontece: seria um comando que aceita todas as flags do `emitir` mais duas.
-
-**Esperar a verificação da DANFSe antes de entregar.** O ambiente não alcança
-`gov.br` e não vai passar a alcançar. Entregar com as incertezas declaradas e
-mensagens de erro que as antecipam custa um comando para descobrir a verdade;
-esperar custa a funcionalidade inteira.
+  XSD, e não apenas presença e formato.
+- **Gerar o DANFSe volta ao escopo, e grande**: leiaute com coordenadas, QR
+  Code, canhoto, fontes — as dependências que tinham sido evitadas voltam a ser
+  necessárias. A NT 008 está versionada em `docs/notas-tecnicas/` e é a
+  especificação.
+- O `internal/infrastructure/adn` foi removido inteiro. Se um dia houver API de
+  novo, ele está no histórico.
 
 ## Aprendizado
 
-Duas peças foram encontradas lendo o que já estava no repositório, não
-escrevendo código novo: um `TODO` honesto num comentário e uma seção de manual
-que ninguém tinha aberto. A ADR 0009 já dizia que a tabela de serviços estava
-versionada desde o começo; aqui foram o endpoint da DANFSe e metade da
-substituição.
+Uma fonte oficial pode estar desatualizada, e a data importa tanto quanto o
+selo. Os manuais deste repositório são de outubro de 2025; os schemas, de
+dezembro e fevereiro; a NT, de julho. Confrontar código com documento — o método
+que achou os defeitos das ADRs 0003, 0005, 0006 e 0009 — só funciona se o
+documento for o vigente.
 
-E há uma diferença entre "não verificado" e "inventado" que vale marcar. A ADR
-0005 catalogou um cliente que falava SOAP com uma API REST — protocolo
-imaginado. A DANFSe aqui tem endpoint e semântica lidos de um documento oficial;
-o que falta é saber se o *nosso* certificado entra. Isso não justifica esperar:
-justifica escrever o erro que essa hipótese produziria, antes de ela acontecer.
+Falta a este repositório uma forma de saber quando um artefato versionado
+envelheceu. Hoje ele guarda a cópia, e não a data em que ela deixou de valer.

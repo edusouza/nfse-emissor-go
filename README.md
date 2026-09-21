@@ -18,10 +18,9 @@ onde as notas não têm valor fiscal.
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- **A DANFSe não foi exercitada contra o serviço real.** O comando existe e o
-  contrato vem do manual oficial, mas a API é descrita para municípios, não
-  para contribuintes — pode ser que o certificado de um prestador não seja
-  aceito. Um comando resolve a dúvida.
+- **Gerar o DANFSe**, o PDF que se entrega ao cliente. A API do governo que o
+  gerava foi suspensa em 03/08/2026 pela NT 008, e a geração passou aos
+  softwares de emissão. Até lá, o portal resolve.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
@@ -68,7 +67,6 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
 | `nfse consultar <chave>` | busca a NFS-e, ou a chave a partir do identificador da DPS |
 | `nfse cancelar <chave>` | registra o evento de cancelamento |
-| `nfse danfse <chave>` | baixa o PDF da NFS-e para entregar ao cliente |
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
 
 Todos aceitam `--help`.
@@ -484,39 +482,26 @@ códigos são disjuntos e a DPS seria rejeitada pelo schema.
 
 ### Entregar o PDF ao cliente
 
-```bash
-nfse danfse 41069022212345678000195000000000000126081234567890
-```
+**Ainda não é possível por aqui.** O DANFSe — o PDF que se entrega ao cliente —
+era gerado por uma API do governo, e a
+[NT 008 v1.02, de 14/07/2026](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
+**suspendeu essa API em 03/08/2026**, passando a geração para os softwares de
+emissão.
 
-```
-Baixando o DANFSe em https://adn.producaorestrita.nfse.gov.br/danfse...
+Enquanto o `nfse` não gera o documento ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22)),
+o caminho é o portal: entre em [nfse.gov.br](https://www.nfse.gov.br) com o seu
+certificado e use *Download DANFSe*, tanto na consulta às notas emitidas quanto
+às recebidas (seções 5.5 e 6.3 do guia do Emissor Nacional Web).
 
-DANFSe salvo
-  Chave de acesso  41069022212345678000195000000000000126081234567890
-  Arquivo          notas/4106902...67890-danfse.pdf (48 KB)
-```
-
-O emissor **não desenha** o documento: quem gera o PDF é o governo, a partir do
-XML que já tem. Por isso o comando é um download e o binário não carrega
-biblioteca de PDF nenhuma.
-
-O serviço fica no Ambiente de Dados Nacional, não na Sefin — lá o endereço
-antigo responde 501. `--url` aponta para outro endereço se for preciso.
-
-> **Ainda não verificado contra o serviço real.** A API DANFSe é descrita no
-> manual dos municípios; o manual dos contribuintes não a menciona. Pode ser
-> que um certificado de prestador não seja aceito. A página de documentação que
-> a Sefin indica para o serviço responde 404 hoje, o que enfraquece esse
-> ponteiro sem dizer nada sobre o endpoint — se o caminho tiver mudado, o erro
-> sugere `--url` com os prefixos alternativos.
-> O comando nunca grava um arquivo que não seja um PDF de verdade.
-> [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
+O XML que o `nfse` grava continua sendo o documento fiscal válido; o DANFSe é a
+representação auxiliar.
 
 ## Roadmap
 
 | Versão | Entrega |
 |--------|---------|
-| v0.8.0 | `onboard` interativo e código IBGE offline |
+| v0.8.0 | Gerar o DANFSe localmente (NT 008) |
+| v0.9.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
 O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na

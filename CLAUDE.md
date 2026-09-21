@@ -45,7 +45,6 @@ internal/
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo
-    adn/                   Ambiente de Dados Nacional (DANFSe em PDF)
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
 pkg/                       utilidades reutilizáveis fora do projeto
   xmlbuilder/              montagem do XML da DPS
@@ -87,6 +86,7 @@ docs/markdown/    manuais oficiais do governo convertidos
 docs/schemas/     XSDs oficiais; o pacote v1.01 traz 1.00 e 1.01 lado a lado
 docs/anexos/      planilhas de referência (códigos IBGE, lista de serviços)
 docs/nfse-nacional/  PDFs originais dos manuais; docs/markdown/ tem a conversão
+docs/notas-tecnicas/ notas técnicas — superam os manuais, confira a data
 specs/            especificações Speckit do desenho anterior (API REST)
 ```
 
