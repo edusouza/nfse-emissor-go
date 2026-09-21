@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package servico carries the national service list of LC 116/2003 — the
 // table behind cTribNac, the six-digit code every DPS has to declare.
 //

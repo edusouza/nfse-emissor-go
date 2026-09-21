@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package dpsid provides utilities for parsing and validating DPS (Declaracao de
 // Prestacao de Servico) identifiers used in Brazil's Sistema Nacional NFS-e.
 //

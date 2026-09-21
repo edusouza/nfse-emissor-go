@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package domain provides the core domain entities shared across the NFS-e emitter.
 package domain
 

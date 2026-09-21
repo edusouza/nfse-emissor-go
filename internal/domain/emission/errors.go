@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package emission provides domain logic for NFS-e emission processing.
 package emission
 

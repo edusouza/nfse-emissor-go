@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 //go:build ignore
 
 // Command gerar_lista rebuilds lista.csv from the government spreadsheet.

@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package xmlbuilder provides utilities for building NFS-e XML documents
 // according to Brazilian government specifications.
 package xmlbuilder

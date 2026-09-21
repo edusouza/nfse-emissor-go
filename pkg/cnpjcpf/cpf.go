@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package cnpjcpf provides validation and formatting utilities for Brazilian
 // tax identification numbers (CNPJ for companies and CPF for individuals).
 package cnpjcpf

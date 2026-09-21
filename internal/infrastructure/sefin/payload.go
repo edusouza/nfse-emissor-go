@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package sefin talks to the Sistema Nacional NFS-e web APIs.
 package sefin
 

@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package xmlsigner provides XMLDSig digital signature functionality for NFS-e documents.
 // It implements certificate parsing, validation, and XML signing according to Brazilian
 // NFS-e (National Electronic Service Invoice) specifications.

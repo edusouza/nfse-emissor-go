@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 package cli
 
 import (
@@ -47,14 +50,34 @@ func AppVersion() string {
 	return prefix + version[:maxAppVersionLength-len(prefix)]
 }
 
+// License and licenseURL are printed by `nfse versao`.
+//
+// A binary travels without the repository around it: whoever receives a copy
+// has no LICENSE.md next to it, and the FSL asks that a copy of the terms or a
+// link to them go along with every copy. One line in `versao` is the only
+// place the binary itself can say it.
+const (
+	License    = "FSL-1.1-MIT"
+	licenseURL = "https://github.com/edusouza/nfse-emissor-go/blob/master/LICENSE.md"
+)
+
 func newVersionCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versao",
-		Short: "Mostra a versao do nfse",
+		Short: "Mostra a versao e a licenca do nfse",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "nfse %s (%s/%s, %s)\n",
-				Version(), runtime.GOOS, runtime.GOARCH, runtime.Version())
+			out := cmd.OutOrStdout()
+
+			if _, err := fmt.Fprintf(out, "nfse %s (%s/%s, %s)\n",
+				Version(), runtime.GOOS, runtime.GOARCH, runtime.Version()); err != nil {
+				return err
+			}
+			_, err := fmt.Fprintf(out,
+				"Licenca %s: uso livre, inclusive comercial e interno, exceto\n"+
+					"para oferecer produto ou servico concorrente. Vira MIT dois anos\n"+
+					"apos a publicacao de cada versao.\n%s\n",
+				License, licenseURL)
 			return err
 		},
 	}

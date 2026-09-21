@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package config loads the emitter's settings and per-invoice data.
 //
 // Values come from three places, each overriding the previous one:

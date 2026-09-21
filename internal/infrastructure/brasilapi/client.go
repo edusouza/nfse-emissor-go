@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package brasilapi looks a CNPJ up in the public registry so that the emitter
 // can fill its own configuration.
 //

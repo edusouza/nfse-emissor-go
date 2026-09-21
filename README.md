@@ -521,4 +521,21 @@ Veja as issues [#4](https://github.com/edusouza/nfse-emissor-go/issues/4) e
 
 ## Licença
 
-[MIT](LICENSE).
+[FSL-1.1-MIT](LICENSE.md) — *Functional Source License*. Em linguagem comum:
+
+- **Use à vontade**, inclusive dentro de uma empresa e para fins comerciais. Se
+  você emite as suas próprias notas com o `nfse`, não há nada a pedir nem a
+  pagar, do MEI à empresa grande.
+- **Não ofereça o `nfse` como produto ou serviço concorrente.** Embrulhar este
+  código num serviço de emissão e vendê-lo é o único uso que a licença não
+  concede. Para isso, fale comigo.
+- **Cada versão vira MIT dois anos depois de publicada**, de forma irrevogável.
+  A restrição tem prazo; a abertura, não.
+
+O texto que vale é o do [`LICENSE.md`](LICENSE.md), e o `nfse versao` repete o
+resumo e o link — um binário circula sem o repositório em volta.
+
+Até a **v0.6.0**, inclusive, o projeto foi publicado sob [MIT](https://opensource.org/license/mit),
+e essas versões continuam MIT para sempre. A FSL vale da v0.7.0 em diante. O
+porquê da troca está na
+[ADR 0010](docs/decisoes/0010-licenca-fsl.md).

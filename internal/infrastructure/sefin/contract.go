@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 package sefin
 
 // The constants below are taken from the government's own OpenAPI documents,

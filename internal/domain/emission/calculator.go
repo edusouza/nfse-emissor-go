@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Package emission provides DTOs and business logic for NFS-e emission operations.
 package emission
 

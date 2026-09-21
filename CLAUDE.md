@@ -68,6 +68,9 @@ assinar com o A1 → enviar à Sefin Nacional → receber a NFS-e autorizada.
 - Testes dependentes de relógio vão atrás de `testing.Short()`.
 - Toda decisão que muda o rumo do projeto vira um ADR em `docs/decisoes/`.
 - O CHANGELOG é atualizado na mesma mudança que altera o comportamento.
+- Todo arquivo `.go` começa com o cabeçalho de licença — duas linhas, copyright
+  e `SPDX-License-Identifier`. Um teste em `internal/docs` recusa quem não tem.
+  Material do governo em `docs/` não recebe cabeçalho: não é nosso.
 
 ## Cuidados com segurança
 

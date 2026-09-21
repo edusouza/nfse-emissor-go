@@ -1,3 +1,6 @@
+// Copyright 2026 Eduardo Souza
+// SPDX-License-Identifier: FSL-1.1-MIT
+
 // Command nfse is a command-line emitter for Brazilian NFS-e (Nota Fiscal de
 // Servico eletronica) through the Sistema Nacional NFS-e.
 package main

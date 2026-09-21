@@ -13,6 +13,40 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### Alterado
+
+- **A licença passa de MIT para [FSL-1.1-MIT](LICENSE.md)** — *Functional
+  Source License*. Quem usa o `nfse` para emitir as próprias notas não tem nada
+  a pedir nem a pagar, de MEI a empresa grande: o uso interno e comercial está
+  concedido no texto. O único uso que a licença não concede é oferecer o `nfse`
+  como produto ou serviço concorrente. Cada versão publicada vira MIT dois anos
+  depois, de forma irrevogável.
+  Ver [ADR 0010](docs/decisoes/0010-licenca-fsl.md).
+- Todo arquivo `.go` passa a carregar o cabeçalho de copyright e
+  `SPDX-License-Identifier`. Material do governo em `docs/` não recebe
+  cabeçalho — não é nosso.
+- **`nfse versao` passa a informar a licença e o link.** Um binário circula sem
+  o repositório em volta, e a cláusula de redistribuição pede que os termos
+  acompanhem cada cópia.
+
+### Verificação
+
+- Um teste em `internal/docs` recusa qualquer `.go` sem cabeçalho, e confere o
+  identificador declarado contra o que está no `LICENSE.md` — inclusive o que o
+  `nfse versao` anuncia. Um relicenciamento pela metade falha o build.
+
+### Atenção
+
+- **As versões até a `v0.6.0` continuam MIT, para sempre.** Elas estão
+  publicadas no `proxy.golang.org`, que é imutável: quem baixar `v0.6.0` recebe
+  o código sob MIT e pode fazer o que o MIT permite, indefinidamente. A FSL vale
+  da `v0.7.0` em diante.
+- O projeto **deixa de ser código aberto** pela definição da OSI. Na prática
+  isso significa que o `pkg.go.dev` não renderiza mais a documentação do pacote
+  e o marca como não redistribuível. O `go install` continua funcionando.
+- Não há ainda caminho para comprar uma licença de uso concorrente. Até haver,
+  a resposta é entrar em contato.
+
 ## [0.6.0] - 2026-09-21
 
 Menos digitação para começar, e o fim do último campo obrigatório que nenhuma
