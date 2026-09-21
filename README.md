@@ -7,22 +7,23 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
-> **Estado atual — v0.6.0** ([CHANGELOG](CHANGELOG.md)). O ciclo inteiro foi
-> exercitado contra a Sefin Nacional em produção restrita — `emitir`, `enviar`,
-> `consultar` por chave e por identificador da DPS, e `cancelar`. A v0.5.2 foi a
-> primeira versão que **emitiu uma NFS-e de verdade**, e a v0.6.0 acrescenta o
-> `nfse onboard`, que monta a configuração a partir do certificado.
->
-> Chegar lá custou cinco defeitos, e cada um foi encontrado por uma rejeição do
-> governo, nunca por inspeção: a renegociação TLS (v0.5.0), e na v0.5.2 o digest
-> da assinatura calculado sem a declaração de namespace, o tipo de inscrição
-> federal invertido no identificador, a razão social enviada onde a regra a
-> proíbe e o total de tributos escolhido pelo valor em vez do regime.
-> **Toda DPS gerada antes da v0.5.2 é inválida** e precisa ser emitida de novo.
->
-> O que falta para a `1.0.0` é uma emissão em **produção** — com valor fiscal.
-> Tecnicamente é o mesmo caminho; a diferença é a consequência de errar. Veja o
-> [roadmap](#roadmap).
+## O que funciona
+
+O ciclo completo de uma nota — configurar, achar o código do serviço, montar,
+validar, assinar, transmitir, consultar e cancelar — exercitado ponta a ponta
+contra a Sefin Nacional em **produção restrita**: o ambiente real do governo,
+onde as notas não têm valor fiscal.
+
+## O que ainda não
+
+- **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
+  muda é a consequência de errar. É o que falta para a `1.0.0`.
+- **Substituição de NFS-e.**
+- **Validação XSD completa** e as regras que dependem do convênio do município
+  com o Sistema Nacional — veja
+  [o que a validação local cobre](#o-que-a-validação-local-cobre).
+- **Código IBGE offline**, para o `nfse onboard --sem-rede`, e um `onboard`
+  interativo.
 
 ## Instalação
 
@@ -30,9 +31,9 @@ depender de portal web.
 go install github.com/edusouza/nfse-emissor-go/cmd/nfse@latest
 ```
 
-Para fixar a versão, troque `@latest` por `@v0.6.0`. O `nfse versao` mostra o
-que está instalado — e é o mesmo identificador que vai no `verAplic` de cada
-declaração.
+Para fixar uma versão, troque `@latest` pela tag desejada; as versões estão no
+[CHANGELOG](CHANGELOG.md). O `nfse versao` mostra o que está instalado — e é o
+mesmo identificador que vai no `verAplic` de cada declaração.
 
 Ou compilando a partir do código:
 
@@ -455,21 +456,13 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 
 ## Roadmap
 
-| Versão | Entrega | Estado |
-|--------|---------|--------|
-| v0.1.0 | Pipeline offline: montar + validar + assinar a DPS | pronto |
-| v0.2.0 | Envio à Sefin Nacional | pronto |
-| v0.3.0 | Consulta de NFS-e por chave de acesso | pronto |
-| v0.4.0 | Cancelamento de NFS-e | pronto |
-| v0.5.0 | `nfse enviar`, validação da alíquota de ISS, renegociação TLS | lançada |
-| v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
-| v0.5.2 | Seis correções, todas encontradas por rejeições reais da Sefin | lançada |
-| v0.6.0 | `nfse onboard`: configuração preenchida a partir do certificado | **lançada** |
-| v0.7.0 | Busca do código do serviço, embutida no `onboard` ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | pronto |
-| v0.8.0 | Substituição de NFS-e | planejado |
-| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal | planejado |
+| Versão | Entrega |
+|--------|---------|
+| v0.8.0 | Substituição de NFS-e |
+| v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
-Detalhes na [issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
+O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na
+[issue #6](https://github.com/edusouza/nfse-emissor-go/issues/6).
 
 ## Como o projeto está organizado
 
