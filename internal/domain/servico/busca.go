@@ -4,6 +4,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/edusouza/nfse-emissor-go/internal/domain/texto"
 )
 
 // Resultado is one candidate of a search, with the score that ranked it.
@@ -226,10 +228,10 @@ func idf(termo string) float64 {
 // normalizar folds the text down to comparable terms: lowercase, without
 // accents, without punctuation, and without the words that carry no meaning
 // on their own.
-func normalizar(texto string) []string {
+func normalizar(entrada string) []string {
 	var termos []string
 
-	for _, campo := range strings.FieldsFunc(dobrar(texto), func(r rune) bool {
+	for _, campo := range strings.FieldsFunc(texto.Dobrar(entrada), func(r rune) bool {
 		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
 	}) {
 		if len(campo) < 3 || vazios[campo] || soDigitos(campo) {
@@ -260,22 +262,6 @@ func dedup(termos []string) []string {
 	}
 	return out
 }
-
-// dobrar lowercases and strips the accents Portuguese uses, so that a query
-// typed without them still matches. A table is enough here and keeps the
-// dependency list where it is.
-func dobrar(texto string) string {
-	return acentos.Replace(strings.ToLower(texto))
-}
-
-var acentos = strings.NewReplacer(
-	"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
-	"é", "e", "è", "e", "ê", "e", "ë", "e",
-	"í", "i", "ì", "i", "î", "i", "ï", "i",
-	"ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
-	"ú", "u", "ù", "u", "û", "u", "ü", "u",
-	"ç", "c", "ñ", "n",
-)
 
 // vazios are the function words that would otherwise match everything. Words
 // that are merely frequent — "serviços", "congêneres" — are not listed: the

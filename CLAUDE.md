@@ -42,6 +42,9 @@ internal/
     emission/              cálculo de valores, tradução de rejeições
     validation/            validação da DPS
     query/                 chave de acesso e respostas de consulta
+    servico/               lista nacional de serviços (cTribNac), embutida
+    municipio/             tabela do IBGE, embutida
+    texto/                 dobra de acentos compartilhada pelas buscas
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo

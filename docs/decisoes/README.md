@@ -18,3 +18,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0007](0007-preenchimento-da-configuracao.md) | Preencher a configuração a partir do certificado e do cadastro público | Aceita |
 | [0008](0008-digest-sem-namespace.md) | Quatro defeitos que só a emissão real revelou | Aceita |
 | [0009](0009-lista-de-servicos-embutida.md) | Embutir a lista nacional de serviços e procurar o cTribNac | Aceita |
+| [0010](0010-tabela-do-ibge-embutida.md) | Embutir a tabela do IBGE para o `--sem-rede` | Aceita |

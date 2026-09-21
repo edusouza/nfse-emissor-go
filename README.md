@@ -22,8 +22,7 @@ onde as notas não têm valor fiscal.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
-- **Código IBGE offline**, para o `nfse onboard --sem-rede`, e um `onboard`
-  interativo.
+- **`onboard` interativo**, perguntando no terminal o que sobrou.
 
 ## Instalação
 
@@ -59,6 +58,7 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 |---------|-----------|
 | `nfse onboard` | cria o `nfse.yaml` já preenchido, a partir do certificado |
 | `nfse servico buscar` / `ver` / `listar` | acha o código do serviço (`cTribNac`) na lista nacional |
+| `nfse municipio buscar` / `ver` | acha o código IBGE do município |
 | `nfse config init` / `check` | cria um `nfse.yaml` em branco e confere o que está preenchido |
 | `nfse cert info` | inspeciona o certificado A1 |
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
@@ -169,6 +169,40 @@ O `nfse config check` confirma depois o que os seis dígitos significam, e avisa
 se o código não estiver na lista que o binário carrega. Por quê, e por que o
 `onboard` sugere mas nunca preenche:
 [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
+
+### Achar o código do município
+
+São sete dígitos do IBGE que ninguém sabe de cabeça, e errar não aparece
+localmente: a nota é montada, assinada, enviada, e vai para o município errado
+com a Sefin aceitando. A consulta ao cadastro público responde isso sozinha,
+mas com `--sem-rede` — ou atrás de um firewall — não há a quem perguntar. Os
+5570 municípios estão embutidos no binário:
+
+```bash
+nfse onboard --certificado certificado.pfx --sem-rede --municipio "Curitiba/PR"
+```
+
+O nome vai sem acento e em qualquer caixa, e a UF pode vir depois de `/`, ` - `
+ou `,`. Para procurar:
+
+```bash
+nfse municipio buscar "bom jesus"
+```
+
+```
+6 resultados para "bom jesus":
+
+  2201903  Bom Jesus/PI
+  2401701  Bom Jesus/RN
+  2502201  Bom Jesus/PB
+  4202537  Bom Jesus/SC
+  4302303  Bom Jesus/RS
+  1501576  Bom Jesus do Tocantins/PA
+```
+
+**Nome ambíguo não vira escolha.** 232 nomes se repetem entre estados; sem a UF
+o comando para e mostra os candidatos, em vez de chutar um.
+[ADR 0010](docs/decisoes/0010-tabela-do-ibge-embutida.md).
 
 ### Verificar o certificado
 
@@ -459,6 +493,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | Versão | Entrega |
 |--------|---------|
 | v0.8.0 | Substituição de NFS-e |
+| v0.9.0 | `onboard` interativo |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
 O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na

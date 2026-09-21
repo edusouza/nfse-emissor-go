@@ -455,3 +455,93 @@ func TestOnboardSemRedeApontaABusca(t *testing.T) {
 		t.Errorf("sem consulta nao ha CNAE para sugerir de:\n%s", data)
 	}
 }
+
+// Com --sem-rede o codigo IBGE nao vem de lugar nenhum. --municipio resolve
+// pelo nome, contra a tabela embutida, que e o caso que a issue #11 descreve.
+func TestOnboardMunicipioOffline(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--sem-rede",
+		"--municipio", "curitiba/pr", "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Curitiba/PR (IBGE 4106902)") {
+		t.Errorf("a saida nao confirma o municipio resolvido:\n%s", out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gerado := string(data)
+
+	if !strings.Contains(gerado, `municipio: "4106902"`) {
+		t.Errorf("o codigo IBGE nao foi gravado:\n%s", gerado)
+	}
+	if !strings.Contains(gerado, "prestador.municipio: --municipio") {
+		t.Errorf("a origem do municipio nao foi registrada no cabecalho:\n%s", gerado)
+	}
+	if strings.Contains(out, "prestador.municipio — codigo IBGE") {
+		t.Errorf("o municipio nao deveria continuar pendente:\n%s", out)
+	}
+}
+
+// 232 nomes se repetem entre UFs. Escolher um poria a nota no municipio
+// errado, e a Sefin aceitaria — entao o comando para e mostra os candidatos.
+func TestOnboardRecusaMunicipioAmbiguo(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--sem-rede",
+		"--municipio", "Bom Jesus", "--arquivo", path)
+	if err == nil {
+		t.Fatalf("esperava erro para um nome ambiguo\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "acrescente a UF") {
+		t.Errorf("erro = %q", err)
+	}
+	// Os candidatos precisam vir junto, senao o usuario nao sabe o que tentar.
+	if !strings.Contains(err.Error(), "Bom Jesus/PI") {
+		t.Errorf("o erro nao lista os candidatos: %q", err)
+	}
+	if _, statErr := os.Stat(path); statErr == nil {
+		t.Error("o arquivo nao deveria ter sido criado")
+	}
+}
+
+func TestOnboardRecusaMunicipioInexistente(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	_, err := runOnboard(t, "--cnpj", onboardCNPJ, "--sem-rede",
+		"--municipio", "Xyzzylandia", "--arquivo", path)
+	if err == nil {
+		t.Fatal("esperava erro para um municipio inexistente")
+	}
+	if !strings.Contains(err.Error(), "nao esta na tabela do IBGE") {
+		t.Errorf("erro = %q", err)
+	}
+}
+
+// O cadastro publico sabe o endereco que a Receita tem em arquivo. Quando os
+// dois discordam, vale o que o usuario digitou — mas em voz alta.
+func TestOnboardAvisaDivergenciaDeMunicipio(t *testing.T) {
+	srv := registroFake(t, http.StatusOK, respostaMEI) // cadastro diz 3550308 (Sao Paulo)
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--fonte", srv.URL,
+		"--municipio", "Curitiba/PR", "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "aviso: --municipio informa") {
+		t.Errorf("a divergencia nao foi avisada:\n%s", out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `municipio: "4106902"`) {
+		t.Errorf("deveria valer o que o usuario informou:\n%s", data)
+	}
+}

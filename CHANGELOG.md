@@ -13,6 +13,60 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.7.0] - 2026-09-21
+
+Fecha o buraco do `--sem-rede`. O `nfse onboard` já montava a configuração
+sozinho quando havia rede; agora também resolve o código IBGE do município sem
+consultar ninguém — e o município era o único campo que sobrava sem resposta
+depois que a 0.6.0 resolveu o código do serviço.
+
+### Adicionado
+
+- **A tabela do IBGE embutida no binário** — os 5570 municípios, gerados do
+  `ANEXO_A` que já estava em `docs/anexos/` pelo mesmo tipo de programa
+  versionado junto que a 0.6.0 introduziu. 132 KB, sem dependência nova.
+  Ver [ADR 0010](docs/decisoes/0010-tabela-do-ibge-embutida.md).
+- **`nfse onboard --municipio "Cidade/UF"`** — resolve o código localmente.
+  Combinado com `--servico` e o certificado, o `--sem-rede` passa a deixar em
+  branco só `prestador.regime_tributario`, que é o campo que o projeto se
+  recusa a adivinhar por decisão registrada, não por falta de dado.
+- **`nfse municipio buscar <nome>`** e **`nfse municipio ver <codigo|nome>`**.
+  O `ver` resolve nos dois sentidos, o que serve para conferir um `nfse.yaml`
+  que veio de outro lugar.
+- O nome é aceito como as pessoas escrevem: sem acento, em qualquer caixa, com
+  a UF separada por `/`, ` - ` ou `,`, ou sem UF. Pontuação é descartada por
+  inteiro, então `Alta Floresta D'Oeste`, `Alta Floresta D Oeste` e
+  `alta floresta doeste` são a mesma coisa.
+
+### Alterado
+
+- **Nome ambíguo não vira escolha.** 232 nomes de município se repetem entre
+  UFs; o comando para e lista os candidatos. Escolher um poria a nota no
+  município errado, e a Sefin aceitaria sem reclamar.
+- Quando `--municipio` discorda do cadastro público, vale o que foi informado
+  na linha de comando — com aviso, porque o cadastro conhece o endereço que a
+  Receita tem em arquivo.
+- A dobra de acentos saiu de `internal/domain/servico` para
+  `internal/domain/texto`, agora compartilhada com a busca de municípios. Duas
+  cópias da mesma tabela significariam consertar uma e publicar a outra.
+
+### Verificação
+
+- Um teste regenera o `municipios.csv` a partir do anexo e compara byte a byte.
+- Um teste garante que a dobra de pontuação não funde dois municípios do mesmo
+  estado. Hoje são 5570 nomes e 5570 chaves; se um anexo futuro criar um par
+  que colida, o teste falha antes de a nota ir para a cidade errada.
+
+### Problemas conhecidos
+
+- A coluna **"Sigla UF" do `ANEXO_A` vem incompleta do governo**: preenchida em
+  450 das 5570 linhas, e vazia em todas as linhas de 20 das 27 UFs. As siglas
+  estão numa tabela de 27 entradas no gerador, conferida contra o prefixo do
+  código IBGE e contra as 450 linhas que o anexo preenche — o gerador falha se
+  discordarem. Detalhe na ADR 0010.
+
+Fecha [#11](https://github.com/edusouza/nfse-emissor-go/issues/11).
+
 ## [0.6.0] - 2026-09-21
 
 Menos digitação para começar, e o fim do último campo obrigatório que nenhuma

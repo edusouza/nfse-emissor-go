@@ -155,3 +155,56 @@ saida:
 	}
 	return path
 }
+
+func TestMunicipioBuscar(t *testing.T) {
+	out, err := execNfse(t, "municipio", "buscar", "curitiba")
+	if err != nil {
+		t.Fatalf("busca falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "4106902") || !strings.Contains(out, "Curitiba/PR") {
+		t.Errorf("a busca nao trouxe Curitiba:\n%s", out)
+	}
+
+	// O nome exato vem antes do nome que apenas comeca igual.
+	out, err = execNfse(t, "municipio", "buscar", "bom jesus")
+	if err != nil {
+		t.Fatalf("busca falhou: %v\n%s", err, out)
+	}
+	primeira := strings.SplitN(strings.SplitN(out, "\n\n", 2)[1], "\n", 2)[0]
+	if !strings.Contains(primeira, "Bom Jesus/") {
+		t.Errorf("o nome exato deveria vir primeiro, veio %q", primeira)
+	}
+}
+
+func TestMunicipioVer(t *testing.T) {
+	out, err := execNfse(t, "municipio", "ver", "4106902")
+	if err != nil {
+		t.Fatalf("ver falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Curitiba/PR") {
+		t.Errorf("a saida nao traz o municipio:\n%s", out)
+	}
+
+	// Tambem resolve no sentido inverso: nome para codigo.
+	out, err = execNfse(t, "municipio", "ver", "sao paulo/sp")
+	if err != nil {
+		t.Fatalf("ver falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "3550308") {
+		t.Errorf("a saida nao traz o codigo:\n%s", out)
+	}
+
+	if _, err := execNfse(t, "municipio", "ver", "9999999"); err == nil {
+		t.Error("um codigo inexistente deveria ser recusado")
+	}
+}
+
+func TestMunicipioBuscarSemResultado(t *testing.T) {
+	out, err := execNfse(t, "municipio", "buscar", "xyzzy")
+	if err != nil {
+		t.Fatalf("uma busca sem resultado nao e um erro: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Nenhum municipio casa") {
+		t.Errorf("a saida nao diz que nao achou:\n%s", out)
+	}
+}

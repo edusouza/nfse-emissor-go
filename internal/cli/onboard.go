@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/municipio"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/brasilapi"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
@@ -61,16 +62,17 @@ func (d *onboardData) origem(campo, fonte string) {
 
 func newOnboardCommand() *cobra.Command {
 	var (
-		certFile    string
-		password    string
-		cnpjFlag    string
-		servicoFlag string
-		path        string
-		serie       string
-		ambiente    string
-		semRede     bool
-		fonte       string
-		force       bool
+		certFile      string
+		password      string
+		cnpjFlag      string
+		servicoFlag   string
+		municipioFlag string
+		path          string
+		serie         string
+		ambiente      string
+		semRede       bool
+		fonte         string
+		force         bool
 	)
 
 	cmd := &cobra.Command{
@@ -93,6 +95,9 @@ Informe em --servico se ja souber; senao, o comando usa o CNAE do cadastro para
 sugerir candidatos, e deixa a escolha para voce. Para procurar:
 
   nfse servico buscar "o que voce faz"
+
+Com --sem-rede, --municipio resolve o codigo IBGE localmente a partir do nome:
+a tabela do IBGE esta embutida no binario.
 
 Nada aqui e obrigatorio para emitir: tudo que o comando preenche pode ser
 escrito a mao no nfse.yaml.`,
@@ -124,6 +129,16 @@ escrito a mao no nfse.yaml.`,
 
 			out := cmd.OutOrStdout()
 			data := &onboardData{}
+
+			if municipioFlag != "" {
+				m, err := municipio.Resolver(municipioFlag)
+				if err != nil {
+					return erroDeMunicipio(err)
+				}
+				data.municipio = m.Codigo
+				data.origem("prestador.municipio", "--municipio")
+				fmt.Fprintf(out, "Municipio    %s (IBGE %s)\n", m, m.Codigo)
+			}
 
 			if servicoFlag != "" {
 				s, ok := servico.PorCodigo(servicoFlag)
@@ -207,6 +222,7 @@ escrito a mao no nfse.yaml.`,
 	cmd.Flags().StringVarP(&password, "senha", "s", "", "senha do certificado (prefira "+envCertPassword+")")
 	cmd.Flags().StringVar(&cnpjFlag, "cnpj", "", "CNPJ do prestador, se preferir informar direto")
 	cmd.Flags().StringVar(&servicoFlag, "servico", "", "codigo de tributacao nacional (cTribNac), 6 digitos")
+	cmd.Flags().StringVar(&municipioFlag, "municipio", "", `municipio do prestador: codigo IBGE ou "Cidade/UF"`)
 	cmd.Flags().StringVarP(&path, "arquivo", "a", config.DefaultFileName, "caminho do arquivo a criar")
 	cmd.Flags().StringVar(&serie, "serie", "00001", "serie da DPS, 5 digitos")
 	cmd.Flags().StringVar(&ambiente, "ambiente", config.EnvProducaoRestrita, "producao-restrita | producao")
@@ -303,8 +319,13 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	}
 
 	if codigo := empresa.CodigoMunicipioIBGE.String(); len(codigo) == 7 {
-		data.municipio = codigo
-		data.origem("prestador.municipio", fonte)
+		switch {
+		case data.municipio == "":
+			data.municipio = codigo
+			data.origem("prestador.municipio", fonte)
+		case data.municipio != codigo:
+			avisarDivergenciaDeMunicipio(errOut, data.municipio, codigo)
+		}
 	}
 
 	if regime, ok := config.TaxRegimeFromSimples(empresa.OpcaoPeloMEI, empresa.OpcaoPeloSimples); ok {
@@ -417,7 +438,8 @@ func printPending(out io.Writer, data *onboardData, certFile, path string) {
 		pending = append(pending, "prestador.nome — razao social")
 	}
 	if data.municipio == "" {
-		pending = append(pending, "prestador.municipio — codigo IBGE do municipio, 7 digitos")
+		pending = append(pending, "prestador.municipio — codigo IBGE do municipio, 7 digitos; "+
+			"ache o seu com 'nfse municipio buscar <nome>', ou reexecute com --municipio \"Cidade/UF\"")
 	}
 	if data.regime == "" {
 		pending = append(pending, "prestador.regime_tributario — mei ou me_epp")
