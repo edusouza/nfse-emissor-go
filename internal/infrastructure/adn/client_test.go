@@ -2,6 +2,7 @@ package adn
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,7 +70,7 @@ func TestBaixarDANFSe_Status(t *testing.T) {
 		corpo    string
 		wantText string
 	}{
-		{http.StatusNotFound, `{"erro":"nao encontrada"}`, "nao encontrada no ADN"},
+		{http.StatusNotFound, `{"erro":"nao encontrada"}`, "o servico nao esta nesse endereco"},
 		{http.StatusForbidden, `acesso negado`, "manual dos municipios"},
 		{http.StatusUnauthorized, ``, "manual dos municipios"},
 		{http.StatusNotImplemented, `movido`, "informe o novo com --url"},
@@ -128,3 +129,38 @@ func TestBaseURLPorAmbiente(t *testing.T) {
 		t.Errorf("--url = %q; a barra final deveria ser removida", got)
 	}
 }
+
+// Um 404 tem duas causas que o status nao separa, e mandar o usuario para a
+// errada custa a investigacao inteira. A mensagem precisa nomear as duas e
+// sugerir endereços alternativos construidos a partir do --url em uso.
+func TestBaixarDANFSe_404NomeiaAsDuasCausas(t *testing.T) {
+	c := New(Config{BaseURL: "https://exemplo.gov.br/danfse", HTTPClient: &http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(strings.NewReader("")),
+				Header:     http.Header{},
+			}, nil
+		}),
+	}})
+
+	_, err := c.BaixarDANFSe(context.Background(), chaveValida)
+	if err == nil {
+		t.Fatal("esperava erro")
+	}
+	for _, querido := range []string{
+		"o servico nao esta nesse endereco",
+		"nao esta no Ambiente de Dados Nacional",
+		"https://exemplo.gov.br/contribuintes/danfse",
+		"https://exemplo.gov.br/municipios/danfse",
+		"nfse consultar",
+	} {
+		if !strings.Contains(err.Error(), querido) {
+			t.Errorf("a mensagem de 404 nao traz %q:\n%v", querido, err)
+		}
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

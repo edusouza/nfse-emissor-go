@@ -171,7 +171,7 @@ func (c *Client) BaixarDANFSe(ctx context.Context, chaveAcesso string) ([]byte, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, c.statusError(resp.StatusCode, body)
+		return nil, c.statusError(resp.StatusCode, chave, body)
 	}
 
 	// The status says OK, which is not the same as the body being a document.
@@ -187,12 +187,25 @@ func (c *Client) BaixarDANFSe(ctx context.Context, chaveAcesso string) ([]byte, 
 }
 
 // statusError turns an HTTP status into something the user can act on.
-func (c *Client) statusError(status int, body []byte) error {
+func (c *Client) statusError(status int, chave string, body []byte) error {
 	switch status {
 	case http.StatusNotFound:
-		return fmt.Errorf("NFS-e nao encontrada no ADN (404).\n"+
-			"A nota existe e ja foi compartilhada com o Ambiente de Dados Nacional?\n"+
-			"Resposta: %s", resumo(body))
+		// A 404 here has two causes that the status alone cannot tell apart,
+		// and guessing the wrong one sends the user hunting in the wrong
+		// place. The endpoint's own documentation page — the address the Sefin
+		// names when it answers 501 — is itself 404 today, so "the service is
+		// not at this address" is at least as likely as "the invoice is not
+		// there".
+		return fmt.Errorf("o ADN respondeu 404 em %s/%s.\n"+
+			"Isso pode significar duas coisas:\n"+
+			"  1. o servico nao esta nesse endereco — a pagina de documentacao\n"+
+			"     que a Sefin indica (%s/docs/index.html) tambem responde 404,\n"+
+			"     entao o caminho pode ter mudado. Tente --url, por exemplo\n"+
+			"     %s/contribuintes/danfse ou %s/municipios/danfse;\n"+
+			"  2. a NFS-e nao esta no Ambiente de Dados Nacional — confira se\n"+
+			"     ela existe com 'nfse consultar <chave>'.\n"+
+			"Resposta: %s",
+			c.baseURL, chave, c.baseURL, hostDe(c.baseURL), hostDe(c.baseURL), resumo(body))
 
 	case http.StatusForbidden, http.StatusUnauthorized:
 		// This is the failure the ADR predicts: the DANFSe API is documented in
@@ -213,6 +226,20 @@ func (c *Client) statusError(status int, body []byte) error {
 		return fmt.Errorf("o ADN respondeu %d; o servico esta indisponivel no momento", status)
 	}
 	return fmt.Errorf("o ADN respondeu %d: %s", status, resumo(body))
+}
+
+// hostDe strips the path off a base URL, so a suggested alternative address
+// can be built from whatever --url the caller actually used.
+func hostDe(baseURL string) string {
+	rest := baseURL
+	prefixo := ""
+	if i := strings.Index(rest, "://"); i >= 0 {
+		prefixo, rest = rest[:i+3], rest[i+3:]
+	}
+	if i := strings.Index(rest, "/"); i >= 0 {
+		rest = rest[:i]
+	}
+	return prefixo + rest
 }
 
 // resumo shortens a response body for an error message.

@@ -92,6 +92,15 @@ declarar. Duas coisas na DANFSe vêm de inferência, não de especificação:
 2. **O host de produção.** `adn.producaorestrita.nfse.gov.br/danfse` está
    escrito no 501 da própria Sefin; `adn.nfse.gov.br/danfse` é a mesma forma que
    a Sefin usa para o par produção/restrita, aplicada por simetria.
+3. **O caminho, depois de um teste.** A página de documentação que o 501 da
+   Sefin indica — `.../danfse/docs/index.html` — **responde 404 hoje**,
+   confirmado por quem tem acesso à rede do governo. As outras áreas do ADN
+   seguem o padrão `/{área}/docs/index.html` e existem
+   (`/contribuintes/docs/index.html`, `/municipios/docs/index.html`), e o
+   `x-logo` do swagger de contribuinte aponta para `/contribuintes/images/...`,
+   o que indica que cada área é servida sob o próprio prefixo. É possível,
+   portanto, que o serviço esteja em `/contribuintes/danfse` ou
+   `/municipios/danfse`, e não na raiz.
 
 O ambiente onde isto foi escrito não alcança `gov.br`, então nada disso pôde ser
 conferido. O cliente foi construído para essa incerteza:
@@ -102,6 +111,10 @@ conferido. O cliente foi construído para essa incerteza:
 - **403 e 401 explicam a hipótese mais provável** — o manual dos municípios — em
   vez de um "acesso negado" que manda procurar no lugar errado.
 - **501 diz que o endereço mudou** e aponta para `--url`.
+- **404 nomeia as duas causas possíveis** — serviço fora desse endereço, ou
+  nota ausente do ADN — e sugere os dois prefixos alternativos, montados a
+  partir do `--url` em uso. Um 404 que dissesse só "NFS-e não encontrada"
+  mandaria procurar a nota quando o problema é o caminho.
 - **`--url` existe** para que um endereço errado seja contornável sem esperar uma
   versão nova.
 

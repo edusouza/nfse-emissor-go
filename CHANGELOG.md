@@ -60,6 +60,12 @@ Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
   produção restrita, que está escrito no 501 da própria Sefin.
   O cliente foi feito para isso: nunca grava um corpo que não comece com
   `%PDF-`, e um 403 explica essa hipótese em vez de dizer só "acesso negado".
+- **A página de documentação do serviço responde 404** — `.../danfse/docs/index.html`,
+  o endereço que o 501 da Sefin indica, não existe mais. As demais áreas do ADN
+  seguem `/{área}/docs/index.html` e existem, então o serviço pode estar sob
+  `/contribuintes/danfse` ou `/municipios/danfse`. O erro de 404 do comando
+  sugere os dois e distingue "serviço fora desse endereço" de "nota não está no
+  ADN", que o status sozinho não separa.
 - A substituição foi exercitada contra o XSD e ponta a ponta na geração do XML,
   mas **não contra a Sefin**. Como toda emissão, o veredito final é do governo.
 
