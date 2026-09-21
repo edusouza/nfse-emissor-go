@@ -71,6 +71,44 @@ type DPSProvider struct {
 	SimplesApuracao int
 }
 
+// Substitution reason codes, from TSCodJustSubst.
+//
+// They are not the cancellation codes: TSCodJustCanc runs 1, 2, 9 and answers
+// "why is this note void", while these run 01..05 and 99 and answer "why is a
+// different note taking its place". Mixing them up produces a DPS the schema
+// refuses.
+const (
+	// SubstReasonLeftSimples is "Desenquadramento de NFS-e do Simples Nacional".
+	SubstReasonLeftSimples = "01"
+
+	// SubstReasonJoinedSimples is "Enquadramento de NFS-e no Simples Nacional".
+	SubstReasonJoinedSimples = "02"
+
+	// SubstReasonExemptionAdded is "Inclusão Retroativa de Imunidade/Isenção".
+	SubstReasonExemptionAdded = "03"
+
+	// SubstReasonExemptionRemoved is "Exclusão Retroativa de Imunidade/Isenção".
+	SubstReasonExemptionRemoved = "04"
+
+	// SubstReasonRejected is "Rejeição de NFS-e pelo tomador ou pelo
+	// intermediário se responsável pelo recolhimento do tributo".
+	SubstReasonRejected = "05"
+
+	// SubstReasonOther is "Outros".
+	SubstReasonOther = "99"
+)
+
+// ValidSubstReason reports whether a code is one TSCodJustSubst admits.
+func ValidSubstReason(code string) bool {
+	switch code {
+	case SubstReasonLeftSimples, SubstReasonJoinedSimples,
+		SubstReasonExemptionAdded, SubstReasonExemptionRemoved,
+		SubstReasonRejected, SubstReasonOther:
+		return true
+	}
+	return false
+}
+
 // DPSSubstitution identifies the NFS-e being replaced by this DPS.
 type DPSSubstitution struct {
 	// AccessKey is the 50-character key of the NFS-e being replaced.

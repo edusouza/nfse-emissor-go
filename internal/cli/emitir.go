@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/query"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/validation"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
@@ -39,6 +41,10 @@ type emitirFlags struct {
 	descontoCondicionado   float64
 	deducoes               float64
 	issAliquota            float64
+
+	substitui      string
+	motivoSubst    string
+	motivoSubstTxt string
 
 	retencao     string
 	tomadorCNPJ  string
@@ -101,6 +107,10 @@ confirmacao no terminal; use --confirmar para dispensa-la em scripts.`,
 	fl.Float64Var(&f.issAliquota, "iss-aliquota", 0, "aliquota de ISS em porcentagem")
 	fl.StringVar(&f.retencao, "retencao", "", "retencao do ISSQN: nao | tomador | intermediario")
 
+	fl.StringVar(&f.substitui, "substitui", "", "chave de acesso da NFS-e que esta nota substitui (50 digitos)")
+	fl.StringVar(&f.motivoSubst, "motivo", "", "motivo da substituicao: "+substReasonList())
+	fl.StringVar(&f.motivoSubstTxt, "motivo-texto", "", "descricao livre do motivo da substituicao")
+
 	fl.StringVar(&f.tomadorCNPJ, "tomador-cnpj", "", "CNPJ do tomador")
 	fl.StringVar(&f.tomadorCPF, "tomador-cpf", "", "CPF do tomador")
 	fl.StringVar(&f.tomadorNome, "tomador-nome", "", "nome do tomador")
@@ -148,7 +158,12 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return err
 	}
 
-	built, err := buildDPS(cfg, nota)
+	subst, err := substitutionFromFlags(f)
+	if err != nil {
+		return err
+	}
+
+	built, err := buildDPS(cfg, nota, subst)
 	if err != nil {
 		return err
 	}
@@ -328,8 +343,71 @@ func notaFromFlags(cmd *cobra.Command, f *emitirFlags) config.Nota {
 	return override
 }
 
+// substReasons maps the flag values a person types onto TSCodJustSubst.
+//
+// They are deliberately not the words `nfse cancelar` uses: a substitution
+// answers a different question, and reusing "erro-emissao" here would invite
+// sending a cancellation code that the schema refuses.
+var substReasons = map[string]string{
+	"saiu-do-simples":       xmlbuilder.SubstReasonLeftSimples,
+	"entrou-no-simples":     xmlbuilder.SubstReasonJoinedSimples,
+	"incluiu-isencao":       xmlbuilder.SubstReasonExemptionAdded,
+	"excluiu-isencao":       xmlbuilder.SubstReasonExemptionRemoved,
+	"recusada-pelo-tomador": xmlbuilder.SubstReasonRejected,
+	"outros":                xmlbuilder.SubstReasonOther,
+}
+
+// substReasonList renders the accepted values in a stable order, for the flag
+// help and for the error message.
+func substReasonList() string {
+	nomes := make([]string, 0, len(substReasons))
+	for nome := range substReasons {
+		nomes = append(nomes, nome)
+	}
+	sort.Slice(nomes, func(i, j int) bool { return substReasons[nomes[i]] < substReasons[nomes[j]] })
+	return strings.Join(nomes, " | ")
+}
+
+// substitutionFromFlags builds the subst element, or nil for an ordinary
+// emission.
+//
+// A substitution is a whole new DPS that points at the note it replaces — not
+// an event, which is what cancellation is. The key and the reason travel
+// together: neither alone says anything the government can act on.
+func substitutionFromFlags(f *emitirFlags) (*xmlbuilder.DPSSubstitution, error) {
+	chave := strings.TrimSpace(f.substitui)
+	motivo := strings.TrimSpace(f.motivoSubst)
+
+	if chave == "" {
+		if motivo != "" || strings.TrimSpace(f.motivoSubstTxt) != "" {
+			return nil, fmt.Errorf("--motivo so vale com --substitui;\n" +
+				"para cancelar uma nota use 'nfse cancelar <chave> --motivo ...'")
+		}
+		return nil, nil
+	}
+
+	if err := query.ValidateAccessKey(chave); err != nil {
+		return nil, fmt.Errorf("--substitui: %w", err)
+	}
+	if motivo == "" {
+		return nil, fmt.Errorf("informe --motivo junto com --substitui: %s", substReasonList())
+	}
+
+	codigo, ok := substReasons[motivo]
+	if !ok {
+		return nil, fmt.Errorf("--motivo %q nao e um motivo de substituicao;\nuse um de: %s",
+			motivo, substReasonList())
+	}
+
+	return &xmlbuilder.DPSSubstitution{
+		AccessKey:  strings.TrimSpace(chave),
+		ReasonCode: codigo,
+		ReasonText: strings.TrimSpace(f.motivoSubstTxt),
+	}, nil
+}
+
 // buildDPS translates the resolved settings into the XML builder's shape.
-func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult, error) {
+func buildDPS(cfg *config.Config, nota config.Nota, substitution *xmlbuilder.DPSSubstitution) (*xmlbuilder.DPSBuildResult, error) {
 	competencia, err := nota.CompetenciaDate()
 	if err != nil {
 		return nil, err
@@ -349,7 +427,7 @@ func buildDPS(cfg *config.Config, nota config.Nota) (*xmlbuilder.DPSBuildResult,
 		CompetenceDate:     competencia,
 		EmitterType:        xmlbuilder.EmitterTypeProvider,
 		MunicipalityCode:   cfg.Prestador.Municipio,
-		// Substitution stays nil: this is an ordinary emission, not a replacement.
+		Substitution:       substitution,
 		Provider: xmlbuilder.DPSProvider{
 			CNPJ:                  cfg.Prestador.CNPJ,
 			Name:                  cfg.Prestador.Nome,

@@ -45,6 +45,7 @@ internal/
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo
+    adn/                   Ambiente de Dados Nacional (DANFSe em PDF)
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
 pkg/                       utilidades reutilizáveis fora do projeto
   xmlbuilder/              montagem do XML da DPS

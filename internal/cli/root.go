@@ -30,6 +30,7 @@ Nacional. Cada etapa pode ser executada isoladamente.`,
 		newConsultarCommand(),
 		newEnviarCommand(),
 		newCancelarCommand(),
+		newDanfseCommand(),
 		newNumeroCommand(),
 	)
 

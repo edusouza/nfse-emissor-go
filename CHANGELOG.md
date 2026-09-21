@@ -13,6 +13,56 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.7.0] - 2026-09-21
+
+Fecha as duas lacunas que faltavam no ciclo de vida de uma nota: **substituir**
+e **entregar o PDF ao cliente**.
+
+Nenhuma das duas exigiu dependência nova, e as duas estavam mais perto do que o
+roadmap sugeria — uma porque metade já estava escrita e desligada, a outra
+porque quem gera o PDF é o governo.
+Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
+
+### Adicionado
+
+- **`nfse emitir --substitui <chave> --motivo <nome>`** — emite uma nota que
+  substitui outra. Não é comando próprio porque substituição **não é evento**:
+  o cancelamento é um pedido de registro de evento, a substituição é uma DPS
+  nova que aponta para a nota que troca, com todos os dados de uma emissão
+  inteira. `--motivo-texto` acrescenta a descrição livre.
+- Os nomes dos motivos são propositalmente diferentes dos do `cancelar`, porque
+  os conjuntos de códigos são disjuntos: `saiu-do-simples`, `entrou-no-simples`,
+  `incluiu-isencao`, `excluiu-isencao`, `recusada-pelo-tomador` e `outros`
+  (`TSCodJustSubst` 01..05 e 99). Mandar um código de cancelamento aqui produz
+  uma DPS que o schema recusa, então o comando recusa antes.
+- **`nfse danfse <chave>`** — baixa o PDF da NFS-e e grava em `notas/`. O
+  emissor não desenha o documento: o serviço fica no Ambiente de Dados Nacional
+  e gera o PDF a partir do XML que o governo já tem. Sem biblioteca de PDF, sem
+  leiaute para manter, sem QR Code para gerar.
+- `--url` no `nfse danfse`, para apontar o serviço a outro endereço.
+
+### Alterado
+
+- **A validação estrutural do `subst` passou a conferir os tipos**, e não só a
+  presença. A chave vai pela mesma regra de 50 dígitos que o resto do projeto
+  usa, e o motivo pela enumeração do XSD. Antes, um código de cancelamento
+  (`"1"`) passava: é uma string não vazia.
+- O `subst` deixa de ser código inalcançável. O `pkg/xmlbuilder` montava o
+  elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia — o próprio
+  `emitir.go` dizia isso num comentário.
+
+### Problemas conhecidos
+
+- **A DANFSe não foi exercitada contra o serviço real.** A API é descrita no
+  manual dos **municípios**; o manual dos contribuintes não a menciona e o
+  swagger de contribuinte não a traz, então não se sabe se o certificado de um
+  prestador é aceito. O host de produção (`adn.nfse.gov.br`) é inferido do de
+  produção restrita, que está escrito no 501 da própria Sefin.
+  O cliente foi feito para isso: nunca grava um corpo que não comece com
+  `%PDF-`, e um 403 explica essa hipótese em vez de dizer só "acesso negado".
+- A substituição foi exercitada contra o XSD e ponta a ponta na geração do XML,
+  mas **não contra a Sefin**. Como toda emissão, o veredito final é do governo.
+
 ## [0.6.0] - 2026-09-21
 
 Menos digitação para começar, e o fim do último campo obrigatório que nenhuma

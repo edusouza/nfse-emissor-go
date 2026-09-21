@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
+
+	"github.com/edusouza/nfse-emissor-go/internal/domain/query"
+	"github.com/edusouza/nfse-emissor-go/pkg/xmlbuilder"
 )
 
 // XSD validation error types.
@@ -475,6 +478,32 @@ func (v *StructuralValidator) validateSubst(infDPS *etree.Element) []StructuralE
 				Code:    XSDErrorMissingElement,
 				Element: "infDPS/subst/" + req.name,
 				Message: fmt.Sprintf("required element for %s not found", req.desc),
+			})
+		}
+	}
+
+	// Both children are typed, and a well-formed-looking value of the wrong
+	// shape is what the Sefin rejects: chSubstda is TSChaveNFSe ([0-9]{50}) and
+	// cMotivo is an enumeration. Checking only that they are present would let
+	// a cancellation reason code through, since "1" is a non-empty string.
+	if chave := subst.FindElement("chSubstda"); chave != nil {
+		if texto := strings.TrimSpace(chave.Text()); texto != "" {
+			if err := query.ValidateAccessKey(texto); err != nil {
+				errors = append(errors, StructuralError{
+					Code:    XSDErrorInvalidFormat,
+					Element: "infDPS/subst/chSubstda",
+					Message: fmt.Sprintf("access key of the replaced NFS-e: %v", err),
+				})
+			}
+		}
+	}
+
+	if motivo := subst.FindElement("cMotivo"); motivo != nil {
+		if texto := strings.TrimSpace(motivo.Text()); texto != "" && !xmlbuilder.ValidSubstReason(texto) {
+			errors = append(errors, StructuralError{
+				Code:    XSDErrorInvalidFormat,
+				Element: "infDPS/subst/cMotivo",
+				Message: fmt.Sprintf("substitution reason %q is not one of TSCodJustSubst (01..05, 99)", texto),
 			})
 		}
 	}
