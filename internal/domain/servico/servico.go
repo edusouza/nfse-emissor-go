@@ -24,7 +24,7 @@ import (
 // Anexo names the government spreadsheet lista.csv was generated from. It is
 // quoted in the CLI so that a code refused by the Sefin can be checked against
 // the version this binary carries.
-const Anexo = "ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL-SNNFSe-v1.00-20251210.xlsx"
+const Anexo = "anexo_b-nbs2-lista_servico_nacional-snnfse-v1-01-20260122.xlsx"
 
 //go:embed lista.csv
 var listaCSV string

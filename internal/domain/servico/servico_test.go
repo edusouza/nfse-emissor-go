@@ -11,11 +11,11 @@ import (
 func TestListaTemOsCodigosDoAnexo(t *testing.T) {
 	todos := Todos()
 
-	// The annex has 335 leaf codes. Asserting the count catches a generator
+	// The annex has 338 leaf codes (v1.01 added three to v1.00's 335). Asserting the count catches a generator
 	// that silently dropped rows — the shape of failure this file already had
 	// once, when a styled cell arrived split into runs and read as empty.
-	if len(todos) != 335 {
-		t.Fatalf("lista tem %d codigos, esperava 335", len(todos))
+	if len(todos) != 338 {
+		t.Fatalf("lista tem %d codigos, esperava 338", len(todos))
 	}
 
 	visto := make(map[string]bool, len(todos))

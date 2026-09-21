@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	annex         = "../../../docs/anexos/ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL-SNNFSe-v1.00-20251210.xlsx"
+	annex         = "../../../docs/anexos/anexo_b-nbs2-lista_servico_nacional-snnfse-v1-01-20260122.xlsx"
 	defaultOutput = "lista.csv"
 
 	// sheet holds the national service list. The workbook's second sheet is

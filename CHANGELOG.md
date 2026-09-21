@@ -51,6 +51,31 @@ Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
   elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia — o próprio
   `emitir.go` dizia isso num comentário.
 
+### Documentação oficial atualizada
+
+Os artefatos do governo foram atualizados a partir da página de documentação
+atual, e o que eles dizem vale mais que qualquer resumo de terceiros:
+
+- **Existe um pacote de schemas `v1.01`, de 09/02/2026** — e ele **traz 1.00 e
+  1.01 lado a lado**. No `infDPS`, a 1.01 acrescenta **um único elemento**,
+  `IBSCBS`, e ele é **opcional**; nada foi removido nem virou obrigatório. O
+  `TVerNFSe` da 1.01 aceita `1.00|1.01`, ou seja: **o documento que este
+  emissor gera continua válido pelo schema atual.** Foi o que a emissão real de
+  18/09 já tinha demonstrado na prática.
+- **A lista nacional de serviços foi para `v1.01` (22/01/2026): 338 códigos**,
+  três a mais que os 335 embutidos. Entraram `141403` e `141404` (guincho e
+  guindaste em construção civil) e `200102` (serviços portuários em águas
+  marinhas); a descrição de `200101` passou a dizer "prestado em terra".
+  Nenhum código foi removido. O `lista.csv` foi regerado do anexo novo.
+- **O ANEXO I de regras passou de 322 para 441 códigos de rejeição.** Nenhuma
+  das regras que o emissor trata hoje foi removida; as novas concentram-se na
+  faixa E09xx, da reforma tributária.
+- **A API DANFSe continua documentada como serviço ativo.** O manual do ADN
+  baixado da página atual descreve `GET /danfse/{chaveAcesso}` nos mesmos
+  termos de antes — e é, byte a byte, o mesmo arquivo que já estava no
+  repositório. Não há Nota Técnica entre os documentos publicados que a
+  desligue, e o manual dos contribuintes continua sem mencioná-la.
+
 ### Problemas conhecidos
 
 - **A DANFSe não foi exercitada contra o serviço real.** A API é descrita no
