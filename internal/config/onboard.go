@@ -24,10 +24,37 @@ type Onboarded struct {
 	Municipio          string
 	Serie              string
 
+	// Servico is cTribNac, and ServicoDescricao the official text of that
+	// code, written as a comment so the file says what the six digits mean.
+	Servico          string
+	ServicoDescricao string
+
+	// SugestoesServico are candidate codes ranked from the provider's CNAE and
+	// written commented out, for the user to uncomment one.
+	//
+	// They are never filled in. The CNAE is the Receita Federal's economic
+	// activity classification and cTribNac is the service list of LC 116/2003:
+	// two taxonomies with no official correspondence, so this is a ranking of
+	// words. A wrong code here would go on every invoice and only surface at a
+	// rejection — or not at all.
+	SugestoesServico []SugestaoServico
+
+	// CNAE and CNAEDescricao say what the suggestions were derived from, so
+	// that a bad list can be recognized as a bad starting point rather than as
+	// a bad law.
+	CNAE          string
+	CNAEDescricao string
+
 	// Origens are the "campo: fonte" lines written into the file's header, so
 	// that whoever reads it later knows which values were looked up and which
 	// were typed.
 	Origens []string
+}
+
+// SugestaoServico is one candidate cTribNac written into the generated file.
+type SugestaoServico struct {
+	Codigo    string
+	Descricao string
 }
 
 // RenderOnboarded produces an annotated nfse.yaml with the discovered values

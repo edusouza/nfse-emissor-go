@@ -333,3 +333,125 @@ func TestOnboardProcedenciaNaoDuplica(t *testing.T) {
 		t.Errorf("prestador.nome aparece %d vezes no cabecalho, esperava 1:\n%s", n, data)
 	}
 }
+
+// respostaTI is the registry answer for a software provider: the CNAE is the
+// only thing it says about what the company does.
+const respostaTI = `{
+	"cnpj": "12345678000195",
+	"razao_social": "EMPRESA TESTE LTDA",
+	"municipio": "CURITIBA",
+	"uf": "PR",
+	"codigo_municipio_ibge": 4106902,
+	"descricao_situacao_cadastral": "ATIVA",
+	"cnae_fiscal": 6209100,
+	"cnae_fiscal_descricao": "Suporte técnico, manutenção e outros serviços em tecnologia da informação",
+	"opcao_pelo_mei": true,
+	"opcao_pelo_simples": true
+}`
+
+// The CNAE cannot decide the service code, but it can rank candidates. They go
+// into the file commented out, and the field stays empty: a wrong cTribNac
+// would ride on every invoice.
+func TestOnboardSugereServicoPeloCNAE(t *testing.T) {
+	srv := registroFake(t, http.StatusOK, respostaTI)
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--fonte", srv.URL, "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "010701") {
+		t.Errorf("a saida nao sugere 010701 para o CNAE 6209-1/00:\n%s", out)
+	}
+	if !strings.Contains(out, "nao um mapeamento oficial") {
+		t.Errorf("a saida apresenta a sugestao sem dizer que e palpite:\n%s", out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gerado := string(data)
+
+	if !strings.Contains(gerado, `codigo_tributacao_nacional: ""`) {
+		t.Errorf("a sugestao nao pode preencher o campo:\n%s", gerado)
+	}
+	for _, want := range []string{"#   010701", "CNAE 6209-1/00", "nfse servico buscar"} {
+		if !strings.Contains(gerado, want) {
+			t.Errorf("faltou %q no arquivo gerado:\n%s", want, gerado)
+		}
+	}
+}
+
+// Knowing the code is the normal case once the user has looked it up, and then
+// nothing is left to guess.
+func TestOnboardComServicoInformado(t *testing.T) {
+	srv := registroFake(t, http.StatusOK, respostaTI)
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	// Without the leading zero, which is how a spreadsheet shows it.
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--servico", "10701",
+		"--fonte", srv.URL, "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gerado := string(data)
+
+	if !strings.Contains(gerado, `codigo_tributacao_nacional: "010701"`) {
+		t.Errorf("o codigo informado nao foi gravado:\n%s", gerado)
+	}
+	if !strings.Contains(gerado, "Suporte") {
+		t.Errorf("o arquivo nao diz o que o codigo significa:\n%s", gerado)
+	}
+	if !strings.Contains(gerado, "padroes.servico.codigo_tributacao_nacional: --servico") {
+		t.Errorf("a origem do codigo nao foi registrada no cabecalho:\n%s", gerado)
+	}
+	if strings.Contains(out, "Falta preencher") &&
+		strings.Contains(out, "codigo_tributacao_nacional — 6 digitos") {
+		t.Errorf("o codigo informado nao deveria continuar pendente:\n%s", out)
+	}
+}
+
+func TestOnboardRecusaServicoForaDaLista(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--sem-rede",
+		"--servico", "999999", "--arquivo", path)
+	if err == nil {
+		t.Fatalf("esperava erro para um codigo fora da lista\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "nao esta na lista nacional") {
+		t.Errorf("erro = %q", err)
+	}
+	if _, statErr := os.Stat(path); statErr == nil {
+		t.Error("o arquivo nao deveria ter sido criado")
+	}
+}
+
+// Without the lookup there is no CNAE, so there is nothing to rank — and the
+// user gets the command that searches instead of a silence.
+func TestOnboardSemRedeApontaABusca(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t, "--cnpj", onboardCNPJ, "--sem-rede", "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "nfse servico buscar") {
+		t.Errorf("a saida nao diz como achar o codigo:\n%s", out)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "Candidatos a partir do CNAE") {
+		t.Errorf("sem consulta nao ha CNAE para sugerir de:\n%s", data)
+	}
+}

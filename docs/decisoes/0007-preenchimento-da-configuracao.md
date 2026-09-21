@@ -78,6 +78,8 @@ prefere o modelo em branco.
   `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
   Ele depende do que a pessoa faz, não de quem ela é. Está registrado na
   [issue #10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+  *Resolvido pela [ADR 0009](0009-lista-de-servicos-embutida.md), que embute a
+  lista nacional e ensina o `onboard` a procurar junto — sem preencher.*
 - Nenhuma dependência nova: o cliente é `net/http` e `encoding/json`. Num
   binário que lida com certificado digital, cada dependência é superfície.
 - O emissor passa a ter um caminho de rede que não é o governo. Ele é opcional,

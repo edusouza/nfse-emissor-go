@@ -7,7 +7,7 @@ Os arquivos aqui descrevem um **MEI de desenvolvimento de software em
 Curitiba**. Os dados são fictícios mas consistentes: o CNPJ tem dígitos
 verificadores válidos, `4106902` é o código de Curitiba na tabela do IBGE
 (`docs\anexos\ANEXO_A-...`) e `010101` é "Análise e desenvolvimento de
-sistemas" na lista nacional de serviços (`docs\anexos\ANEXO_B-...`).
+sistemas" na lista nacional de serviços — `nfse servico ver 010101` confirma.
 
 Funciona tanto no **Windows PowerShell 5.1** (o que já vem no Windows) quanto
 no **PowerShell 7+**.

@@ -13,6 +13,60 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+Fecha o último campo obrigatório que nenhuma consulta respondia: o código de
+tributação nacional do serviço (`cTribNac`).
+
+A pergunta que originou esta parte foi *"fiz o onboarding pelo certificado, mas
+ficou faltando o código de tributação nacional — como usar o CNAE primário?"*.
+Não dá: o CNAE classifica a atividade econômica da **empresa** para a Receita
+Federal, e o `cTribNac` classifica o **serviço** para efeito de ISS, segundo a
+LC 116/2003. Duas taxonomias, finalidades diferentes, nenhuma correspondência
+oficial — o `ANEXO_B` tem 335 códigos e nenhuma coluna de CNAE. O que dá para
+fazer é procurar junto, e é o que foi feito.
+
+### Adicionado
+
+- **A lista nacional de serviços embutida no binário** — os 335 códigos da
+  LC 116/2003, gerados do `ANEXO_B` que já estava em `docs/anexos/` por um
+  programa versionado junto. Sem dependência nova: um `.xlsx` é um zip de XML,
+  e `archive/zip` mais `encoding/xml` bastam. A consulta é local e funciona sem
+  rede. Ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
+- **`nfse servico buscar <termo>`** — procura o código pela descrição do
+  serviço, sem acento e no plural se for o caso. A busca pesa cada palavra pela
+  raridade dela na lista: "serviços" e "congêneres" aparecem em quase todo
+  código e não separam nada.
+- **`nfse servico ver <codigo>`** e **`nfse servico listar [item]`** — o que um
+  código significa, e os 41 itens da lei para quem não acerta a palavra que a
+  lista usa ("aula" está lá como "ensino").
+- **`nfse onboard --servico <codigo>`**, conferido contra a lista antes de
+  gravar, com a descrição oficial escrita como comentário ao lado do código.
+- **Sugestões de `cTribNac` no `onboard`**, ordenadas a partir do CNAE que o
+  cadastro público informa. Vão para a tela e para o `nfse.yaml`
+  **comentadas**, junto com o CNAE que as gerou e a ressalva de que são
+  palpite — o campo continua vazio. O motivo está na ADR: a expressão
+  "tecnologia da informação" aparece literalmente dentro de um código de
+  rastreamento veicular, e um emissor que escolhesse sozinho poria esse código
+  em toda nota de uma empresa de software **sem gerar rejeição nenhuma**.
+
+### Alterado
+
+- **`nfse config check` diz o que o código de serviço significa**, e avisa —
+  sem recusar — quando o `cTribNac` configurado não está na lista embutida. A
+  lista é lei federal e cresce; a cópia embutida é um anexo datado, e recusar
+  um código que o governo já publicou seria pior que não conferir.
+- A lista de pendências do `onboard` deixa de citar o código de serviço quando
+  ele foi informado, e quebra linha em vez de estourar o terminal.
+
+### Verificação
+
+- Um teste regenera o `lista.csv` a partir do anexo e compara byte a byte: o
+  arquivo embutido só vale enquanto reproduzir a planilha oficial.
+- Um teste em `internal/docs` recusa qualquer `cTribNac` citado na documentação
+  que não exista na lista — o mesmo tratamento que as chaves de acesso já
+  tinham desde que o README publicou uma com 47 dígitos.
+
+Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+
 ## [0.6.0] - 2026-09-18
 
 Menos digitação para começar. O emissor passa a montar a própria configuração a
@@ -61,6 +115,7 @@ arquivo em branco com cinco campos obrigatórios.
 - Sobra um campo obrigatório que nenhuma consulta responde:
   `codigo_tributacao_nacional`, o código do serviço na lista da LC 116/2003.
   Ver [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+  *Resolvido em [Não lançado](#não-lançado).*
 ## [0.5.2] - 2026-09-18
 
 **A primeira versão que emitiu uma NFS-e de verdade.** Em produção restrita, o

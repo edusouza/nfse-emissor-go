@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/brasilapi"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
@@ -28,6 +29,18 @@ type onboardData struct {
 	municipio string
 	regime    string
 	origens   []string
+
+	// servico is cTribNac, and it is the one field nothing can discover:
+	// it says what the provider does, and only the provider knows that. It is
+	// filled from --servico or left blank.
+	servico servico.Servico
+
+	// cnae and sugestoes carry the registry's activity code and the codes it
+	// resembles, which go into the file commented out for the user to pick
+	// from. See config.Onboarded.SugestoesServico for why they stay comments.
+	cnae      string
+	cnaeDesc  string
+	sugestoes []servico.Resultado
 }
 
 // origem records where a field came from, replacing an earlier answer for the
@@ -48,15 +61,16 @@ func (d *onboardData) origem(campo, fonte string) {
 
 func newOnboardCommand() *cobra.Command {
 	var (
-		certFile string
-		password string
-		cnpjFlag string
-		path     string
-		serie    string
-		ambiente string
-		semRede  bool
-		fonte    string
-		force    bool
+		certFile    string
+		password    string
+		cnpjFlag    string
+		servicoFlag string
+		path        string
+		serie       string
+		ambiente    string
+		semRede     bool
+		fonte       string
+		force       bool
 	)
 
 	cmd := &cobra.Command{
@@ -72,6 +86,13 @@ municipio e regime tributario.
 A consulta envia o seu CNPJ para um servico de terceiros. O comando avisa antes
 de sair para a rede e ` + "`--sem-rede`" + ` desliga a consulta: nesse caso o arquivo sai
 com o que o certificado informa.
+
+O codigo de tributacao nacional do servico (cTribNac) e o unico campo que
+nenhuma consulta responde: ele depende do que voce presta, nao de quem voce e.
+Informe em --servico se ja souber; senao, o comando usa o CNAE do cadastro para
+sugerir candidatos, e deixa a escolha para voce. Para procurar:
+
+  nfse servico buscar "o que voce faz"
 
 Nada aqui e obrigatorio para emitir: tudo que o comando preenche pode ser
 escrito a mao no nfse.yaml.`,
@@ -103,6 +124,16 @@ escrito a mao no nfse.yaml.`,
 
 			out := cmd.OutOrStdout()
 			data := &onboardData{}
+
+			if servicoFlag != "" {
+				s, ok := servico.PorCodigo(servicoFlag)
+				if !ok {
+					return fmt.Errorf("--servico %q nao esta na lista nacional (%s);\n"+
+						"procure o codigo com 'nfse servico buscar <termo>'", servicoFlag, servico.Anexo)
+				}
+				data.servico = s
+				data.origem("padroes.servico.codigo_tributacao_nacional", "--servico")
+			}
 
 			if certFile != "" {
 				pass, err := resolveCertPassword(password, cmd.Flags().Changed("senha"), cmd.ErrOrStderr())
@@ -141,6 +172,8 @@ escrito a mao no nfse.yaml.`,
 				lookupRegistry(cmd.Context(), out, cmd.ErrOrStderr(), data, fonte)
 			}
 
+			sugerirServico(out, data)
+
 			rendered, err := config.RenderOnboarded(config.Onboarded{
 				Ambiente:           ambiente,
 				CertificadoArquivo: certFile,
@@ -149,6 +182,11 @@ escrito a mao no nfse.yaml.`,
 				RegimeTributario:   data.regime,
 				Municipio:          data.municipio,
 				Serie:              serie,
+				Servico:            data.servico.Codigo,
+				ServicoDescricao:   umaLinha(data.servico.Descricao, comentarioLargura),
+				SugestoesServico:   sugestoesParaOArquivo(data.sugestoes),
+				CNAE:               formatCNAE(data.cnae),
+				CNAEDescricao:      umaLinha(data.cnaeDesc, comentarioLargura),
 				Origens:            data.origens,
 			})
 			if err != nil {
@@ -168,6 +206,7 @@ escrito a mao no nfse.yaml.`,
 	cmd.Flags().StringVarP(&certFile, "certificado", "c", "", "certificado A1 (.pfx/.p12) de onde ler o CNPJ")
 	cmd.Flags().StringVarP(&password, "senha", "s", "", "senha do certificado (prefira "+envCertPassword+")")
 	cmd.Flags().StringVar(&cnpjFlag, "cnpj", "", "CNPJ do prestador, se preferir informar direto")
+	cmd.Flags().StringVar(&servicoFlag, "servico", "", "codigo de tributacao nacional (cTribNac), 6 digitos")
 	cmd.Flags().StringVarP(&path, "arquivo", "a", config.DefaultFileName, "caminho do arquivo a criar")
 	cmd.Flags().StringVar(&serie, "serie", "00001", "serie da DPS, 5 digitos")
 	cmd.Flags().StringVar(&ambiente, "ambiente", config.EnvProducaoRestrita, "producao-restrita | producao")
@@ -273,6 +312,12 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 		data.origem("prestador.regime_tributario", fonte)
 	}
 
+	// The CNAE does not go into the file — it is not a field of the DPS. It is
+	// kept because it is the only thing the registry knows about what the
+	// provider does, and the service code has to come from somewhere.
+	data.cnae = empresa.CNAEFiscal.String()
+	data.cnaeDesc = strings.TrimSpace(empresa.CNAEFiscalDescricao)
+
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  Razao social\t%s\n", empresa.RazaoSocial)
 	if empresa.Municipio != "" {
@@ -280,6 +325,9 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	}
 	if data.regime != "" {
 		fmt.Fprintf(tw, "  Regime\t%s\n", data.regime)
+	}
+	if data.cnae != "" {
+		fmt.Fprintf(tw, "  Atividade\t%s %s\n", formatCNAE(data.cnae), data.cnaeDesc)
 	}
 	if empresa.DescricaoSituacaoCadastral != "" {
 		fmt.Fprintf(tw, "  Situacao\t%s\n", empresa.DescricaoSituacaoCadastral)
@@ -293,6 +341,68 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 		fmt.Fprintf(errOut, "aviso: a consulta nao informou a opcao pelo Simples Nacional; "+
 			"preencha prestador.regime_tributario a mao\n")
 	}
+}
+
+// comentarioLargura is how much of a description fits on one comment line of
+// the generated file without wrapping in an editor.
+const comentarioLargura = 64
+
+// sugestoesMax is how many candidates are offered. Three is a list someone
+// reads; ten is a list someone scrolls past.
+const sugestoesMax = 3
+
+// sugerirServico offers candidate cTribNac codes from the provider's CNAE.
+//
+// It never picks one. The CNAE classifies the company's economic activity for
+// the Receita Federal and cTribNac classifies the service for the ISS: there
+// is no official correspondence between the two, and no public service
+// converts one into the other. What is possible is to rank the national list
+// against the words of the CNAE description and let the person recognize their
+// own trade — which is also why the CNAE that produced the list is printed
+// with it.
+func sugerirServico(out io.Writer, data *onboardData) {
+	if data.servico.Codigo != "" {
+		fmt.Fprintf(out, "\nServico %s — %s\n", data.servico.Codigo,
+			umaLinha(data.servico.Descricao, larguraTexto-12))
+		return
+	}
+
+	if data.cnaeDesc == "" {
+		return
+	}
+
+	data.sugestoes = servico.SugerirPorCNAE(data.cnaeDesc, sugestoesMax)
+	if len(data.sugestoes) == 0 {
+		return
+	}
+
+	fmt.Fprintf(out, "\nCodigos de servico parecidos com a sua atividade (%s):\n", formatCNAE(data.cnae))
+	for _, r := range data.sugestoes {
+		fmt.Fprintf(out, "  %s  %s\n", r.Servico.Codigo, umaLinha(r.Servico.Descricao, larguraTexto-10))
+	}
+	fmt.Fprintf(out, "Sao palpites a partir do texto do CNAE, nao um mapeamento oficial.\n")
+	fmt.Fprintf(out, "Confira com 'nfse servico ver <codigo>' ou procure com 'nfse servico buscar'.\n")
+}
+
+// sugestoesParaOArquivo shortens the candidates to one comment line each.
+func sugestoesParaOArquivo(resultados []servico.Resultado) []config.SugestaoServico {
+	var out []config.SugestaoServico
+	for _, r := range resultados {
+		out = append(out, config.SugestaoServico{
+			Codigo:    r.Servico.Codigo,
+			Descricao: umaLinha(r.Servico.Descricao, comentarioLargura),
+		})
+	}
+	return out
+}
+
+// formatCNAE renders the activity code the way the Receita writes it:
+// 6209-1/00.
+func formatCNAE(cnae string) string {
+	if len(cnae) != 7 {
+		return cnae
+	}
+	return cnae[:4] + "-" + cnae[4:5] + "/" + cnae[5:]
 }
 
 // printPending lists what still has to be typed, in the order it will be
@@ -312,13 +422,27 @@ func printPending(out io.Writer, data *onboardData, certFile, path string) {
 	if data.regime == "" {
 		pending = append(pending, "prestador.regime_tributario — mei ou me_epp")
 	}
-	pending = append(pending,
-		"padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional (LC 116/2003)",
-		"padroes.servico.descricao — o que voce presta")
+	if data.servico.Codigo == "" {
+		linha := "padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional (LC 116/2003)"
+		if len(data.sugestoes) > 0 {
+			linha += fmt.Sprintf("; os candidatos acima estao no arquivo, comentados (o mais proximo e %s)",
+				data.sugestoes[0].Servico.Codigo)
+		} else {
+			linha += "; procure com 'nfse servico buscar <termo>'"
+		}
+		pending = append(pending, linha)
+	}
+	pending = append(pending, "padroes.servico.descricao — o que voce presta")
 
 	fmt.Fprintf(out, "\nFalta preencher em %s:\n", path)
 	for _, p := range pending {
-		fmt.Fprintf(out, "  - %s\n", p)
+		for i, linha := range quebrar(p, larguraTexto-4) {
+			prefixo := "  - "
+			if i > 0 {
+				prefixo = "    "
+			}
+			fmt.Fprintf(out, "%s%s\n", prefixo, linha)
+		}
 	}
 
 	fmt.Fprintf(out, "\nDepois:\n  nfse config check\n  nfse emitir --valor 100,00\n")

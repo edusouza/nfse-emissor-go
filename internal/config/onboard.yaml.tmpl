@@ -39,9 +39,27 @@ dps:
 padroes:
   servico:
     # Codigo de tributacao nacional, 6 digitos (LC 116/2003).   OBRIGATORIO
-    # Consulte a lista nacional de servicos em
-    # docs/anexos/ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL-SNNFSe-v1.00-20251210.xlsx
+{{- if .Servico }}
+    # {{ .ServicoDescricao }}
+    codigo_tributacao_nacional: {{ q .Servico }}
+{{- else }}
+    # Nenhuma consulta responde qual e o seu: o codigo depende do que voce
+    # presta, nao de quem voce e. Procure pela descricao:
+    #   nfse servico buscar "o que voce faz"
+{{- if .SugestoesServico }}
+    #
+    # O cadastro diz que a sua atividade principal e o CNAE {{ .CNAE }}:
+    #   {{ .CNAEDescricao }}
+    # Codigos de servico parecidos com ela:
+{{- range .SugestoesServico }}
+    #   {{ .Codigo }}  {{ .Descricao }}
+{{- end }}
+    #
+    # Isso e um palpite por palavras, nao um mapeamento oficial. Leia a
+    # descricao inteira com 'nfse servico ver <codigo>' antes de usar.
+{{- end }}
     codigo_tributacao_nacional: ""
+{{- end }}
     # Onde o servico e prestado. Se vazio, usa prestador.municipio.
     municipio_prestacao: ""
     # Descricao usada quando --descricao nao e informado.

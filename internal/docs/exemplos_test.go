@@ -8,11 +8,17 @@ import (
 	"testing"
 
 	"github.com/edusouza/nfse-emissor-go/internal/domain/query"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 )
 
 // longDigitRun matches any run of 20 or more digits, which in this repository's
 // documentation is always meant to be an NFS-e access key.
 var longDigitRun = regexp.MustCompile(`\b\d{20,}\b`)
+
+// serviceCodeInDocs matches a cTribNac where the documentation puts one: in
+// the configuration field or after the flag. Matching bare six-digit runs
+// instead would sweep up dates and amounts.
+var serviceCodeInDocs = regexp.MustCompile(`(?:codigo_tributacao_nacional:\s*"?|--servico\s+)(\d{6})`)
 
 // docFiles lists the documentation that shows commands a reader will copy.
 var docFiles = []string{
@@ -43,6 +49,40 @@ func TestAccessKeysInDocsAreValid(t *testing.T) {
 				if err := query.ValidateAccessKey(key); err != nil {
 					t.Errorf("%s documenta uma chave que o proprio nfse recusa:\n  %s\n  %v",
 						name, key, err)
+				}
+			}
+		})
+	}
+}
+
+// TestServiceCodesInDocsExist keeps the examples from teaching a code the
+// Sefin would reject.
+//
+// Six digits look right whatever they are: nothing in the emitter refuses a
+// well-formed cTribNac, and a reader copying one out of the README would only
+// find out at the rejection. The embedded list is the one thing that can tell.
+func TestServiceCodesInDocsExist(t *testing.T) {
+	root := repoRoot(t)
+
+	// The configuration files count too: they are copied as starting points,
+	// which makes a wrong code there worse than a wrong code in prose.
+	arquivos := append(append([]string{}, docFiles...),
+		"internal/config/exemplo.yaml",
+		"exemplos/nfse.yaml",
+		"exemplos/nota-consultoria.yaml",
+	)
+
+	for _, name := range arquivos {
+		t.Run(name, func(t *testing.T) {
+			content, err := os.ReadFile(filepath.Join(root, name))
+			if err != nil {
+				t.Fatalf("nao foi possivel ler %s: %v", name, err)
+			}
+
+			for _, match := range serviceCodeInDocs.FindAllStringSubmatch(string(content), -1) {
+				if _, ok := servico.PorCodigo(match[1]); !ok {
+					t.Errorf("%s documenta o cTribNac %s, que nao esta na lista nacional (%s)",
+						name, match[1], servico.Anexo)
 				}
 			}
 		})

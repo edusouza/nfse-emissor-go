@@ -57,6 +57,7 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | Comando | O que faz |
 |---------|-----------|
 | `nfse onboard` | cria o `nfse.yaml` já preenchido, a partir do certificado |
+| `nfse servico buscar` / `ver` / `listar` | acha o código do serviço (`cTribNac`) na lista nacional |
 | `nfse config init` / `check` | cria um `nfse.yaml` em branco e confere o que está preenchido |
 | `nfse cert info` | inspeciona o certificado A1 |
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
@@ -88,12 +89,21 @@ Consultando o CNPJ 12.345.678/0001-95 no cadastro publico da Receita Federal, vi
   Razao social  EMPRESA EXEMPLO LTDA
   Municipio     CURITIBA/PR (IBGE 4106902)
   Regime        mei
+  Atividade     6209-1/00 Suporte tecnico, manutencao e outros servicos em tecnologia da informacao
   Situacao      ATIVA
+
+Codigos de servico parecidos com a sua atividade (6209-1/00):
+  010701  Suporte tecnico em informatica, inclusive instalacao...
+  110501  Servicos relacionados ao monitoramento e rastreamento a...
+Sao palpites a partir do texto do CNAE, nao um mapeamento oficial.
+Confira com 'nfse servico ver <codigo>' ou procure com 'nfse servico buscar'.
 
 nfse.yaml criado.
 
 Falta preencher em nfse.yaml:
-  - padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional (LC 116/2003)
+  - padroes.servico.codigo_tributacao_nacional — 6 digitos da lista nacional
+    (LC 116/2003); os candidatos acima estao no arquivo, comentados (o mais
+    proximo e 010701)
   - padroes.servico.descricao — o que voce presta
 
 Depois:
@@ -102,8 +112,8 @@ Depois:
 ```
 
 O código IBGE do município — sete dígitos que ninguém sabe de cabeça — e a
-razão social exata vêm prontos. Sobra o código do serviço, que depende do que
-você presta ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)).
+razão social exata vêm prontos. Se você já sabe o código do serviço, passe
+`--servico 010701` e ele sai conferido e comentado no arquivo.
 
 Sem o certificado em mãos, `--cnpj 12345678000195` faz o mesmo caminho. E a
 consulta é opcional:
@@ -123,6 +133,41 @@ quem roda a própria instância do
 
 Quem prefere preencher tudo à mão continua com `nfse config init`, que escreve
 o mesmo arquivo em branco e comentado.
+
+### Achar o código do serviço
+
+O `cTribNac` é o único campo obrigatório que **nenhuma consulta responde**: ele
+diz o que você presta, não quem você é. O CNAE não serve para deduzi-lo — o
+CNAE classifica a atividade econômica da empresa para a Receita Federal, e o
+`cTribNac` classifica o serviço para efeito de ISS pela LC 116/2003. São duas
+taxonomias sem correspondência oficial, e o anexo do governo não tem coluna de
+CNAE.
+
+O que dá para fazer é procurar. Os 335 códigos da lista nacional estão
+embutidos no binário, então a busca é local:
+
+```bash
+nfse servico buscar suporte tecnico
+```
+
+```
+1 resultado para "suporte tecnico":
+
+  010701  (subitem 1.07 da LC 116/2003)
+    Suporte técnico em informática, inclusive instalação, configuração
+    e manutenção de programas de computação e bancos de dados.
+    item 1 — Serviços de Informática e congêneres.
+```
+
+A lista fala a língua da lei, que nem sempre é a do dia a dia: "aula" está lá
+como *ensino*, "software" como *programa de computação*. Quando a palavra não
+casa, o caminho é pelos grupos — `nfse servico listar` mostra os 41 itens da
+lei, e `nfse servico listar 1` abre os códigos de um deles.
+
+O `nfse config check` confirma depois o que os seis dígitos significam, e avisa
+se o código não estiver na lista que o binário carrega. Por quê, e por que o
+`onboard` sugere mas nunca preenche:
+[ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md).
 
 ### Verificar o certificado
 
@@ -420,7 +465,7 @@ Cancelar em `producao` pede confirmação no terminal — a operação é defini
 | v0.5.1 | Recusar certificado que não é do prestador, antes de assinar | lançada |
 | v0.5.2 | Seis correções, todas encontradas por rejeições reais da Sefin | lançada |
 | v0.6.0 | `nfse onboard`: configuração preenchida a partir do certificado | **lançada** |
-| v0.7.0 | Busca do código do serviço ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | planejado |
+| v0.7.0 | Busca do código do serviço, embutida no `onboard` ([#10](https://github.com/edusouza/nfse-emissor-go/issues/10)) | pronto |
 | v0.8.0 | Substituição de NFS-e | planejado |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal | planejado |
 
