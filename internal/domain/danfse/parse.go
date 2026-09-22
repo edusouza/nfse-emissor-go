@@ -37,7 +37,8 @@ const prefixoID = "NFS"
 // what `nfse emitir --enviar` saves — never the DPS that was sent: the DANFSe
 // represents the invoice that exists, and only the reply carries the access
 // key, the number and the status.
-func Parse(conteudo []byte) (*Documento, error) {
+// municipios may be nil, and then every municipality prints as its IBGE code.
+func Parse(conteudo []byte, municipios Municipios) (*Documento, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(conteudo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrXMLInvalido, err)
@@ -58,11 +59,17 @@ func Parse(conteudo []byte) (*Documento, error) {
 	return &Documento{
 		Cabecalho:     cabecalho(inf, infDPS, chave),
 		Identificacao: identificacao(inf, infDPS, chave),
-		Servico:       servico(inf, infDPS),
-		ISSQN:         issqn(inf, infDPS),
-		Federal:       federal(infDPS),
-		IBSCBS:        ibscbs(inf, infDPS),
-		Totais:        totais(inf, infDPS),
+
+		Prestador:     prestador(infDPS, municipios),
+		Tomador:       tomador(infDPS, municipios),
+		Destinatario:  destinatario(infDPS, municipios),
+		Intermediario: intermediario(infDPS, municipios),
+
+		Servico: servico(inf, infDPS),
+		ISSQN:   issqn(inf, infDPS),
+		Federal: federal(infDPS),
+		IBSCBS:  ibscbs(inf, infDPS),
+		Totais:  totais(inf, infDPS),
 
 		Complementares: complementares(inf, infDPS),
 		Canhoto:        Canhoto{Numero: limitar(juntar(" / ", texto(inf, "nNFSe"), chave), 66)},

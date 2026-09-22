@@ -6,7 +6,7 @@ import (
 )
 
 func TestParse_Servico(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestParse_Servico(t *testing.T) {
 }
 
 func TestParse_ISSQN(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestParse_ISSQN_NaoIncidencia(t *testing.T) {
 		conteudo := []byte(trocar(t, string(lerExemplo(t)),
 			"<tribISSQN>1</tribISSQN>", "<tribISSQN>"+caso.codigo+"</tribISSQN>"))
 
-		doc, err := Parse(conteudo)
+		doc, err := Parse(conteudo, nil)
 		if err != nil {
 			t.Fatalf("Parse devolveu erro: %v", err)
 		}
@@ -103,7 +103,7 @@ func TestParse_Federal_PisCofinsRetidos(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"</tribMun>", "</tribMun>\n            "+bloco))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestParse_Federal_PisCofinsNaoRetidos(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"</tribMun>", "</tribMun>\n            "+bloco))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestParse_Federal_PisCofinsNaoRetidos(t *testing.T) {
 }
 
 func TestParse_Totais(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestParse_Totais(t *testing.T) {
 // with nothing behind it prints a dash — not a zero, which would state a value
 // the invoice never carried.
 func TestParse_IBSCBS_AusenteViraTracos(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 // The line of the Lei 12.741/2012 is mandatory even when the invoice states no
 // estimate — indTotTrib = 0, which is what the example carries.
 func TestComplementares_LinhaDeTributosSempreSai(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestComplementares_TotaisEmValores(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"<totTrib>\n              <indTotTrib>0</indTotTrib>\n            </totTrib>", bloco))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestComplementares_TotaisEmPercentuais(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"<totTrib>\n              <indTotTrib>0</indTotTrib>\n            </totTrib>", bloco))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestComplementares_TotaisDoSimplesNacional(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"<indTotTrib>0</indTotTrib>", "<pTotTribSN>6.00</pTotTribSN>"))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestComplementares_NotaSubstituida(t *testing.T) {
 
 	conteudo := []byte(trocar(t, string(lerExemplo(t)), "<prest>", bloco+"\n        <prest>"))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestComplementares_NotaSubstituida(t *testing.T) {
 // A prefix with nothing after it would say the invoice mentions something it
 // does not.
 func TestComplementares_PrefixoSemValorNaoAparece(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestComplementares_PrefixoSemValorNaoAparece(t *testing.T) {
 }
 
 func TestCanhoto_NumeroEChave(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestCanhoto_NumeroEChave(t *testing.T) {
 // Nothing in the NFS-e says it was cancelled or replaced, so Parse never
 // invents a watermark: whoever prints has to state it.
 func TestParse_NaoInventaMarcaDagua(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}

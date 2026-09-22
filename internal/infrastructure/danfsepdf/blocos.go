@@ -182,3 +182,54 @@ func (p *pagina) marca(marca danfse.Marca) {
 
 	p.pdf.SetTextColor(0, 0, 0)
 }
+
+// pessoa draws one of the four blocks that name someone.
+//
+// A block with nobody in it collapses into the sentence notes 2 and 3 dictate,
+// filling the rows it would have used: leaving four empty boxes on the page
+// would suggest the invoice has fields nobody filled, when what it has is no
+// such person.
+func (p *pagina) pessoa(titulo string, dados danfse.Pessoa, linhas [3]float64, fim float64) {
+	inicio := linhas[0]
+
+	if dados.Mensagem != "" {
+		altura := fim - inicio
+		p.quadroSombreado(colunaA, inicio, larguraCorpo, altura)
+		p.caixa(colunaA, inicio, larguraCorpo, altura)
+		p.escrever(dados.Mensagem, colunaA+0.08, inicio+0.42, fonte, "B", corpoBloco)
+		return
+	}
+
+	p.titulo(titulo, inicio)
+	p.campo("CNPJ / CPF / NIF", dados.Documento, colunaB, inicio, colunaLargura, blocoAltura)
+	if titulo == tituloDestinatario {
+		// The recipient has no municipal registration in the leiaute; the
+		// telephone takes the column it would occupy elsewhere.
+		p.campo("Telefone", dados.Telefone, colunaD, inicio, colunaLargura, blocoAltura)
+		p.caixa(colunaC, inicio, colunaLargura, blocoAltura)
+	} else {
+		p.campo("Indicador Municipal (Inscrição)", dados.InscricaoMunicipal, colunaC, inicio, colunaLargura, blocoAltura)
+		p.campo("Telefone", dados.Telefone, colunaD, inicio, colunaLargura, blocoAltura)
+	}
+
+	linha2 := linhas[1]
+	p.campo("Nome / Nome Empresarial", dados.Nome, colunaA, linha2, larguraDupla, blocoAltura)
+	p.campo("Município / Sigla UF", dados.Municipio, colunaC, linha2, colunaLargura, blocoAltura)
+	p.campo("Código IBGE / CEP", dados.CodigoCEP, colunaD, linha2, colunaLargura, blocoAltura)
+
+	linha3 := linhas[2]
+	p.campo("Endereço", dados.Endereco, colunaA, linha3, larguraDupla, blocoAltura)
+	p.campo("E-mail", dados.Email, colunaC, linha3, larguraDupla, blocoAltura)
+}
+
+// prestador draws the block of item 2.1.3, which has one row more than the
+// others: the Simples Nacional standing that decides how the invoice is taxed.
+func (p *pagina) prestador(dados danfse.Prestador) {
+	p.pessoa(tituloPrestador, dados.Pessoa,
+		[3]float64{prestadorY, prestadorLinha2, prestadorLinha3}, tomadorY)
+
+	p.campo("Simples Nacional na Data de Competência", dados.SimplesNacional,
+		colunaA, prestadorLinha4, colunaLargura, blocoAltura)
+	p.campo("Regime de Apuração Tributária pelo SN", dados.RegimeApuracao,
+		colunaC, prestadorLinha4, larguraDupla, blocoAltura)
+}

@@ -176,3 +176,29 @@ const (
 	marcaCinza  = 166
 	marcaAngulo = 45.0
 )
+
+// The four people blocks, items 2.1.3 to 2.1.6 of NT 008. Each one starts at
+// its title row and ends where the next block begins.
+const (
+	prestadorY      = 4.34
+	prestadorLinha2 = 4.98
+	prestadorLinha3 = 5.62
+	prestadorLinha4 = 6.28
+
+	tomadorY      = 6.92
+	tomadorLinha2 = 7.56
+	tomadorLinha3 = 8.22
+
+	destinatarioY      = 8.86
+	destinatarioLinha2 = 9.50
+	destinatarioLinha3 = 10.16
+
+	intermediarioY      = 10.80
+	intermediarioLinha2 = 11.44
+	intermediarioLinha3 = 12.09
+
+	tituloPrestador     = "PRESTADOR / FORNECEDOR"
+	tituloTomador       = "TOMADOR / ADQUIRENTE"
+	tituloDestinatario  = "DESTINATÁRIO DA OPERAÇÃO"
+	tituloIntermediario = "INTERMEDIÁRIO DA OPERAÇÃO"
+)

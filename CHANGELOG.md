@@ -13,11 +13,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
-### Em andamento — DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
+### DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
 
-O documento ainda está parcial: faltam os quatro blocos de pessoas —
-prestador, tomador, destinatário e intermediário —, que dependem de traduzir o
-código IBGE em nome de município. Todo o resto do leiaute já sai.
+O leiaute inteiro da NT 008 sai em uma página A4.
 
 - **`nfse danfse <arquivo-da-nfse.xml>`** desenha o PDF a partir do XML
   autorizado, o mesmo que o `consultar` grava. Recusa uma DPS: o DANFSe
@@ -40,8 +38,24 @@ código IBGE em nome de município. Todo o resto do leiaute já sai.
   Elas vêm de `--cancelada` e `--substituida`, não do XML: a NFS-e não guarda
   registro de ter sido cancelada — o cancelamento é um evento à parte — nem de
   ter sido substituída, e as duas marcas se excluem.
+- **Prestador, tomador, destinatário e intermediário**, com os documentos
+  formatados e o endereço concatenado. Um bloco sem ninguém vira a frase que a
+  NT manda — "TOMADOR/ADQUIRENTE DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e" e as
+  irmãs dela — e, quando a nota diz que o destinatário é o próprio tomador
+  (`indDest = 0`), o bloco diz isso em vez de repetir a mesma pessoa.
+- **Nome do município por consulta ao IBGE**, com cache em disco: a segunda
+  impressão da mesma nota não depende da rede. A consulta é anunciada antes de
+  acontecer, `--sem-rede` a desliga, e uma falha nunca impede o documento — o
+  campo sai com o código do IBGE e a saída explica por quê.
+  Ver [ADR 0012](docs/decisoes/0012-municipio-por-consulta.md).
 - Duas dependências novas, ambas sem `cgo`: `go-pdf/fpdf` e
   `boombuler/barcode`. Ver [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md).
+
+**Pendência de verificação:** o contrato da consulta ao IBGE não foi
+exercitado contra o serviço real — o ambiente onde este código foi escrito não
+alcança `servicodados.ibge.gov.br`. Os campos vêm da documentação do serviço e
+os testes usam um servidor local. É a mesma pendência que a BrasilAPI tem desde
+a v0.6.0.
 
 **Achado na leitura da NT:** o item 2.2.2 limita as margens a 0,20 cm, mas a
 tabela de coordenadas do item 2.4.5 posiciona tudo a partir de 0,30 cm — e

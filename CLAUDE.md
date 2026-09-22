@@ -42,10 +42,13 @@ internal/
     emission/              cálculo de valores, tradução de rejeições
     validation/            validação da DPS
     query/                 chave de acesso e respostas de consulta
+    danfse/                modelo do documento auxiliar, montado do XML da NFS-e
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
+    ibge/                  nome do município por código, com cache (só no `danfse`)
+    danfsepdf/             desenho do DANFSe em PDF, nas coordenadas da NT 008
 pkg/                       utilidades reutilizáveis fora do projeto
   xmlbuilder/              montagem do XML da DPS
   cnpjcpf/                 validação de CNPJ/CPF

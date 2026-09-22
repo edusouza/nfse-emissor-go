@@ -19,7 +19,7 @@ func lerExemplo(t *testing.T) []byte {
 }
 
 func TestParse_Identificacao(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestParse_Identificacao(t *testing.T) {
 // A v1.00 invoice has no IBS/CBS group, so finNFSe has nowhere to come from.
 // Note 12 of NT 008 says the field still prints, as a dash.
 func TestParse_FinalidadeAusenteViraTraco(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestParse_FinalidadeAusenteViraTraco(t *testing.T) {
 }
 
 func TestParse_Cabecalho(t *testing.T) {
-	doc, err := Parse(lerExemplo(t))
+	doc, err := Parse(lerExemplo(t), nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestParse_Cabecalho(t *testing.T) {
 func TestParse_ProducaoNaoLevaTarja(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)), "<tpAmb>2</tpAmb>", "<tpAmb>1</tpAmb>"))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestParse_ItemNoventaENoveOmiteOMunicipio(t *testing.T) {
 	conteudo := []byte(trocar(t, string(lerExemplo(t)),
 		"<cTribNac>010701</cTribNac>", "<cTribNac>990101</cTribNac>"))
 
-	doc, err := Parse(conteudo)
+	doc, err := Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestParse_Recusas(t *testing.T) {
 
 	for _, caso := range casos {
 		t.Run(caso.nome, func(t *testing.T) {
-			_, err := Parse([]byte(caso.conteudo))
+			_, err := Parse([]byte(caso.conteudo), nil)
 			if !errors.Is(err, caso.esperado) {
 				t.Fatalf("esperava %v, veio %v", caso.esperado, err)
 			}

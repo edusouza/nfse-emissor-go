@@ -16,11 +16,17 @@ package danfse
 type Documento struct {
 	Cabecalho     Cabecalho
 	Identificacao Identificacao
-	Servico       Servico
-	ISSQN         ISSQN
-	Federal       Federal
-	IBSCBS        IBSCBS
-	Totais        Totais
+
+	Prestador     Prestador
+	Tomador       Pessoa
+	Destinatario  Pessoa
+	Intermediario Pessoa
+
+	Servico Servico
+	ISSQN   ISSQN
+	Federal Federal
+	IBSCBS  IBSCBS
+	Totais  Totais
 
 	// Complementares is the single field of item 2.1.12, already joined by the
 	// pipes the nota técnica asks for and ending in the line the Lei
@@ -92,6 +98,44 @@ type Identificacao struct {
 	Emitente    string
 	Situacao    string
 	Finalidade  string
+}
+
+// Municipios translates the seven-digit IBGE code into a municipality's name
+// and state.
+//
+// The NFS-e carries the code and not the name, except for the issuer's own
+// city. Where the translation comes from is not this package's business — ADR
+// 0012 chose a lookup with a cache — and an implementation is free to answer
+// that it does not know, which is what happens offline.
+type Municipios interface {
+	Nome(codigo string) (nome, uf string, ok bool)
+}
+
+// Pessoa is one of the four blocks that name someone: items 2.1.3 to 2.1.6.
+type Pessoa struct {
+	// Mensagem replaces the whole block when there is nobody to describe, with
+	// the sentence notes 2 and 3 of NT 008 dictate. Empty means the fields
+	// below are the ones to print.
+	Mensagem string
+
+	Documento          string
+	InscricaoMunicipal string
+	Telefone           string
+	Nome               string
+	Municipio          string
+	CodigoCEP          string
+	Endereco           string
+	Email              string
+}
+
+// Prestador is the block of item 2.1.3, which carries two fields no other
+// person has: the Simples Nacional standing that decides how the invoice is
+// taxed.
+type Prestador struct {
+	Pessoa
+
+	SimplesNacional string
+	RegimeApuracao  string
 }
 
 // Servico is the "SERVIÇO PRESTADO" block: item 2.1.7 of NT 008.

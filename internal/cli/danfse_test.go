@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,5 +126,91 @@ func TestDanfse_MarcasDaguaSeExcluem(t *testing.T) {
 	}
 	if !strings.Contains(saida, "CANCELADA") {
 		t.Errorf("a saida nao informa a marca d'agua:\n%s", saida)
+	}
+}
+
+// The lookup is announced before the codes leave the machine, cached after,
+// and never allowed to stop the document.
+func TestDanfse_ConsultaDeMunicipios(t *testing.T) {
+	var pedidos []string
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pedidos = append(pedidos, r.URL.Path)
+		w.Write([]byte(`{"id":3550308,"nome":"São Paulo",
+			"microrregiao":{"mesorregiao":{"UF":{"sigla":"SP"}}}}`))
+	}))
+	defer servidor.Close()
+
+	dir, xml := copiarExemplo(t)
+	cache := filepath.Join(dir, "municipios.json")
+
+	saida, err := rodarDanfse(t, xml, "--fonte", servidor.URL, "--cache", cache)
+	if err != nil {
+		t.Fatalf("o comando falhou: %v\n%s", err, saida)
+	}
+
+	if !strings.Contains(saida, "serao consultados em") {
+		t.Errorf("a consulta nao foi anunciada antes de acontecer:\n%s", saida)
+	}
+	if len(pedidos) != 1 {
+		t.Fatalf("esperava uma consulta, vieram %d: %v", len(pedidos), pedidos)
+	}
+	if _, err := os.Stat(cache); err != nil {
+		t.Errorf("o cache nao foi gravado: %v", err)
+	}
+
+	// The same invoice printed again answers from the cache.
+	if _, err := rodarDanfse(t, xml, "--fonte", servidor.URL, "--cache", cache, "--sobrescrever"); err != nil {
+		t.Fatalf("a segunda geracao falhou: %v", err)
+	}
+	if len(pedidos) != 1 {
+		t.Errorf("a segunda geracao consultou de novo: %v", pedidos)
+	}
+}
+
+// A lookup that fails is a line on the report, never a failed command: the
+// document still has to reach the person waiting for it.
+func TestDanfse_ConsultaQueFalhaNaoImpedeODocumento(t *testing.T) {
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer servidor.Close()
+
+	dir, xml := copiarExemplo(t)
+	destino := filepath.Join(dir, "danfse.pdf")
+
+	saida, err := rodarDanfse(t, xml, "-o", destino,
+		"--fonte", servidor.URL, "--cache", filepath.Join(dir, "cache.json"))
+	if err != nil {
+		t.Fatalf("a consulta falhou e derrubou o comando: %v\n%s", err, saida)
+	}
+
+	if _, err := os.Stat(destino); err != nil {
+		t.Fatalf("o PDF nao foi gravado: %v", err)
+	}
+	if !strings.Contains(saida, "codigo do IBGE no lugar") {
+		t.Errorf("a saida nao explica por que o nome nao saiu:\n%s", saida)
+	}
+}
+
+func TestDanfse_SemRedeNaoConsulta(t *testing.T) {
+	var chamou bool
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chamou = true
+	}))
+	defer servidor.Close()
+
+	dir, xml := copiarExemplo(t)
+
+	saida, err := rodarDanfse(t, xml, "--sem-rede",
+		"--fonte", servidor.URL, "--cache", filepath.Join(dir, "cache.json"))
+	if err != nil {
+		t.Fatalf("o comando falhou: %v\n%s", err, saida)
+	}
+
+	if chamou {
+		t.Error("--sem-rede consultou mesmo assim")
+	}
+	if strings.Contains(saida, "serao consultados em") {
+		t.Errorf("com --sem-rede nao ha consulta a anunciar:\n%s", saida)
 	}
 }

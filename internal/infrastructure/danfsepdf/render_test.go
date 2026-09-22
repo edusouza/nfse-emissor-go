@@ -40,7 +40,7 @@ func exemplo(t *testing.T) *danfse.Documento {
 		t.Fatalf("nao consegui ler a NFS-e de exemplo: %v", err)
 	}
 
-	doc, err := danfse.Parse(conteudo)
+	doc, err := danfse.Parse(conteudo, nil)
 	if err != nil {
 		t.Fatalf("Parse devolveu erro: %v", err)
 	}

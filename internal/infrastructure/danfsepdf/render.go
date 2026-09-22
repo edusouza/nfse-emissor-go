@@ -36,6 +36,13 @@ func desenhar(doc *danfse.Documento, opcoes Opcoes) (*pagina, error) {
 	p := novaPagina()
 	p.cabecalho(doc.Cabecalho)
 	p.dadosDaNFSe(doc.Identificacao)
+	p.prestador(doc.Prestador)
+	p.pessoa(tituloTomador, doc.Tomador,
+		[3]float64{tomadorY, tomadorLinha2, tomadorLinha3}, destinatarioY)
+	p.pessoa(tituloDestinatario, doc.Destinatario,
+		[3]float64{destinatarioY, destinatarioLinha2, destinatarioLinha3}, intermediarioY)
+	p.pessoa(tituloIntermediario, doc.Intermediario,
+		[3]float64{intermediarioY, intermediarioLinha2, intermediarioLinha3}, servicoY)
 	p.servico(doc.Servico)
 	p.issqn(doc.ISSQN)
 	p.federal(doc.Federal)
