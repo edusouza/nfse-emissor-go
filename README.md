@@ -18,7 +18,9 @@ onde as notas não têm valor fiscal.
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- **Substituição de NFS-e.**
+- **Gerar o DANFSe**, o PDF que se entrega ao cliente. A API do governo que o
+  gerava foi suspensa em 03/08/2026 pela NT 008, e a geração passou aos
+  softwares de emissão. Até lá, o portal resolve.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
@@ -454,11 +456,52 @@ prática obriga a explicar o que aconteceu em vez de escrever "erro".
 
 Cancelar em `producao` pede confirmação no terminal — a operação é definitiva.
 
+### Substituir uma nota
+
+Substituição **não é cancelamento**. O cancelamento é um evento que anula a
+nota; a substituição emite uma nota nova no lugar da anterior, e por isso pede
+todos os dados de uma emissão:
+
+```bash
+nfse emitir --valor 1500 --descricao "Consultoria - agosto/2026"   --substitui 41069022212345678000195000000000000126081234567890   --motivo saiu-do-simples --enviar
+```
+
+Os motivos são um conjunto fechado, **diferente do conjunto do cancelamento**:
+
+| `--motivo` | Código | Quando |
+|---|---|---|
+| `saiu-do-simples` | 01 | desenquadramento do Simples Nacional |
+| `entrou-no-simples` | 02 | enquadramento no Simples Nacional |
+| `incluiu-isencao` | 03 | inclusão retroativa de imunidade/isenção |
+| `excluiu-isencao` | 04 | exclusão retroativa de imunidade/isenção |
+| `recusada-pelo-tomador` | 05 | rejeição pelo tomador ou intermediário responsável |
+| `outros` | 99 | outros — use `--motivo-texto` para explicar |
+
+Mandar um motivo de cancelamento aqui é recusado antes de qualquer coisa: os
+códigos são disjuntos e a DPS seria rejeitada pelo schema.
+
+### Entregar o PDF ao cliente
+
+**Ainda não é possível por aqui.** O DANFSe — o PDF que se entrega ao cliente —
+era gerado por uma API do governo, e a
+[NT 008 v1.02, de 14/07/2026](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
+**suspendeu essa API em 03/08/2026**, passando a geração para os softwares de
+emissão.
+
+Enquanto o `nfse` não gera o documento ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22)),
+o caminho é o portal: entre em [nfse.gov.br](https://www.nfse.gov.br) com o seu
+certificado e use *Download DANFSe*, tanto na consulta às notas emitidas quanto
+às recebidas (seções 5.5 e 6.3 do guia do Emissor Nacional Web).
+
+O XML que o `nfse` grava continua sendo o documento fiscal válido; o DANFSe é a
+representação auxiliar.
+
 ## Roadmap
 
 | Versão | Entrega |
 |--------|---------|
-| v0.8.0 | Substituição de NFS-e |
+| v0.8.0 | Gerar o DANFSe localmente (NT 008) |
+| v0.9.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
 O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na

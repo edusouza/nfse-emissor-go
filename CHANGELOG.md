@@ -13,6 +13,77 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.7.0] - 2026-09-21
+
+Fecha a substituição de NFS-e. A DANFSe foi implementada e **removida antes do
+lançamento**, quando a nota técnica que a rege apareceu — ver abaixo.
+Ver [ADR 0010](docs/decisoes/0010-substituicao-e-danfse.md).
+
+### Adicionado
+
+- **`nfse emitir --substitui <chave> --motivo <nome>`** — emite uma nota que
+  substitui outra. Não é comando próprio porque substituição **não é evento**:
+  o cancelamento é um pedido de registro de evento, a substituição é uma DPS
+  nova que aponta para a nota que troca, com todos os dados de uma emissão
+  inteira. `--motivo-texto` acrescenta a descrição livre.
+- Os nomes dos motivos são propositalmente diferentes dos do `cancelar`, porque
+  os conjuntos de códigos são disjuntos: `saiu-do-simples`, `entrou-no-simples`,
+  `incluiu-isencao`, `excluiu-isencao`, `recusada-pelo-tomador` e `outros`
+  (`TSCodJustSubst` 01..05 e 99). Mandar um código de cancelamento aqui produz
+  uma DPS que o schema recusa, então o comando recusa antes.
+
+### Alterado
+
+- **A validação estrutural do `subst` passou a conferir os tipos**, e não só a
+  presença. A chave vai pela mesma regra de 50 dígitos que o resto do projeto
+  usa, e o motivo pela enumeração do XSD. Antes, um código de cancelamento
+  (`"1"`) passava: é uma string não vazia.
+- O `subst` deixa de ser código inalcançável. O `pkg/xmlbuilder` montava o
+  elemento desde a v0.1.0 e nenhum caminho do CLI o preenchia.
+
+### Removido
+
+- **`nfse danfse` não foi lançado.** O comando baixava o PDF da API do Ambiente
+  de Dados Nacional. A
+  [NT 008 v1.02, de 14/07/2026](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
+  determina que **essa API foi suspensa em 03/08/2026** e que a geração do
+  DANFSe passa aos softwares de emissão. O comando não tinha como funcionar, e
+  publicar um comando que não funciona é pior que não ter comando. O
+  `internal/infrastructure/adn` saiu inteiro; está no histórico.
+  Gerar o DANFSe localmente é a [issue #22](https://github.com/edusouza/nfse-emissor-go/issues/22).
+
+### Documentação oficial atualizada
+
+Os artefatos do governo foram atualizados a partir da página de documentação
+atual, e o que eles dizem vale mais que qualquer resumo de terceiros:
+
+- **Existe um pacote de schemas `v1.01`, de 09/02/2026** — e ele **traz 1.00 e
+  1.01 lado a lado**. No `infDPS`, a 1.01 acrescenta **um único elemento**,
+  `IBSCBS`, e ele é **opcional**; nada foi removido nem virou obrigatório. O
+  `TVerNFSe` da 1.01 aceita `1.00|1.01`, ou seja: **o documento que este
+  emissor gera continua válido pelo schema atual.** Foi o que a emissão real de
+  18/09 já tinha demonstrado na prática.
+- **A lista nacional de serviços foi para `v1.01` (22/01/2026): 338 códigos**,
+  três a mais que os 335 embutidos. Entraram `141403` e `141404` (guincho e
+  guindaste em construção civil) e `200102` (serviços portuários em águas
+  marinhas); a descrição de `200101` passou a dizer "prestado em terra".
+  Nenhum código foi removido. O `lista.csv` foi regerado do anexo novo.
+- **O ANEXO I de regras passou de 322 para 441 códigos de rejeição.** Nenhuma
+  das regras que o emissor trata hoje foi removida; as novas concentram-se na
+  faixa E09xx, da reforma tributária.
+- **A NT 008 v1.02 foi incorporada** em `docs/notas-tecnicas/`. Ela suspende a
+  API de geração do DANFSe em 03/08/2026 e especifica o documento para quem
+  passa a gerá-lo: campos com origem no XML, coordenadas, QR Code, canhoto e
+  fontes. Os manuais do ADN, de outubro de 2025, ainda descrevem a API — uma
+  nota técnica os supera sem reescrevê-los.
+
+### Problemas conhecidos
+
+- A substituição foi exercitada contra o XSD e ponta a ponta na geração do XML,
+  mas **não contra a Sefin**. Como toda emissão, o veredito final é do governo.
+
+Fecha [#10](https://github.com/edusouza/nfse-emissor-go/issues/10).
+
 ## [0.6.0] - 2026-09-21
 
 Menos digitação para começar, e o fim do último campo obrigatório que nenhuma

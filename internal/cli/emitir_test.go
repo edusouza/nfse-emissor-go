@@ -523,3 +523,108 @@ func TestEmitir_ContadorNaoAvancaSemArquivo(t *testing.T) {
 		t.Errorf("o contador deveria estar em 2:\n%s", proxima)
 	}
 }
+
+// A substituição não é um evento: é uma DPS nova que aponta para a nota que
+// ela troca. O elemento tem de sair no XML com a chave e o código do motivo.
+func TestEmitir_SubstituicaoSaiNoXML(t *testing.T) {
+	dir := workspace(t)
+	const substituida = "41069022212345678000195000000000000126081234567890"
+
+	if out, err := runEmit(t, dir, "--numero", "31", "--valor", "1000",
+		"--descricao", "Servico", "--substitui", substituida,
+		"--motivo", "saiu-do-simples", "--motivo-texto", "Desenquadramento em agosto"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(onlyXML(t, dir)); err != nil {
+		t.Fatal(err)
+	}
+
+	casos := map[string]string{
+		"DPS/infDPS/subst/chSubstda": substituida,
+		"DPS/infDPS/subst/cMotivo":   "01",
+		"DPS/infDPS/subst/xMotivo":   "Desenquadramento em agosto",
+	}
+	for caminho, querido := range casos {
+		el := doc.FindElement(caminho)
+		if el == nil {
+			t.Fatalf("%s ausente no XML gerado", caminho)
+		}
+		if el.Text() != querido {
+			t.Errorf("%s = %q, esperava %q", caminho, el.Text(), querido)
+		}
+	}
+}
+
+// Uma emissão comum não pode carregar subst: o elemento é opcional no schema e
+// a presença dele diz ao governo que outra nota está sendo trocada.
+func TestEmitir_SemSubstituicaoNaoEmiteOElemento(t *testing.T) {
+	dir := workspace(t)
+
+	if out, err := runEmit(t, dir, "--numero", "32", "--valor", "1000",
+		"--descricao", "Servico"); err != nil {
+		t.Fatalf("emissao falhou: %v\n%s", err, out)
+	}
+
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(onlyXML(t, dir)); err != nil {
+		t.Fatal(err)
+	}
+	if el := doc.FindElement("DPS/infDPS/subst"); el != nil {
+		t.Errorf("subst nao deveria existir numa emissao comum")
+	}
+}
+
+func TestEmitir_SubstituicaoRecusas(t *testing.T) {
+	const chaveValida = "41069022212345678000195000000000000126081234567890"
+
+	tests := []struct {
+		name     string
+		args     []string
+		wantText string
+	}{
+		{
+			name:     "chave sem motivo",
+			args:     []string{"--substitui", chaveValida},
+			wantText: "informe --motivo junto com --substitui",
+		},
+		{
+			name:     "motivo sem chave",
+			args:     []string{"--motivo", "outros"},
+			wantText: "--motivo so vale com --substitui",
+		},
+		{
+			// O motivo do cancelamento usa outro conjunto de codigos; mandar
+			// um deles aqui produziria uma DPS que o schema recusa.
+			name:     "motivo do cancelamento",
+			args:     []string{"--substitui", chaveValida, "--motivo", "erro-emissao"},
+			wantText: "nao e um motivo de substituicao",
+		},
+		{
+			name:     "chave curta",
+			args:     []string{"--substitui", "123", "--motivo", "outros"},
+			wantText: "exatamente 50 digitos",
+		},
+		{
+			name:     "chave com letra",
+			args:     []string{"--substitui", "4106902221234567800019500000000000012608123456789X", "--motivo", "outros"},
+			wantText: "apenas digitos",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := workspace(t)
+			args := append([]string{"--numero", "40", "--valor", "1000", "--descricao", "Servico"}, tt.args...)
+
+			out, err := runEmit(t, dir, args...)
+			if err == nil {
+				t.Fatalf("esperava erro\n%s", out)
+			}
+			if !strings.Contains(err.Error(), tt.wantText) {
+				t.Errorf("erro = %q, esperava conter %q", err, tt.wantText)
+			}
+		})
+	}
+}

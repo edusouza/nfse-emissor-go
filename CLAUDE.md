@@ -83,12 +83,18 @@ assinar com o A1 → enviar à Sefin Nacional → receber a NFS-e autorizada.
 ```
 docs/decisoes/    ADRs — leia antes de mudar arquitetura
 docs/markdown/    manuais oficiais do governo convertidos
-docs/schemas/     XSDs oficiais (DPS_v1.00.xsd, NFSe_v1.00.xsd, evento_v1.00.xsd)
+docs/schemas/     XSDs oficiais; o pacote v1.01 traz 1.00 e 1.01 lado a lado
 docs/anexos/      planilhas de referência (códigos IBGE, lista de serviços)
+docs/nfse-nacional/  PDFs originais dos manuais; docs/markdown/ tem a conversão
+docs/notas-tecnicas/ notas técnicas — superam os manuais, confira a data
 specs/            especificações Speckit do desenho anterior (API REST)
 ```
 
 Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
+
+**Versão do leiaute:** o emissor gera `versao="1.00"`. O schema v1.01 aceita
+`1.00|1.01`, e a única diferença no `infDPS` é o grupo opcional `IBSCBS`. Não
+mude isso sem um ADR — suportar IBS/CBS é trabalho de uma versão inteira.
 
 ## Glossário
 
