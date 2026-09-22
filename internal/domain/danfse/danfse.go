@@ -16,6 +16,11 @@ package danfse
 type Documento struct {
 	Cabecalho     Cabecalho
 	Identificacao Identificacao
+	Servico       Servico
+	ISSQN         ISSQN
+	Federal       Federal
+	IBSCBS        IBSCBS
+	Totais        Totais
 }
 
 // Cabecalho is the top strip of the document: item 2.4.3 of NT 008.
@@ -52,4 +57,82 @@ type Identificacao struct {
 	Emitente    string
 	Situacao    string
 	Finalidade  string
+}
+
+// Servico is the "SERVIÇO PRESTADO" block: item 2.1.7 of NT 008.
+type Servico struct {
+	CodigoTributacao string
+	CodigoNBS        string
+	LocalPrestacao   string
+
+	// DescricaoCodigo is the municipal description when the invoice carries
+	// one, and the national description otherwise — the rule the nota técnica
+	// writes as "SE xTribMun <> '' ENTAO Descrição Municipal SENAO Nacional".
+	// It is the one field with no label on the document.
+	DescricaoCodigo string
+
+	Descricao string
+}
+
+// ISSQN is the "TRIBUTAÇÃO MUNICIPAL" block: item 2.1.8 of NT 008.
+type ISSQN struct {
+	// Incide is false for an operation outside the municipal tax, and then the
+	// block prints a single sentence instead of its fields — note 4.
+	Incide bool
+
+	TipoTributacao          string
+	MunicipioIncidencia     string
+	RegimeEspecial          string
+	TipoImunidade           string
+	SuspensaoExigibilidade  string
+	NumeroProcessoSuspensao string
+	BeneficioMunicipal      string
+	CalculoBM               string
+	TotalDeducoes           string
+	DescontoIncondicionado  string
+	BaseCalculo             string
+	Aliquota                string
+	Retencao                string
+	Apurado                 string
+}
+
+// Federal is the "TRIBUTAÇÃO FEDERAL (EXCETO CBS)" block: item 2.1.9.
+type Federal struct {
+	IRRF                   string
+	ContribuicaoPrevidenc  string
+	ContribuicoesSociais   string
+	PIS                    string
+	COFINS                 string
+	DescricaoContribuicoes string
+}
+
+// IBSCBS is the block of item 2.1.10, which only layout v1.01 fills. On a
+// v1.00 invoice every field is a dash, and the block still prints: the nota
+// técnica gives it no condition for being left out.
+type IBSCBS struct {
+	CST                string
+	IndicadorOperacao  string
+	ExclusoesReducoes  string
+	BaseCalculo        string
+	ReducaoAliquota    string
+	AliquotaIBS        string
+	AliquotaEfetivaMun string
+	ValorApuradoMun    string
+	AliquotaEfetivaUF  string
+	ValorApuradoUF     string
+	ValorTotalIBS      string
+	AliquotaCBS        string
+	AliquotaEfetivaCBS string
+	ValorTotalCBS      string
+}
+
+// Totais is the "VALOR TOTAL DA NFS-e" block: item 2.1.11.
+type Totais struct {
+	ValorServico           string
+	DescontoIncondicionado string
+	DescontoCondicionado   string
+	TotalRetencoes         string
+	ValorLiquido           string
+	TotalIBSCBS            string
+	ValorLiquidoComIBSCBS  string
 }

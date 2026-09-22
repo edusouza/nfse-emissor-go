@@ -69,3 +69,95 @@ func limitar(valor string, max int) string {
 	}
 	return string([]rune(valor)[:max-3]) + "..."
 }
+
+// moeda formats a TSDec15V2 value the way a Brazilian document reads it:
+// 1500.00 in the XML becomes 1.500,00 on the paper.
+//
+// The conversion is textual, never through a float: money in a fiscal document
+// has to come out exactly as the invoice states it, and binary floating point
+// is the classic way to turn 1234.10 into 1234.0999999.
+func moeda(valor string) string {
+	inteiro, decimal, ok := partesDoNumero(valor)
+	if !ok {
+		return valor
+	}
+	return agrupar(inteiro) + "," + decimal
+}
+
+// percentual formats a rate. It keeps the two decimals the schema's TSDec2V2
+// carries and adds the sign the reader expects.
+func percentual(valor string) string {
+	inteiro, decimal, ok := partesDoNumero(valor)
+	if !ok {
+		return valor
+	}
+	return agrupar(inteiro) + "," + decimal + "%"
+}
+
+// partesDoNumero splits a decimal into its integer and fractional halves,
+// always with two digits after the comma, and reports whether the value looked
+// like a number at all.
+func partesDoNumero(valor string) (inteiro, decimal string, ok bool) {
+	valor = strings.TrimSpace(valor)
+	if valor == "" {
+		return "", "", false
+	}
+
+	sinal := ""
+	if strings.HasPrefix(valor, "-") {
+		sinal, valor = "-", valor[1:]
+	}
+
+	inteiro, decimal = valor, "00"
+	if ponto := strings.IndexByte(valor, '.'); ponto >= 0 {
+		inteiro, decimal = valor[:ponto], valor[ponto+1:]
+	}
+	if inteiro == "" {
+		inteiro = "0"
+	}
+
+	if !apenasDigitos(inteiro) || !apenasDigitos(decimal) {
+		return "", "", false
+	}
+
+	switch {
+	case len(decimal) < 2:
+		decimal += strings.Repeat("0", 2-len(decimal))
+	case len(decimal) > 2:
+		// The schema allows more than two decimal places in some rates; the
+		// document shows two, and cutting is safer than rounding a value the
+		// government already decided.
+		decimal = decimal[:2]
+	}
+
+	return sinal + inteiro, decimal, true
+}
+
+// agrupar puts a dot every three digits, from the right.
+func agrupar(inteiro string) string {
+	sinal := ""
+	if strings.HasPrefix(inteiro, "-") {
+		sinal, inteiro = "-", inteiro[1:]
+	}
+
+	var partes []string
+	for len(inteiro) > 3 {
+		partes = append([]string{inteiro[len(inteiro)-3:]}, partes...)
+		inteiro = inteiro[:len(inteiro)-3]
+	}
+	partes = append([]string{inteiro}, partes...)
+
+	return sinal + strings.Join(partes, ".")
+}
+
+func apenasDigitos(valor string) bool {
+	if valor == "" {
+		return false
+	}
+	for _, r := range valor {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}

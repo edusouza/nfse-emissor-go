@@ -1,0 +1,119 @@
+package danfsepdf
+
+import "github.com/edusouza/nfse-emissor-go/internal/domain/danfse"
+
+// campo draws one cell: the dividing box, the label of item 2.4.2 in six points
+// bold, and the content in seven points.
+func (p *pagina) campo(rotulo, valor string, x, y, largura, altura float64) {
+	p.caixa(x, y, largura, altura)
+	p.escrever(rotulo, x+0.08, y+0.24, fonte, "B", corpoMiudo)
+	p.escrever(valor, x+0.08, y+0.55, fonte, "", corpoTexto)
+}
+
+// titulo draws the name of a block in the leftmost cell of its first row,
+// shaded as item 2.2.3 requires.
+func (p *pagina) titulo(nome string, y float64) {
+	p.quadroSombreado(colunaA, y, colunaLargura, blocoAltura)
+	p.caixa(colunaA, y, colunaLargura, blocoAltura)
+	p.escrever(nome, colunaA+0.08, y+0.42, fonte, "B", corpoBloco)
+}
+
+func (p *pagina) servico(s danfse.Servico) {
+	p.titulo(tituloServico, servicoY)
+	p.campo("Código de Tributação Nacional / Municipal", s.CodigoTributacao, colunaB, servicoY, colunaLargura, blocoAltura)
+	p.campo("Código da NBS", s.CodigoNBS, colunaC, servicoY, colunaLargura, blocoAltura)
+	p.campo("Local da Prestação / Sigla UF / País", s.LocalPrestacao, colunaD, servicoY, colunaLargura, blocoAltura)
+
+	// The description of the taxation code is the one field the nota técnica
+	// gives no label to, and its box is shorter than the others because of it.
+	p.caixa(colunaA, descricaoCodigoY, larguraCorpo, descricaoCodigoH)
+	p.escrever(s.DescricaoCodigo, colunaA+0.08, descricaoCodigoY+0.26, fonte, "", corpoTexto)
+
+	p.campo("Descrição do Serviço", s.Descricao, colunaA, descricaoServicoY, larguraCorpo, blocoAltura)
+}
+
+func (p *pagina) issqn(i danfse.ISSQN) {
+	if !i.Incide {
+		// Note 4: an operation outside the municipal tax replaces the whole
+		// block with one sentence.
+		p.quadroSombreado(colunaA, issqnY, larguraCorpo, blocoAltura)
+		p.caixa(colunaA, issqnY, larguraCorpo, blocoAltura)
+		p.escrever(danfse.MensagemSemISSQN, colunaA+0.08, issqnY+0.42, fonte, "B", corpoBloco)
+		return
+	}
+
+	p.titulo(tituloISSQN, issqnY)
+	// The NT's table puts both this block's title and "Tipo de Tributação do
+	// ISSQN" at 0,30 cm — the two cannot share a cell. The tax type moves one
+	// column right, which is where every other block puts its first field, and
+	// the municipality of incidence follows it with the double width the table
+	// gives it. That fills the row exactly, and nothing overlaps.
+	p.campo("Tipo de Tributação do ISSQN", i.TipoTributacao, colunaB, issqnY, colunaLargura, blocoAltura)
+	p.campo("Município / Sigla UF / País da Incidência do ISSQN", i.MunicipioIncidencia, colunaC, issqnY, larguraDupla, blocoAltura)
+
+	p.campo("Regime Especial de Tributação do ISSQN", i.RegimeEspecial, colunaA, issqnLinha2, colunaLargura, blocoAltura)
+	p.campo("Tipo de Imunidade do ISSQN", i.TipoImunidade, colunaB, issqnLinha2, colunaLargura, blocoAltura)
+	p.campo("Suspensão da Exigibilidade do ISSQN", i.SuspensaoExigibilidade, colunaC, issqnLinha2, colunaLargura, blocoAltura)
+	p.campo("Número Processo Suspensão", i.NumeroProcessoSuspensao, colunaD, issqnLinha2, colunaLargura, blocoAltura)
+
+	p.campo("Benefício Municipal", i.BeneficioMunicipal, colunaA, issqnLinha3, colunaLargura, blocoAltura)
+	p.campo("Cálculo do BM", i.CalculoBM, colunaB, issqnLinha3, colunaLargura, blocoAltura)
+	p.campo("Total Deduções/Reduções", i.TotalDeducoes, colunaC, issqnLinha3, colunaLargura, blocoAltura)
+	p.campo("Desconto Incondicionado", i.DescontoIncondicionado, colunaD, issqnLinha3, colunaLargura, blocoAltura)
+
+	p.campo("BC ISSQN", i.BaseCalculo, colunaA, issqnLinha4, colunaLargura, blocoAltura)
+	p.campo("Alíquota Aplicada", i.Aliquota, colunaB, issqnLinha4, colunaLargura, blocoAltura)
+	p.campo("Retenção do ISSQN", i.Retencao, colunaC, issqnLinha4, colunaLargura, blocoAltura)
+	p.campo("ISSQN Apurado", i.Apurado, colunaD, issqnLinha4, colunaLargura, blocoAltura)
+}
+
+func (p *pagina) federal(f danfse.Federal) {
+	p.titulo(tituloFederal, federalY)
+	p.campo("IRRF", f.IRRF, colunaB, federalY, colunaLargura, blocoAltura)
+	p.campo("Contribuição Previdenciária - Retida", f.ContribuicaoPrevidenc, colunaC, federalY, colunaLargura, blocoAltura)
+	p.campo("Contribuições Sociais - Retidas", f.ContribuicoesSociais, colunaD, federalY, colunaLargura, blocoAltura)
+
+	p.campo("PIS - Débito Apuração Própria", f.PIS, colunaA, federalLinha2, colunaLargura, blocoAltura)
+	p.campo("COFINS - Débito Apuração Própria", f.COFINS, colunaB, federalLinha2, colunaLargura, blocoAltura)
+	p.campo("Descrição Contrib. Sociais - Retidas", f.DescricaoContribuicoes, colunaC, federalLinha2, larguraDupla, blocoAltura)
+}
+
+func (p *pagina) ibscbs(i danfse.IBSCBS) {
+	p.titulo(tituloIBSCBS, ibscbsY)
+	p.campo("CST / cClassTrib", i.CST, colunaB, ibscbsY, colunaLargura, blocoAltura)
+	p.campo("Indicador de Operação / Código IBGE Incidência / Município Incidência / Sigla UF",
+		i.IndicadorOperacao, colunaC, ibscbsY, larguraDupla, blocoAltura)
+
+	p.campo("Exclusões e Reduções da Base de Cálculo", i.ExclusoesReducoes, colunaA, ibscbsLinha2, colunaLargura, blocoAltura)
+	p.campo("Base de Cálculo Após Exclusões e Reduções", i.BaseCalculo, colunaB, ibscbsLinha2, colunaLargura, blocoAltura)
+	p.campo("Red. Alíquota IBS / Red. Alíquota CBS", i.ReducaoAliquota, colunaC, ibscbsLinha2, colunaLargura, blocoAltura)
+	p.campo("Alíquota - IBS UF / IBS Mun", i.AliquotaIBS, colunaD, ibscbsLinha2, colunaLargura, blocoAltura)
+
+	p.campo("Alíq. Efetiva Municipal - IBS", i.AliquotaEfetivaMun, colunaA, ibscbsLinha3, colunaLargura, blocoAltura)
+	p.campo("Valor Apurado Municipal - IBS", i.ValorApuradoMun, colunaB, ibscbsLinha3, colunaLargura, blocoAltura)
+	p.campo("Alíq. Efetiva Estadual - IBS", i.AliquotaEfetivaUF, colunaC, ibscbsLinha3, colunaLargura, blocoAltura)
+	p.campo("Valor Apurado Estadual - IBS", i.ValorApuradoUF, colunaD, ibscbsLinha3, colunaLargura, blocoAltura)
+
+	p.campo("Valor Total Apurado - IBS", i.ValorTotalIBS, colunaA, ibscbsLinha4, colunaLargura, blocoAltura)
+	p.campo("Alíquota - CBS", i.AliquotaCBS, colunaB, ibscbsLinha4, colunaLargura, blocoAltura)
+	p.campo("Alíquota Efetiva - CBS", i.AliquotaEfetivaCBS, colunaC, ibscbsLinha4, colunaLargura, blocoAltura)
+	p.campo("Valor Total Apurado - CBS", i.ValorTotalCBS, colunaD, ibscbsLinha4, colunaLargura, blocoAltura)
+}
+
+func (p *pagina) totais(t danfse.Totais) {
+	p.quadroSombreado(colunaA, totaisY, colunaLargura, totaisAltura)
+	p.caixa(colunaA, totaisY, colunaLargura, totaisAltura)
+	p.escrever(tituloTotais, colunaA+0.08, totaisY+0.44, fonte, "B", corpoBloco)
+
+	p.campo("Valor da Operação / Serviço", t.ValorServico, colunaB, totaisY, colunaLargura, totaisAltura)
+	p.campo("Desconto Incondicionado", t.DescontoIncondicionado, colunaC, totaisY, colunaLargura, totaisAltura)
+	p.campo("Desconto Condicionado", t.DescontoCondicionado, colunaD, totaisY, colunaLargura, totaisAltura)
+
+	p.campo("Total das Retenções (ISSQN / Federais)", t.TotalRetencoes, colunaA, totaisLinha2, colunaLargura, totaisAltura)
+	p.campo("Valor Líquido da NFS-e", t.ValorLiquido, colunaB, totaisLinha2, colunaLargura, totaisAltura)
+	p.campo("Total do IBS/CBS", t.TotalIBSCBS, colunaC, totaisLinha2, colunaLargura, totaisAltura)
+
+	// Item 2.2.3 shades this field: it is the number the reader is looking for.
+	p.quadroSombreado(colunaD, totaisLinha2, colunaLargura, totaisAltura)
+	p.campo("Valor Líquido da NFS-e + IBS/CBS", t.ValorLiquidoComIBSCBS, colunaD, totaisLinha2, colunaLargura, totaisAltura)
+}

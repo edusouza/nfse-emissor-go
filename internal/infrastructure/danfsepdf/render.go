@@ -29,6 +29,11 @@ func desenhar(doc *danfse.Documento) (*pagina, error) {
 	p := novaPagina()
 	p.cabecalho(doc.Cabecalho)
 	p.dadosDaNFSe(doc.Identificacao)
+	p.servico(doc.Servico)
+	p.issqn(doc.ISSQN)
+	p.federal(doc.Federal)
+	p.ibscbs(doc.IBSCBS)
+	p.totais(doc.Totais)
 	if err := p.qrCode(doc.Cabecalho.QRCode); err != nil {
 		return nil, err
 	}

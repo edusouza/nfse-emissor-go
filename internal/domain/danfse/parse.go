@@ -58,6 +58,11 @@ func Parse(conteudo []byte) (*Documento, error) {
 	return &Documento{
 		Cabecalho:     cabecalho(inf, infDPS, chave),
 		Identificacao: identificacao(inf, infDPS, chave),
+		Servico:       servico(inf, infDPS),
+		ISSQN:         issqn(inf, infDPS),
+		Federal:       federal(infDPS),
+		IBSCBS:        ibscbs(inf, infDPS),
+		Totais:        totais(inf, infDPS),
 	}, nil
 }
 

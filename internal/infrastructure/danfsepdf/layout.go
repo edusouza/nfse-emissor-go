@@ -113,3 +113,46 @@ const (
 	notaQRCode = "A autenticidade desta NFS-e pode ser verificada pela leitura " +
 		"deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e"
 )
+
+// Blocks from "SERVIÇO PRESTADO" down to "VALOR TOTAL DA NFS-e", item 2.4.5.
+//
+// The people blocks above them (prestador, tomador, destinatário and
+// intermediário) occupy the rows between 4,34 and 12,74.
+const (
+	blocoAltura = 0.63
+
+	servicoY          = 12.74
+	descricaoCodigoY  = 13.39
+	descricaoCodigoH  = 0.38
+	descricaoServicoY = 13.79
+
+	issqnY      = 14.43
+	issqnLinha2 = 15.08
+	issqnLinha3 = 15.73
+	issqnLinha4 = 16.37
+
+	federalY      = 17.02
+	federalLinha2 = 17.67
+
+	ibscbsY      = 18.32
+	ibscbsLinha2 = 18.96
+	ibscbsLinha3 = 19.61
+	ibscbsLinha4 = 20.26
+
+	totaisY      = 20.90
+	totaisLinha2 = 21.59
+	totaisAltura = 0.67
+
+	// A field that spans two of the four columns.
+	larguraDupla = 10.19
+)
+
+// Block titles, spelled as item 2.4.1 requires them: bold, seven points and all
+// caps.
+const (
+	tituloServico = "SERVIÇO PRESTADO"
+	tituloISSQN   = "TRIBUTAÇÃO MUNICIPAL (ISSQN)"
+	tituloFederal = "TRIBUTAÇÃO FEDERAL (EXCETO CBS)"
+	tituloIBSCBS  = "TRIBUTAÇÃO IBS / CBS"
+	tituloTotais  = "VALOR TOTAL DA NFS-e"
+)
