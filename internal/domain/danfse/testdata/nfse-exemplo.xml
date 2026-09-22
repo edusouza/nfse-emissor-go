@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NFS-e ficticia, montada conforme NFSe_v1.01.xsd (leiaute 1.00, sem IBS/CBS),
+  para exercitar a geracao do DANFSe. Nenhum dado aqui pertence a alguem:
+  CNPJ, chave de acesso e enderecos sao de exemplo.
+-->
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+  <infNFSe Id="NFS41069022212345678000195000000000000126081234567890">
+    <xLocEmi>Curitiba</xLocEmi>
+    <xLocPrestacao>Curitiba</xLocPrestacao>
+    <nNFSe>126</nNFSe>
+    <cLocIncid>4106902</cLocIncid>
+    <xLocIncid>Curitiba</xLocIncid>
+    <xTribNac>Analise e desenvolvimento de sistemas</xTribNac>
+    <verAplic>SefinNacional-1.00</verAplic>
+    <ambGer>2</ambGer>
+    <tpEmis>1</tpEmis>
+    <cStat>100</cStat>
+    <dhProc>2026-08-12T14:31:05-03:00</dhProc>
+    <nDFSe>126</nDFSe>
+    <emit>
+      <CNPJ>12345678000195</CNPJ>
+      <IM>1234567</IM>
+      <xNome>EMPRESA EXEMPLO DE SERVICOS LTDA</xNome>
+      <enderNac>
+        <xLgr>Rua das Flores</xLgr>
+        <nro>100</nro>
+        <xCpl>Sala 21</xCpl>
+        <xBairro>Centro</xBairro>
+        <cMun>4106902</cMun>
+        <UF>PR</UF>
+        <CEP>80010000</CEP>
+      </enderNac>
+      <fone>4133334444</fone>
+      <email>contato@exemplo.com.br</email>
+    </emit>
+    <valores>
+      <vBC>1500.00</vBC>
+      <pAliqAplic>2.00</pAliqAplic>
+      <vISSQN>30.00</vISSQN>
+      <vTotalRet>0.00</vTotalRet>
+      <vLiq>1500.00</vLiq>
+    </valores>
+    <DPS versao="1.00">
+      <infDPS Id="DPS410690222123456780001950000010000000126">
+        <tpAmb>2</tpAmb>
+        <dhEmi>2026-08-12T14:30:00-03:00</dhEmi>
+        <verAplic>nfse-emissor-go 0.7.0</verAplic>
+        <serie>00001</serie>
+        <nDPS>126</nDPS>
+        <dCompet>2026-08-12</dCompet>
+        <tpEmit>1</tpEmit>
+        <cLocEmi>4106902</cLocEmi>
+        <prest>
+          <CNPJ>12345678000195</CNPJ>
+          <IM>1234567</IM>
+          <xNome>EMPRESA EXEMPLO DE SERVICOS LTDA</xNome>
+          <fone>4133334444</fone>
+          <email>contato@exemplo.com.br</email>
+          <regTrib>
+            <opSimpNac>2</opSimpNac>
+            <regApTribSN>1</regApTribSN>
+            <regEspTrib>0</regEspTrib>
+          </regTrib>
+        </prest>
+        <toma>
+          <CNPJ>98765432000198</CNPJ>
+          <xNome>CLIENTE EXEMPLO COMERCIO LTDA</xNome>
+          <end>
+            <endNac>
+              <cMun>3550308</cMun>
+              <CEP>01310100</CEP>
+            </endNac>
+            <xLgr>Avenida Paulista</xLgr>
+            <nro>1000</nro>
+            <xBairro>Bela Vista</xBairro>
+          </end>
+          <email>financeiro@cliente.com.br</email>
+        </toma>
+        <serv>
+          <locPrest>
+            <cLocPrestacao>4106902</cLocPrestacao>
+          </locPrest>
+          <cServ>
+            <cTribNac>010701</cTribNac>
+            <xDescServ>Desenvolvimento de sistema de emissao de notas fiscais</xDescServ>
+          </cServ>
+        </serv>
+        <valores>
+          <vServPrest>
+            <vServ>1500.00</vServ>
+          </vServPrest>
+          <trib>
+            <tribMun>
+              <tribISSQN>1</tribISSQN>
+              <tpRetISSQN>1</tpRetISSQN>
+            </tribMun>
+            <totTrib>
+              <indTotTrib>0</indTotTrib>
+            </totTrib>
+          </trib>
+        </valores>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>
