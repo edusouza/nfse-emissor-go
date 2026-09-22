@@ -117,3 +117,68 @@ func (p *pagina) totais(t danfse.Totais) {
 	p.quadroSombreado(colunaD, totaisLinha2, colunaLargura, totaisAltura)
 	p.campo("Valor Líquido da NFS-e + IBS/CBS", t.ValorLiquidoComIBSCBS, colunaD, totaisLinha2, colunaLargura, totaisAltura)
 }
+
+// complementares fills the tall box of item 2.1.12, wrapping the joined text
+// over as many lines as the box holds.
+func (p *pagina) complementares(conteudo string, comCanhoto bool) {
+	p.quadroSombreado(colunaA, complementaresTituloY, larguraCorpo, complementaresAltura)
+	p.caixa(colunaA, complementaresTituloY, larguraCorpo, complementaresAltura)
+	p.escrever(tituloComplementares, colunaA+0.08, complementaresTituloY+0.27, fonte, "B", corpoBloco)
+
+	// Without the receipt strip the box may take the room it would have used —
+	// item 2.3.3 says so in as many words.
+	fim := canhotoY
+	if !comCanhoto {
+		fim = alturaPagina - margem
+	}
+	altura := fim - complementaresY
+	p.caixa(colunaA, complementaresY, larguraCorpo, altura)
+
+	p.pdf.SetFont(fonte, "", corpoTexto)
+	linhas := p.pdf.SplitLines([]byte(p.traduzir(conteudo)), larguraCorpo-0.16)
+
+	const entrelinha = 0.32
+	for i, linha := range linhas {
+		base := complementaresY + entrelinha*float64(i+1) - 0.08
+		if base > complementaresY+altura {
+			// The text is longer than the box. NT 008 already caps the field at
+			// 2000 characters; stopping here keeps whatever is left from
+			// running over the blocks below.
+			break
+		}
+		p.pdf.Text(colunaA+0.08, base, string(linha))
+	}
+}
+
+// canhoto draws the receipt strip of item 2.1.13.
+//
+// Two of its three fields have no source in the XML: the date of acknowledgement
+// and the signature are written by hand on the printed page. They stay blank —
+// the dash of note 12 belongs to a field the invoice left empty, not to a line
+// meant for a pen.
+func (p *pagina) canhoto(c danfse.Canhoto) {
+	p.campo("Data de Cientificação", "", colunaA, canhotoY, colunaLargura, canhotoAltura)
+	p.campo("Identificação e Assinatura", "", colunaB, canhotoY, colunaLargura, canhotoAltura)
+	p.campo("Nº NFS-e / Chave NFS-e", c.Numero, colunaC, canhotoY, larguraDupla, canhotoAltura)
+}
+
+// marca writes the watermark of a cancelled or replaced invoice across the
+// page, on the diagonal.
+func (p *pagina) marca(marca danfse.Marca) {
+	if marca == danfse.SemMarca {
+		return
+	}
+
+	p.pdf.SetFont(fonte, "", marcaCorpo)
+	p.pdf.SetTextColor(marcaCinza, marcaCinza, marcaCinza)
+
+	texto := p.traduzir(string(marca))
+	meioX, meioY := larguraPagina/2, alturaPagina/2
+
+	p.pdf.TransformBegin()
+	p.pdf.TransformRotate(marcaAngulo, meioX, meioY)
+	p.pdf.Text(meioX-p.pdf.GetStringWidth(texto)/2, meioY, texto)
+	p.pdf.TransformEnd()
+
+	p.pdf.SetTextColor(0, 0, 0)
+}

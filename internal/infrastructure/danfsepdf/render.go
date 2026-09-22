@@ -10,9 +10,16 @@ import (
 	"github.com/edusouza/nfse-emissor-go/internal/domain/danfse"
 )
 
+// Opcoes carries what the document needs and the NFS-e XML cannot say.
+type Opcoes struct {
+	// SemCanhoto leaves out the receipt strip, which item 2.3.3 allows the
+	// issuer to drop.
+	SemCanhoto bool
+}
+
 // Render draws the document and writes the PDF to w.
-func Render(doc *danfse.Documento, w io.Writer) error {
-	p, err := desenhar(doc)
+func Render(doc *danfse.Documento, opcoes Opcoes, w io.Writer) error {
+	p, err := desenhar(doc, opcoes)
 	if err != nil {
 		return err
 	}
@@ -21,7 +28,7 @@ func Render(doc *danfse.Documento, w io.Writer) error {
 
 // desenhar lays the whole document out and stops short of writing it, so that
 // tests can turn compression off and read what was actually drawn.
-func desenhar(doc *danfse.Documento) (*pagina, error) {
+func desenhar(doc *danfse.Documento, opcoes Opcoes) (*pagina, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("nao ha DANFSe para desenhar")
 	}
@@ -34,9 +41,16 @@ func desenhar(doc *danfse.Documento) (*pagina, error) {
 	p.federal(doc.Federal)
 	p.ibscbs(doc.IBSCBS)
 	p.totais(doc.Totais)
+	p.complementares(doc.Complementares, !opcoes.SemCanhoto)
+	if !opcoes.SemCanhoto {
+		p.canhoto(doc.Canhoto)
+	}
 	if err := p.qrCode(doc.Cabecalho.QRCode); err != nil {
 		return nil, err
 	}
+
+	// The watermark goes on last, over everything it marks.
+	p.marca(doc.Marca)
 	return p, nil
 }
 

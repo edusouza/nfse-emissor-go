@@ -21,6 +21,41 @@ type Documento struct {
 	Federal       Federal
 	IBSCBS        IBSCBS
 	Totais        Totais
+
+	// Complementares is the single field of item 2.1.12, already joined by the
+	// pipes the nota técnica asks for and ending in the line the Lei
+	// 12.741/2012 requires.
+	Complementares string
+
+	// Canhoto is the delivery receipt of item 2.1.13. The nota técnica makes it
+	// optional for the issuer.
+	Canhoto Canhoto
+
+	// Marca is the watermark of items 2.5.1 and 2.5.2.
+	//
+	// It does not come from the XML: an NFS-e carries no trace of having been
+	// cancelled or replaced — the cancellation is an event of its own, and the
+	// replacement lives in the invoice that replaced it. Whoever prints the
+	// document has to say so, and the CLI asks.
+	Marca Marca
+}
+
+// Marca is the diagonal watermark a cancelled or replaced invoice carries.
+type Marca string
+
+// The two watermarks NT 008 defines, worded as it writes them.
+const (
+	SemMarca         Marca = ""
+	MarcaCancelada   Marca = "CANCELADA"
+	MarcaSubstituida Marca = "SUBSTITUÍDA"
+)
+
+// Canhoto is the receipt strip at the foot of the document.
+type Canhoto struct {
+	// Numero is "<número> / <chave de acesso>", which is the only part of the
+	// block the invoice fills; the date and the signature are written by hand
+	// on the printed paper, and stay blank here.
+	Numero string
 }
 
 // Cabecalho is the top strip of the document: item 2.4.3 of NT 008.

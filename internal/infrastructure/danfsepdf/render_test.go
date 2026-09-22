@@ -18,7 +18,7 @@ import (
 func desenhado(t *testing.T, doc *danfse.Documento) string {
 	t.Helper()
 
-	p, err := desenhar(doc)
+	p, err := desenhar(doc, Opcoes{})
 	if err != nil {
 		t.Fatalf("desenhar devolveu erro: %v", err)
 	}
@@ -49,7 +49,7 @@ func exemplo(t *testing.T) *danfse.Documento {
 
 func TestRender_PaginaA4EmUmaFolhaSo(t *testing.T) {
 	var saida bytes.Buffer
-	if err := Render(exemplo(t), &saida); err != nil {
+	if err := Render(exemplo(t), Opcoes{}, &saida); err != nil {
 		t.Fatalf("Render devolveu erro: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestRender_TarjaSoSaiEmHomologacao(t *testing.T) {
 }
 
 func TestRender_SemDocumento(t *testing.T) {
-	if err := Render(nil, &bytes.Buffer{}); err == nil {
+	if err := Render(nil, Opcoes{}, &bytes.Buffer{}); err == nil {
 		t.Fatal("esperava erro ao desenhar um documento inexistente")
 	}
 }
@@ -149,5 +149,67 @@ func TestQuebrarEm_MenosPalavrasQueLinhas(t *testing.T) {
 	}
 	if linhas[0] != "duas" || linhas[1] != "palavras" || linhas[2] != "" {
 		t.Errorf("quebra inesperada: %q", linhas)
+	}
+}
+
+// Items 2.5.1 and 2.5.2: the watermark is what tells a reader the invoice is
+// no longer worth anything, so it has to be on the page — and only when asked.
+func TestRender_MarcaDagua(t *testing.T) {
+	doc := exemplo(t)
+	if pdf := desenhado(t, doc); strings.Contains(pdf, "CANCELADA") {
+		t.Error("uma nota sem marca nao pode sair carimbada")
+	}
+
+	doc.Marca = danfse.MarcaCancelada
+	pdf := desenhado(t, doc)
+	if !strings.Contains(pdf, "CANCELADA") {
+		t.Error("a marca d'agua nao foi desenhada")
+	}
+	// Grey K35 is 166 on a 0-255 scale. A colour whose three channels match
+	// is written with the PDF's grayscale operator, so it reads "0.651 g".
+	if !strings.Contains(pdf, "0.651 g") {
+		t.Error("a marca d'agua nao saiu no cinza que a NT pede")
+	}
+	// The diagonal comes from a transformation matrix, not from the text.
+	if !strings.Contains(pdf, " cm\n") {
+		t.Error("a marca d'agua nao foi rotacionada")
+	}
+}
+
+func TestRender_CanhotoPodeSerOmitido(t *testing.T) {
+	doc := exemplo(t)
+
+	comCanhoto, err := desenhar(doc, Opcoes{})
+	if err != nil {
+		t.Fatalf("desenhar devolveu erro: %v", err)
+	}
+	comCanhoto.pdf.SetCompression(false)
+	var comSaida bytes.Buffer
+	if err := comCanhoto.pdf.Output(&comSaida); err != nil {
+		t.Fatalf("Output devolveu erro: %v", err)
+	}
+	if !strings.Contains(comSaida.String(), "Identifica") {
+		t.Error("o canhoto deveria sair por padrao")
+	}
+
+	semCanhoto, err := desenhar(doc, Opcoes{SemCanhoto: true})
+	if err != nil {
+		t.Fatalf("desenhar devolveu erro: %v", err)
+	}
+	semCanhoto.pdf.SetCompression(false)
+	var semSaida bytes.Buffer
+	if err := semCanhoto.pdf.Output(&semSaida); err != nil {
+		t.Fatalf("Output devolveu erro: %v", err)
+	}
+	if strings.Contains(semSaida.String(), "Data de Cientifica") {
+		t.Error("com --sem-canhoto o bloco nao pode ser desenhado")
+	}
+}
+
+func TestRender_LinhaDeTributosNoPapel(t *testing.T) {
+	pdf := desenhado(t, exemplo(t))
+
+	if !strings.Contains(pdf, "12.741/2012") {
+		t.Error("a linha da Lei 12.741/2012 nao chegou ao papel")
 	}
 }

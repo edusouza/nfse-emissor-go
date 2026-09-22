@@ -16,6 +16,10 @@ import (
 type danfseFlags struct {
 	saida        string
 	sobrescrever bool
+
+	semCanhoto  bool
+	cancelada   bool
+	substituida bool
 }
 
 func newDanfseCommand() *cobra.Command {
@@ -41,6 +45,9 @@ para quem emite quando a API do governo foi suspensa, em 03/08/2026.`,
 	fl := cmd.Flags()
 	fl.StringVarP(&f.saida, "saida", "o", "", "arquivo PDF a gravar (padrao: o mesmo nome do XML)")
 	fl.BoolVar(&f.sobrescrever, "sobrescrever", false, "substitui o PDF se ele ja existir")
+	fl.BoolVar(&f.semCanhoto, "sem-canhoto", false, "omite o canhoto de recebimento, que a NT deixa opcional")
+	fl.BoolVar(&f.cancelada, "cancelada", false, "imprime a marca d'agua CANCELADA")
+	fl.BoolVar(&f.substituida, "substituida", false, "imprime a marca d'agua SUBSTITUIDA")
 
 	return cmd
 }
@@ -56,8 +63,14 @@ func runDanfse(cmd *cobra.Command, entrada string, f *danfseFlags) error {
 		return err
 	}
 
+	marca, err := marcaDagua(f)
+	if err != nil {
+		return err
+	}
+	doc.Marca = marca
+
 	var pdf bytes.Buffer
-	if err := danfsepdf.Render(doc, &pdf); err != nil {
+	if err := danfsepdf.Render(doc, danfsepdf.Opcoes{SemCanhoto: f.semCanhoto}, &pdf); err != nil {
 		return err
 	}
 
@@ -73,11 +86,33 @@ func runDanfse(cmd *cobra.Command, entrada string, f *danfseFlags) error {
 	fmt.Fprintf(out, "DANFSe gerado\n")
 	fmt.Fprintf(out, "  Chave de acesso  %s\n", doc.Identificacao.ChaveAcesso)
 	fmt.Fprintf(out, "  Arquivo          %s\n", destino)
+	if doc.Marca != danfse.SemMarca {
+		fmt.Fprintf(out, "  Marca d'agua     %s\n", doc.Marca)
+	}
 	if doc.Cabecalho.SemValidadeJuridica {
 		fmt.Fprintf(out, "\nA nota e de homologacao: o documento sai com a tarja\n"+
 			"\"NFS-e SEM VALIDADE JURIDICA\", como manda a NT 008.\n")
 	}
 	return nil
+}
+
+// marcaDagua reads the watermark from the flags.
+//
+// It cannot come from the XML: an NFS-e carries no trace of having been
+// cancelled — the cancellation is an event registered apart — and a replaced
+// invoice only learns of it through the invoice that replaced it. So the
+// person printing has to say, and saying both at once is a contradiction
+// rather than two marks.
+func marcaDagua(f *danfseFlags) (danfse.Marca, error) {
+	switch {
+	case f.cancelada && f.substituida:
+		return danfse.SemMarca, fmt.Errorf("uma nota e cancelada ou substituida, nunca as duas; escolha uma das marcas")
+	case f.cancelada:
+		return danfse.MarcaCancelada, nil
+	case f.substituida:
+		return danfse.MarcaSubstituida, nil
+	}
+	return danfse.SemMarca, nil
 }
 
 // trocarExtensaoPorPDF turns notas/<chave>-nfse.xml into notas/<chave>-nfse.pdf.

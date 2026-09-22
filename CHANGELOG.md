@@ -15,9 +15,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Em andamento — DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
 
-O documento ainda está parcial: saem o cabeçalho e o bloco de identificação da
-NFS-e. Os demais blocos — prestador, tomador, serviço, tributação e totais —
-vêm em seguida, antes do lançamento.
+O documento ainda está parcial: faltam os quatro blocos de pessoas —
+prestador, tomador, destinatário e intermediário —, que dependem de traduzir o
+código IBGE em nome de município. Todo o resto do leiaute já sai.
 
 - **`nfse danfse <arquivo-da-nfse.xml>`** desenha o PDF a partir do XML
   autorizado, o mesmo que o `consultar` grava. Recusa uma DPS: o DANFSe
@@ -30,6 +30,16 @@ vêm em seguida, antes do lançamento.
   de imagem incorporada.
 - **Tarja "NFS-e SEM VALIDADE JURÍDICA"** em vermelho quando `tpAmb = 2`, como
   a NT exige — e só nesse caso.
+- **Informações complementares** reunidas na ordem e com os prefixos da NT,
+  separadas por pipes, terminando sempre na linha de **totais aproximados de
+  tributos da Lei 12.741/2012** — que sai mesmo quando a nota não declara
+  estimativa, porque a NT a torna obrigatória.
+- **Canhoto de recebimento**, que a NT deixa opcional: `--sem-canhoto` o omite
+  e devolve o espaço às informações complementares.
+- **Marcas d'água `CANCELADA` e `SUBSTITUÍDA`**, na diagonal, em cinza K35.
+  Elas vêm de `--cancelada` e `--substituida`, não do XML: a NFS-e não guarda
+  registro de ter sido cancelada — o cancelamento é um evento à parte — nem de
+  ter sido substituída, e as duas marcas se excluem.
 - Duas dependências novas, ambas sem `cgo`: `go-pdf/fpdf` e
   `boombuler/barcode`. Ver [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md).
 

@@ -107,3 +107,22 @@ func TestDanfse_ArquivoInexistente(t *testing.T) {
 		t.Fatal("esperava erro para um arquivo que nao existe")
 	}
 }
+
+// Cancelled and replaced are different fates, and the flags cannot both be
+// true: the document would carry two contradictory watermarks.
+func TestDanfse_MarcasDaguaSeExcluem(t *testing.T) {
+	dir, xml := copiarExemplo(t)
+	destino := filepath.Join(dir, "danfse.pdf")
+
+	if _, err := rodarDanfse(t, xml, "-o", destino, "--cancelada", "--substituida"); err == nil {
+		t.Fatal("esperava recusa ao pedir as duas marcas de uma vez")
+	}
+
+	saida, err := rodarDanfse(t, xml, "-o", destino, "--cancelada")
+	if err != nil {
+		t.Fatalf("o comando falhou: %v\n%s", err, saida)
+	}
+	if !strings.Contains(saida, "CANCELADA") {
+		t.Errorf("a saida nao informa a marca d'agua:\n%s", saida)
+	}
+}

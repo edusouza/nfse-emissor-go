@@ -63,6 +63,9 @@ func Parse(conteudo []byte) (*Documento, error) {
 		Federal:       federal(infDPS),
 		IBSCBS:        ibscbs(inf, infDPS),
 		Totais:        totais(inf, infDPS),
+
+		Complementares: complementares(inf, infDPS),
+		Canhoto:        Canhoto{Numero: limitar(juntar(" / ", texto(inf, "nNFSe"), chave), 66)},
 	}, nil
 }
 

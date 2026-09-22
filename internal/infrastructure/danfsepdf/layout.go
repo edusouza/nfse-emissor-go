@@ -156,3 +156,23 @@ const (
 	tituloIBSCBS  = "TRIBUTAÇÃO IBS / CBS"
 	tituloTotais  = "VALOR TOTAL DA NFS-e"
 )
+
+// "INFORMAÇÕES COMPLEMENTARES" and the receipt strip, items 2.1.12 and 2.1.13.
+const (
+	complementaresTituloY = 22.27
+	complementaresY       = 22.68
+	complementaresAltura  = 0.39
+
+	canhotoY      = 28.10
+	canhotoAltura = 0.67
+
+	tituloComplementares = "INFORMAÇÕES COMPLEMENTARES"
+)
+
+// Watermark of items 2.5.1 and 2.5.2: diagonal, at least fifty points, grey
+// K35 — which is 166 on a 0-255 scale (255 * 0.65).
+const (
+	marcaCorpo  = 50.0
+	marcaCinza  = 166
+	marcaAngulo = 45.0
+)
