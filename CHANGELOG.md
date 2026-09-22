@@ -13,6 +13,57 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
+
+O leiaute inteiro da NT 008 sai em uma página A4.
+
+- **`nfse danfse <arquivo-da-nfse.xml>`** desenha o PDF a partir do XML
+  autorizado, o mesmo que o `consultar` grava. Recusa uma DPS: o DANFSe
+  representa a nota que existe, e só a resposta do governo traz chave, número
+  e situação.
+- Leiaute conforme a [NT 008 v1.02](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf):
+  A4 retrato em página única, coordenadas em centímetros, linhas de 0,5 ponto,
+  borda de 1 ponto e sombreamento cinza a 5%.
+- **QR Code da consulta pública** desenhado como vetor, módulo a módulo, em vez
+  de imagem incorporada.
+- **Tarja "NFS-e SEM VALIDADE JURÍDICA"** em vermelho quando `tpAmb = 2`, como
+  a NT exige — e só nesse caso.
+- **Informações complementares** reunidas na ordem e com os prefixos da NT,
+  separadas por pipes, terminando sempre na linha de **totais aproximados de
+  tributos da Lei 12.741/2012** — que sai mesmo quando a nota não declara
+  estimativa, porque a NT a torna obrigatória.
+- **Canhoto de recebimento**, que a NT deixa opcional: `--sem-canhoto` o omite
+  e devolve o espaço às informações complementares.
+- **Marcas d'água `CANCELADA` e `SUBSTITUÍDA`**, na diagonal, em cinza K35.
+  Elas vêm de `--cancelada` e `--substituida`, não do XML: a NFS-e não guarda
+  registro de ter sido cancelada — o cancelamento é um evento à parte — nem de
+  ter sido substituída, e as duas marcas se excluem.
+- **Prestador, tomador, destinatário e intermediário**, com os documentos
+  formatados e o endereço concatenado. Um bloco sem ninguém vira a frase que a
+  NT manda — "TOMADOR/ADQUIRENTE DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e" e as
+  irmãs dela — e, quando a nota diz que o destinatário é o próprio tomador
+  (`indDest = 0`), o bloco diz isso em vez de repetir a mesma pessoa.
+- **Nome do município por consulta ao IBGE**, com cache em disco: a segunda
+  impressão da mesma nota não depende da rede. A consulta é anunciada antes de
+  acontecer, `--sem-rede` a desliga, e uma falha nunca impede o documento — o
+  campo sai com o código do IBGE e a saída explica por quê.
+  Ver [ADR 0012](docs/decisoes/0012-municipio-por-consulta.md).
+- Duas dependências novas, ambas sem `cgo`: `go-pdf/fpdf` e
+  `boombuler/barcode`. Ver [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md).
+
+**Pendência de verificação:** o contrato da consulta ao IBGE não foi
+exercitado contra o serviço real — o ambiente onde este código foi escrito não
+alcança `servicodados.ibge.gov.br`. Os campos vêm da documentação do serviço e
+os testes usam um servidor local. É a mesma pendência que a BrasilAPI tem desde
+a v0.6.0.
+
+**Achado na leitura da NT:** o item 2.2.2 limita as margens a 0,20 cm, mas a
+tabela de coordenadas do item 2.4.5 posiciona tudo a partir de 0,30 cm — e
+0,30 + 20,40 + 0,30 fecha exatamente os 21 cm da folha A4. As duas partes da
+nota técnica se contradizem; o emissor segue a tabela, que é a que posiciona os
+campos e de onde o modelo do Anexo I foi desenhado.
+
+
 ## [0.7.0] - 2026-09-21
 
 Fecha a substituição de NFS-e. A DANFSe foi implementada e **removida antes do
