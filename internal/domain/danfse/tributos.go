@@ -32,12 +32,26 @@ func servico(inf, infDPS *etree.Element) Servico {
 	return Servico{
 		CodigoTributacao: campo(juntar(" / ", codigoTributacao(cTribNac), cTribMun)),
 		CodigoNBS:        campo(codigoNBS(texto(infDPS, "serv/cServ/cNBS"))),
-		LocalPrestacao: campo(juntar(" / ",
+		LocalPrestacao: campo(localidade(
 			texto(inf, "xLocPrestacao"),
+			texto(infDPS, "serv/locPrest/cLocPrestacao"),
 			texto(infDPS, "serv/locPrest/cPaisPrestacao"))),
 		DescricaoCodigo: campo(limitar(descricao, 170)),
 		Descricao:       campo(limitar(texto(infDPS, "serv/cServ/xDescServ"), 1300)),
 	}
+}
+
+// localidade renders "Município / UF / País", as items 2.1.7 and 2.1.8 ask.
+//
+// The invoice names the municipality but not its state. The state is the
+// first two digits of the IBGE code — a fixed table, so no lookup — and a
+// national code means the country is Brazil, which the nota técnica writes as
+// its ISO code. A place abroad has no IBGE code and carries its country.
+func localidade(nome, codigoIBGE, pais string) string {
+	if codigoIBGE != "" {
+		return limitar(juntar(" / ", nome, siglaUF(codigoIBGE), paisBrasil), 42)
+	}
+	return limitar(juntar(" / ", nome, pais), 42)
 }
 
 // codigoTributacao punctuates the six digits of the national code as the nota
@@ -68,8 +82,11 @@ func issqn(inf, infDPS *etree.Element) ISSQN {
 		// its own in this block — tpImunidade exists for exactly that case.
 		Incide: tipo != tribNaoIncidencia,
 
-		TipoTributacao:      campo(limitar(descrever(tributacaoISSQN, tipo), 21)),
-		MunicipioIncidencia: campo(juntar(" / ", texto(inf, "xLocIncid"), texto(tribMun, "cPaisResult"))),
+		TipoTributacao: campo(limitar(descrever(tributacaoISSQN, tipo), 21)),
+		MunicipioIncidencia: campo(localidade(
+			texto(inf, "xLocIncid"),
+			texto(inf, "cLocIncid"),
+			texto(tribMun, "cPaisResult"))),
 
 		RegimeEspecial:          campo(limitar(descrever(regimeEspecial, texto(infDPS, "prest/regTrib/regEspTrib")), 27)),
 		TipoImunidade:           campo(limitar(descrever(imunidadeISSQN, texto(tribMun, "tpImunidade")), 40)),

@@ -111,11 +111,94 @@ func TestParse_Prestador(t *testing.T) {
 	if doc.Prestador.RegimeApuracao != "Regime de apuração dos tributos federais e municipal pelo Simples Nacional" {
 		t.Errorf("regime de apuracao: veio %q", doc.Prestador.RegimeApuracao)
 	}
-	// The example's prestador has no address group, which is ordinary: the
-	// field is optional in the leiaute.
-	if doc.Prestador.Municipio != Traco || doc.Prestador.Endereco != Traco {
-		t.Errorf("sem endereco, os campos deveriam ser tracos: %q e %q",
-			doc.Prestador.Municipio, doc.Prestador.Endereco)
+}
+
+// The provider who emits has only the CNPJ in the DPS — rule E0121 rejects the
+// name there — and the rest of the block comes from infNFSe/emit. Taking the
+// mapping of NT 008 to the letter printed a column of dashes.
+func TestParse_PrestadorEmitenteVemDoGrupoEmit(t *testing.T) {
+	// No lookup at all: the emitter's municipality is named by the invoice.
+	doc, err := Parse(lerExemplo(t), nil)
+	if err != nil {
+		t.Fatalf("Parse devolveu erro: %v", err)
+	}
+
+	casos := []struct{ campo, obtido, esperado string }{
+		{"nome", doc.Prestador.Nome, "EMPRESA EXEMPLO DE SERVICOS LTDA"},
+		{"telefone", doc.Prestador.Telefone, "4133334444"},
+		{"municipio", doc.Prestador.Municipio, "Curitiba / PR"},
+		{"codigo e CEP", doc.Prestador.CodigoCEP, "4106902 / 80.010-000"},
+		{"endereco", doc.Prestador.Endereco, "Rua das Flores, 100, Sala 21, Centro"},
+		{"email", doc.Prestador.Email, "contato@exemplo.com.br"},
+	}
+	for _, caso := range casos {
+		if caso.obtido != caso.esperado {
+			t.Errorf("%s: esperava %q, veio %q", caso.campo, caso.esperado, caso.obtido)
+		}
+	}
+}
+
+// What the DPS declared is what prints; emit only fills the gaps.
+func TestParse_DPSPrevaleceSobreEmit(t *testing.T) {
+	conteudo := trocar(t, string(lerExemplo(t)),
+		"<IM>1234567</IM>\n          <regTrib>",
+		"<IM>1234567</IM>\n          <fone>4199998888</fone>\n          <regTrib>")
+
+	doc, err := Parse([]byte(conteudo), nil)
+	if err != nil {
+		t.Fatalf("Parse devolveu erro: %v", err)
+	}
+
+	if doc.Prestador.Telefone != "4199998888" {
+		t.Errorf("o telefone da DPS deveria prevalecer, veio %q", doc.Prestador.Telefone)
+	}
+	if doc.Prestador.Nome != "EMPRESA EXEMPLO DE SERVICOS LTDA" {
+		t.Errorf("o nome ausente da DPS deveria vir do emit, veio %q", doc.Prestador.Nome)
+	}
+}
+
+// emit describes whoever tpEmit names. When the buyer emits, it is the buyer's
+// block that gets completed, never the provider's.
+func TestParse_EmitCompletaQuemEmitiu(t *testing.T) {
+	conteudo := trocar(t, string(lerExemplo(t)), "<tpEmit>1</tpEmit>", "<tpEmit>2</tpEmit>")
+
+	doc, err := Parse([]byte(conteudo), municipios())
+	if err != nil {
+		t.Fatalf("Parse devolveu erro: %v", err)
+	}
+
+	if doc.Prestador.Nome != Traco {
+		t.Errorf("com tpEmit = 2, o emit nao descreve o prestador; veio %q", doc.Prestador.Nome)
+	}
+	if doc.Tomador.Nome != "CLIENTE EXEMPLO COMERCIO LTDA" {
+		t.Errorf("o nome que o tomador declarou deveria prevalecer, veio %q", doc.Tomador.Nome)
+	}
+	if doc.Tomador.Telefone != "4133334444" {
+		t.Errorf("o telefone ausente do tomador deveria vir do emit, veio %q", doc.Tomador.Telefone)
+	}
+}
+
+// An invoice without the emit group — not one the schema allows, but the
+// document still prints — falls back to the dashes of note 12.
+func TestParse_SemGrupoEmit(t *testing.T) {
+	conteudo := string(lerExemplo(t))
+	inicio := strings.Index(conteudo, "<emit>")
+	fim := strings.Index(conteudo, "</emit>") + len("</emit>")
+	if inicio < 0 || fim <= inicio {
+		t.Fatal("a NFS-e de exemplo nao tem mais o grupo emit")
+	}
+
+	doc, err := Parse([]byte(conteudo[:inicio]+conteudo[fim:]), nil)
+	if err != nil {
+		t.Fatalf("Parse devolveu erro: %v", err)
+	}
+
+	if doc.Prestador.Nome != Traco || doc.Prestador.Endereco != Traco {
+		t.Errorf("sem emit, os campos deveriam ser tracos: %q e %q",
+			doc.Prestador.Nome, doc.Prestador.Endereco)
+	}
+	if doc.Prestador.Documento != "12.345.678/0001-95" {
+		t.Errorf("o documento da DPS nao depende do emit, veio %q", doc.Prestador.Documento)
 	}
 }
 

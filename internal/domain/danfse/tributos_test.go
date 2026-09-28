@@ -22,6 +22,11 @@ func TestParse_Servico(t *testing.T) {
 	if doc.Servico.Descricao != "Desenvolvimento de sistema de emissao de notas fiscais" {
 		t.Errorf("descricao do servico: veio %q", doc.Servico.Descricao)
 	}
+	// Items 2.1.7 and 2.1.8 ask for "Município / UF / País"; the invoice names
+	// only the city, and the state comes from the IBGE code.
+	if doc.Servico.LocalPrestacao != "Curitiba / PR / BR" {
+		t.Errorf("local da prestacao: veio %q", doc.Servico.LocalPrestacao)
+	}
 	// With no municipal description, the national one takes the field.
 	if doc.Servico.DescricaoCodigo != "Analise e desenvolvimento de sistemas" {
 		t.Errorf("descricao do codigo: veio %q", doc.Servico.DescricaoCodigo)
@@ -36,7 +41,7 @@ func TestParse_ISSQN(t *testing.T) {
 
 	casos := []struct{ campo, obtido, esperado string }{
 		{"tipo de tributacao", doc.ISSQN.TipoTributacao, "Operação tributável"},
-		{"municipio de incidencia", doc.ISSQN.MunicipioIncidencia, "Curitiba"},
+		{"municipio de incidencia", doc.ISSQN.MunicipioIncidencia, "Curitiba / PR / BR"},
 		{"regime especial", doc.ISSQN.RegimeEspecial, "Nenhum"},
 		{"base de calculo", doc.ISSQN.BaseCalculo, "1.500,00"},
 		{"aliquota", doc.ISSQN.Aliquota, "2,00%"},
@@ -262,5 +267,43 @@ func TestLimitar(t *testing.T) {
 	// bytes, and a cut by byte could split an accented letter in half.
 	if obtido := limitar("ação", 4); obtido != "ação" {
 		t.Errorf("limitar contou bytes em vez de caracteres: %q", obtido)
+	}
+}
+
+func TestLocalidade(t *testing.T) {
+	casos := []struct{ nome, codigo, pais, esperado string }{
+		{"Curitiba", "4106902", "", "Curitiba / PR / BR"},
+		{"Brasília", "5300108", "", "Brasília / DF / BR"},
+		// Abroad there is no IBGE code, and the invoice carries the country.
+		{"", "", "US", "US"},
+		{"Lisboa", "", "PT", "Lisboa / PT"},
+		// A code outside the table still says the place is in Brazil.
+		{"Curitiba", "9999999", "", "Curitiba / BR"},
+		{"", "", "", ""},
+	}
+
+	for _, caso := range casos {
+		if obtido := localidade(caso.nome, caso.codigo, caso.pais); obtido != caso.esperado {
+			t.Errorf("localidade(%q, %q, %q) = %q, esperava %q",
+				caso.nome, caso.codigo, caso.pais, obtido, caso.esperado)
+		}
+	}
+}
+
+func TestSiglaUF(t *testing.T) {
+	casos := []struct{ codigo, esperado string }{
+		{"4106902", "PR"},
+		{"3550308", "SP"},
+		{"5300108", "DF"},
+		{"1100015", "RO"},
+		{"41", ""},      // so a UF, nao um municipio
+		{"41a6902", ""}, // nao sao digitos
+		{"9999999", ""}, // UF inexistente
+	}
+
+	for _, caso := range casos {
+		if obtido := siglaUF(caso.codigo); obtido != caso.esperado {
+			t.Errorf("siglaUF(%q) = %q, esperava %q", caso.codigo, obtido, caso.esperado)
+		}
 	}
 }

@@ -3,6 +3,10 @@
   NFS-e ficticia, montada conforme NFSe_v1.01.xsd (leiaute 1.00, sem IBS/CBS),
   para exercitar a geracao do DANFSe. Nenhum dado aqui pertence a alguem:
   CNPJ, chave de acesso e enderecos sao de exemplo.
+
+  Como numa nota real emitida pelo proprio prestador (tpEmit = 1), o prest da
+  DPS traz so o documento, a inscricao e o regime: a regra E0121 rejeita o
+  nome ali. Nome, endereco e contatos voltam em infNFSe/emit.
 -->
 <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
   <infNFSe Id="NFS41069022212345678000195000000000000126081234567890">
@@ -54,9 +58,6 @@
         <prest>
           <CNPJ>12345678000195</CNPJ>
           <IM>1234567</IM>
-          <xNome>EMPRESA EXEMPLO DE SERVICOS LTDA</xNome>
-          <fone>4133334444</fone>
-          <email>contato@exemplo.com.br</email>
           <regTrib>
             <opSimpNac>2</opSimpNac>
             <regApTribSN>1</regApTribSN>

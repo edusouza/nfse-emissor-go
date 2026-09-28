@@ -43,6 +43,15 @@ O leiaute inteiro da NT 008 sai em uma página A4.
   NT manda — "TOMADOR/ADQUIRENTE DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e" e as
   irmãs dela — e, quando a nota diz que o destinatário é o próprio tomador
   (`indDest = 0`), o bloco diz isso em vez de repetir a mesma pessoa.
+- **Dados de quem emitiu vêm do grupo `emit` da NFS-e** quando a DPS não os
+  traz. A NT aponta o bloco do prestador para a DPS, mas numa nota emitida pelo
+  próprio prestador a DPS só leva o CNPJ — a regra E0121 rejeita o nome ali — e
+  nome, endereço, telefone e e-mail voltam no `emit`, preenchidos pelo governo.
+  Seguir a NT ao pé da letra imprimia o bloco inteiro em traços. O que a DPS
+  declarou continua prevalecendo, campo a campo.
+- **Local da prestação e município de incidência** no formato da NT,
+  "Município / UF / País" (`Curitiba / PR / BR`). A nota só traz o nome da
+  cidade; a UF sai dos dois primeiros dígitos do código do IBGE, sem consulta.
 - **Nome do município por consulta ao IBGE**, com cache em disco: a segunda
   impressão da mesma nota não depende da rede. A consulta é anunciada antes de
   acontecer, `--sem-rede` a desliga, e uma falha nunca impede o documento — o

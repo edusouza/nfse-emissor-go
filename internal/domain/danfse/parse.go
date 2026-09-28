@@ -56,7 +56,7 @@ func Parse(conteudo []byte, municipios Municipios) (*Documento, error) {
 
 	infDPS := inf.FindElement("DPS/infDPS")
 
-	return &Documento{
+	resultado := &Documento{
 		Cabecalho:     cabecalho(inf, infDPS, chave),
 		Identificacao: identificacao(inf, infDPS, chave),
 
@@ -73,7 +73,10 @@ func Parse(conteudo []byte, municipios Municipios) (*Documento, error) {
 
 		Complementares: complementares(inf, infDPS),
 		Canhoto:        Canhoto{Numero: limitar(juntar(" / ", texto(inf, "nNFSe"), chave), 66)},
-	}, nil
+	}
+	completarEmitente(resultado, inf, infDPS, municipios)
+
+	return resultado, nil
 }
 
 // chaveDeAcesso extracts the access key from the Id attribute.

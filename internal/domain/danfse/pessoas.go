@@ -135,7 +135,11 @@ func municipio(endereco *etree.Element, municipios Municipios) string {
 			texto(exterior, "cPais")), 37)
 	}
 
-	codigo := texto(endereco, "endNac/cMun")
+	return municipioNacional(texto(endereco, "endNac/cMun"), municipios)
+}
+
+// municipioNacional renders "Nome / UF" for a seven-digit IBGE code.
+func municipioNacional(codigo string, municipios Municipios) string {
 	if codigo == "" {
 		return ""
 	}
@@ -185,4 +189,95 @@ func logradouro(endereco *etree.Element) string {
 		texto(endereco, "nro"),
 		texto(endereco, "xCpl"),
 		texto(endereco, "xBairro"))
+}
+
+// Codes of TSEmitenteDPS (infDPS/tpEmit) naming who emitted the DPS.
+const (
+	emitePrestador     = "1"
+	emiteTomador       = "2"
+	emiteIntermediario = "3"
+)
+
+// completarEmitente fills the emitter's block with what infNFSe/emit says
+// about them, wherever the DPS said nothing.
+//
+// NT 008 maps the provider block to DPS/infDPS/prest, but on a real invoice
+// that group is nearly empty: rule E0121 rejects the provider's name in a DPS
+// the provider emits, because the government already knows it by the CNPJ.
+// The name, the address and the contacts come back in the emit group instead,
+// filled from the national register. Rules E1282 and E1285 guarantee emit
+// carries the document of the person tpEmit names, so it is the same person —
+// described by the one party that knows. Following the mapping to the letter
+// printed the provider block as a column of dashes.
+//
+// The DPS still wins field by field: it is what the nota técnica points at,
+// and when it does say something, that is what was declared.
+func completarEmitente(doc *Documento, inf, infDPS *etree.Element, municipios Municipios) {
+	emit := emitente(inf, municipios)
+
+	switch texto(infDPS, "tpEmit") {
+	case emitePrestador:
+		doc.Prestador.Pessoa = completar(doc.Prestador.Pessoa, emit)
+	case emiteTomador:
+		doc.Tomador = completar(doc.Tomador, emit)
+	case emiteIntermediario:
+		doc.Intermediario = completar(doc.Intermediario, emit)
+	}
+}
+
+// emitente reads infNFSe/emit, whose address is a flat enderNac rather than
+// the end/endNac pair of the DPS.
+func emitente(inf *etree.Element, municipios Municipios) Pessoa {
+	raiz := caminho(inf, "emit")
+	if raiz == nil {
+		return Pessoa{}
+	}
+
+	endereco := caminho(raiz, "enderNac")
+
+	// Rule E1286 makes the emitter's municipality the one the invoice was
+	// issued in, and the invoice names that one itself: no lookup needed.
+	var municipio string
+	if cidade := texto(inf, "xLocEmi"); cidade != "" {
+		municipio = limitar(juntar(" / ", cidade, texto(endereco, "UF")), 37)
+	} else {
+		municipio = municipioNacional(texto(endereco, "cMun"), municipios)
+	}
+
+	return Pessoa{
+		Documento:          documento(raiz),
+		InscricaoMunicipal: limitar(texto(raiz, "IM"), 15),
+		Telefone:           limitar(texto(raiz, "fone"), 20),
+		Nome:               limitar(texto(raiz, "xNome"), 80),
+		Municipio:          municipio,
+		CodigoCEP:          limitar(juntar(" / ", texto(endereco, "cMun"), formatarCEP(texto(endereco, "CEP"))), 21),
+		Endereco:           limitar(logradouro(endereco), 80),
+		Email:              limitar(texto(raiz, "email"), 80),
+	}
+}
+
+// completar keeps each field the DPS filled and takes the emitter's for the
+// rest. A block replaced by a sentence has nobody in it to complete.
+func completar(dps, emit Pessoa) Pessoa {
+	if dps.Mensagem != "" {
+		return dps
+	}
+
+	escolher := func(doDPS, doEmit string) string {
+		if doDPS != "" && doDPS != Traco {
+			return doDPS
+		}
+		return campo(doEmit)
+	}
+
+	return Pessoa{
+		Documento:          escolher(dps.Documento, emit.Documento),
+		InscricaoMunicipal: escolher(dps.InscricaoMunicipal, emit.InscricaoMunicipal),
+		Telefone:           escolher(dps.Telefone, emit.Telefone),
+		Nome:               escolher(dps.Nome, emit.Nome),
+		Municipio:          escolher(dps.Municipio, emit.Municipio),
+		CodigoCEP:          escolher(dps.CodigoCEP, emit.CodigoCEP),
+		Endereco:           escolher(dps.Endereco, emit.Endereco),
+		Email:              escolher(dps.Email, emit.Email),
+	}
 }
