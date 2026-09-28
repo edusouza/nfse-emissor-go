@@ -3,6 +3,7 @@ package danfsepdf
 import (
 	"fmt"
 	"io"
+	"unicode/utf8"
 
 	"github.com/boombuler/barcode/qr"
 	"github.com/go-pdf/fpdf"
@@ -18,12 +19,19 @@ type Opcoes struct {
 }
 
 // Render draws the document and writes the PDF to w.
-func Render(doc *danfse.Documento, opcoes Opcoes, w io.Writer) error {
+//
+// The warnings are what the page could not show the way the XML says it. The
+// document is written regardless — a DANFSe with a mangled name is still the
+// invoice's — but whoever hands it over should know.
+func Render(doc *danfse.Documento, opcoes Opcoes, w io.Writer) ([]string, error) {
 	p, err := desenhar(doc, opcoes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return p.pdf.Output(w)
+	if err := p.pdf.Output(w); err != nil {
+		return nil, err
+	}
+	return p.avisos(), nil
 }
 
 // desenhar lays the whole document out and stops short of writing it, so that
@@ -49,6 +57,10 @@ func desenhar(doc *danfse.Documento, opcoes Opcoes) (*pagina, error) {
 	p.ibscbs(doc.IBSCBS)
 	p.totais(doc.Totais)
 	p.complementares(doc.Complementares, !opcoes.SemCanhoto)
+	// The receipt strip stays at the foot of the page wherever the blocks
+	// above it ended: the room the service description took came out of the
+	// complementary information, not from under the strip.
+	p.deslocamento = 0
 	if !opcoes.SemCanhoto {
 		p.canhoto(doc.Canhoto)
 	}
@@ -67,8 +79,17 @@ type pagina struct {
 
 	// traduzir converts UTF-8 into the cp1252 encoding the PDF's built-in fonts
 	// use. Without it every accented letter of a Brazilian invoice — the ç of
-	// "Serviço", the ã of "Informações" — comes out as mojibake.
+	// "Serviço", the ã of "Informações" — comes out as mojibake. Text goes
+	// through converter, which also notices what cp1252 cannot hold.
 	traduzir func(string) string
+
+	// deslocamento pushes every block drawn after the service description
+	// down by the room the description took beyond its one line. The helpers
+	// below apply it, so the blocks keep their coordinates from the NT's table.
+	deslocamento float64
+
+	cabe        map[rune]bool
+	foraDaFonte []string
 }
 
 func novaPagina() *pagina {
@@ -82,7 +103,11 @@ func novaPagina() *pagina {
 	pdf.SetAutoPageBreak(false, 0)
 	pdf.AddPage()
 
-	p := &pagina{pdf: pdf, traduzir: pdf.UnicodeTranslatorFromDescriptor("cp1252")}
+	p := &pagina{
+		pdf:      pdf,
+		traduzir: pdf.UnicodeTranslatorFromDescriptor("cp1252"),
+		cabe:     map[rune]bool{},
+	}
 	p.pdf.SetDrawColor(0, 0, 0)
 	p.pdf.SetLineWidth(linhaBorda)
 	p.pdf.Rect(margem, margem, larguraCorpo, alturaCorpo, "D")
@@ -147,8 +172,9 @@ func (p *pagina) dadosDaNFSe(id danfse.Identificacao) {
 // qrCode draws the code as vector squares rather than as an embedded image.
 //
 // The library is used only as an encoder: it answers which modules are dark,
-// and each dark module becomes a filled rectangle. That keeps the code sharp at
-// any printer resolution and spares the document an image object.
+// and each run of dark modules along a row becomes one filled rectangle. That
+// keeps the code sharp at any printer resolution, spares the document an image
+// object, and draws a few hundred rectangles instead of one per module.
 func (p *pagina) qrCode(endereco string) error {
 	codigo, err := qr.Encode(endereco, qr.M, qr.Auto)
 	if err != nil {
@@ -157,14 +183,23 @@ func (p *pagina) qrCode(endereco string) error {
 
 	modulos := codigo.Bounds().Dx()
 	lado := qrLado / float64(modulos)
+	escuro := func(x, y int) bool {
+		vermelho, verde, azul, _ := codigo.At(x, y).RGBA()
+		return vermelho == 0 && verde == 0 && azul == 0
+	}
 
 	p.pdf.SetFillColor(0, 0, 0)
 	for y := 0; y < modulos; y++ {
-		for x := 0; x < modulos; x++ {
-			vermelho, verde, azul, _ := codigo.At(x, y).RGBA()
-			if vermelho == 0 && verde == 0 && azul == 0 {
-				p.pdf.Rect(qrX+float64(x)*lado, qrY+float64(y)*lado, lado, lado, "F")
+		for x := 0; x < modulos; {
+			if !escuro(x, y) {
+				x++
+				continue
 			}
+			inicio := x
+			for x < modulos && escuro(x, y) {
+				x++
+			}
+			p.pdf.Rect(qrX+float64(inicio)*lado, qrY+float64(y)*lado, float64(x-inicio)*lado, lado, "F")
 		}
 	}
 
@@ -177,22 +212,21 @@ func (p *pagina) qrCode(endereco string) error {
 func (p *pagina) notaDoQRCode() {
 	p.pdf.SetFont(fonte, "", corpoMiudo)
 
-	linhas := quebrarEm(p.traduzir(notaQRCode), qrNotaLinhas, p.pdf.GetStringWidth)
 	altura := qrNotaAltura / float64(qrNotaLinhas)
-	for i, linha := range linhas {
-		p.pdf.Text(qrNotaX+0.05, qrNotaY+altura*float64(i+1)-0.04, linha)
+	for i, linha := range notaQRCode {
+		p.pdf.Text(qrNotaX+0.05, qrNotaY+altura*float64(i+1)-0.04, p.converter(linha))
 	}
 }
 
 // quadroSombreado fills an area with the 5% grey of item 2.2.3.
 func (p *pagina) quadroSombreado(x, y, largura, altura float64) {
 	p.pdf.SetFillColor(cinzaClaro, cinzaClaro, cinzaClaro)
-	p.pdf.Rect(x, y, largura, altura, "F")
+	p.pdf.Rect(x, y+p.deslocamento, largura, altura, "F")
 }
 
 // caixa draws a field's dividing lines.
 func (p *pagina) caixa(x, y, largura, altura float64) {
-	p.pdf.Rect(x, y, largura, altura, "D")
+	p.pdf.Rect(x, y+p.deslocamento, largura, altura, "D")
 }
 
 func (p *pagina) escrever(texto string, x, y float64, familia, estilo string, tamanho float64) {
@@ -200,7 +234,55 @@ func (p *pagina) escrever(texto string, x, y float64, familia, estilo string, ta
 		return
 	}
 	p.pdf.SetFont(familia, estilo, tamanho)
-	p.pdf.Text(x, y, p.traduzir(texto))
+	p.pdf.Text(x, y+p.deslocamento, p.converter(texto))
+}
+
+// converter translates text for the core fonts and remembers any that lost
+// characters on the way.
+//
+// cp1252 covers Portuguese and most Western European text, and nothing else:
+// the translator turns a Cyrillic or CJK letter into ".", silently. On a
+// foreign taker's name that is a corrupted field on a fiscal document, and it
+// is reported rather than discovered by the client.
+func (p *pagina) converter(texto string) string {
+	for _, r := range texto {
+		if !p.cabeNaFonte(r) {
+			p.registrarForaDaFonte(texto)
+			break
+		}
+	}
+	return p.traduzir(texto)
+}
+
+func (p *pagina) cabeNaFonte(r rune) bool {
+	if r < utf8.RuneSelf {
+		return true
+	}
+	if cabe, visto := p.cabe[r]; visto {
+		return cabe
+	}
+	cabe := p.traduzir(string(r)) != "."
+	p.cabe[r] = cabe
+	return cabe
+}
+
+func (p *pagina) registrarForaDaFonte(texto string) {
+	for _, visto := range p.foraDaFonte {
+		if visto == texto {
+			return
+		}
+	}
+	p.foraDaFonte = append(p.foraDaFonte, texto)
+}
+
+// avisos puts what went missing in words for the person printing.
+func (p *pagina) avisos() []string {
+	var avisos []string
+	for _, texto := range p.foraDaFonte {
+		avisos = append(avisos, fmt.Sprintf(
+			"%q tem caracteres que a fonte do PDF nao tem; eles sairam como \".\"", texto))
+	}
+	return avisos
 }
 
 // centralizar puts text in the middle of the span between esquerda and direita.
@@ -213,6 +295,6 @@ func (p *pagina) centralizarEm(texto string, meio, y float64, familia, estilo st
 		return
 	}
 	p.pdf.SetFont(familia, estilo, tamanho)
-	traduzido := p.traduzir(texto)
-	p.pdf.Text(meio-p.pdf.GetStringWidth(traduzido)/2, y, traduzido)
+	traduzido := p.converter(texto)
+	p.pdf.Text(meio-p.pdf.GetStringWidth(traduzido)/2, y+p.deslocamento, traduzido)
 }

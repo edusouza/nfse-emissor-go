@@ -620,6 +620,13 @@ func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed 
 // wrong for every caller but one: a query has neither.
 var errArquivoExistente = errors.New("arquivo ja existe")
 
+// arquivoExistente is the refusal to replace a file, for callers that find out
+// before trying to write.
+func arquivoExistente(path string) error {
+	return fmt.Errorf("%w: %q ja existe.\nUse --sobrescrever se for mesmo para substituir o arquivo",
+		errArquivoExistente, path)
+}
+
 func writeNew(path string, content []byte, overwrite bool) error {
 	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if overwrite {
@@ -629,8 +636,7 @@ func writeNew(path string, content []byte, overwrite bool) error {
 	file, err := os.OpenFile(path, flags, 0o644)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("%w: %q ja existe.\nUse --sobrescrever se for mesmo para substituir o arquivo",
-				errArquivoExistente, path)
+			return arquivoExistente(path)
 		}
 		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
 	}
@@ -697,7 +703,7 @@ func reportEmission(cmd *cobra.Command, nota config.Nota, dpsID, dpsPath, nfsePa
 	fmt.Fprintf(out, "  DPS              %s\n", dpsID)
 	fmt.Fprintf(out, "  Ambiente         %s\n", env)
 	fmt.Fprintf(out, "  Valor            R$ %.2f\n", nota.Valores.ValorServico)
-	fmt.Fprintf(out, "  Processada em    %s\n", result.ProcessedAt.Local().Format("02/01/2006 15:04:05"))
+	fmt.Fprintf(out, "  Processada em    %s\n", result.ProcessedAt.Local().Format(layoutDataHoraSegundos))
 	fmt.Fprintf(out, "  DPS assinada     %s\n", dpsPath)
 	fmt.Fprintf(out, "  NFS-e            %s\n", nfsePath)
 

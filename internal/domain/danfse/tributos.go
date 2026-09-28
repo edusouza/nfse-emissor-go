@@ -2,6 +2,7 @@ package danfse
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
@@ -15,9 +16,26 @@ const MensagemSemISSQN = "TRIBUTAÇÃO MUNICIPAL (ISSQN) - OPERAÇÃO NÃO SUJEI
 // tax does not reach.
 const tribNaoIncidencia = "4"
 
-// retidoPisCofins is the tpRetPisCofins that changes how three fields of the
-// federal block are filled.
-const retidoPisCofins = "1"
+// pisRetido and cofinsRetido read TSTipoRetPISCofins one contribution at a
+// time.
+//
+// NT 008 writes its rule for code 1 alone — "Quando tpRetPisCofins = 1 (PIS/
+// COFINS Retido)" — because that was the whole list when it was drafted. The
+// schema now has ten codes, and 3 and 4 withhold both contributions just as 1
+// does; 5, 6, 7 and 9 withhold one of them. Applying the rule to code 1 only
+// printed a withheld PIS as the issuer's own debt and left it out of the
+// withheld total — the double count the rule exists to prevent. So the rule is
+// applied as it reads, to each contribution the code says was withheld.
+// Whether CSLL was withheld needs no table: vRetCSLL is a withheld amount by
+// definition, and is always part of the total.
+var (
+	pisRetido = map[string]bool{
+		"1": true, "3": true, "4": true, "5": true, "9": true,
+	}
+	cofinsRetido = map[string]bool{
+		"1": true, "3": true, "4": true, "6": true, "7": true,
+	}
+)
 
 func servico(inf, infDPS *etree.Element) Servico {
 	cTribNac := texto(infDPS, "serv/cServ/cTribNac")
@@ -125,24 +143,27 @@ func federal(infDPS *etree.Element) Federal {
 	tribFed := caminho(infDPS, "valores/trib/tribFed")
 	piscofins := caminho(tribFed, "piscofins")
 
-	retido := texto(piscofins, "tpRetPisCofins") == retidoPisCofins
+	tipo := texto(piscofins, "tpRetPisCofins")
 	vPis := texto(piscofins, "vPis")
 	vCofins := texto(piscofins, "vCofins")
-	vRetCSLL := texto(tribFed, "vRetCSLL")
 
-	// When PIS and COFINS were withheld, they belong to the withheld total and
-	// stop being a debt of the issuer's own. NT 008 spells out both halves of
-	// the move, and printing only one of them would count the same money twice.
-	sociais := vRetCSLL
-	if retido {
-		sociais = somar(vRetCSLL, vPis, vCofins)
-		vPis, vCofins = "0.00", "0.00"
+	// A withheld contribution belongs to the withheld total and stops being a
+	// debt of the issuer's own. NT 008 spells out both halves of the move, and
+	// printing only one of them would count the same money twice.
+	sociais := []string{texto(tribFed, "vRetCSLL")}
+	if pisRetido[tipo] {
+		sociais = append(sociais, vPis)
+		vPis = "0.00"
+	}
+	if cofinsRetido[tipo] {
+		sociais = append(sociais, vCofins)
+		vCofins = "0.00"
 	}
 
 	return Federal{
 		IRRF:                   campo(moeda(texto(tribFed, "vRetIRRF"))),
 		ContribuicaoPrevidenc:  campo(moeda(texto(tribFed, "vRetCP"))),
-		ContribuicoesSociais:   campo(moeda(sociais)),
+		ContribuicoesSociais:   campo(moeda(somar(sociais...))),
 		PIS:                    campo(moeda(vPis)),
 		COFINS:                 campo(moeda(vCofins)),
 		DescricaoContribuicoes: campo(limitar(descrever(retencaoPisCofins, texto(piscofins, "tpRetPisCofins")), 35)),
@@ -253,10 +274,9 @@ func somar(valores ...string) string {
 		}
 		achou = true
 
-		negativo := strings.HasPrefix(inteiro, "-")
-		parcela := paraCentavos(strings.TrimPrefix(inteiro, "-"), decimal)
-		if negativo {
-			parcela = -parcela
+		parcela, ok := paraCentavos(inteiro, decimal)
+		if !ok {
+			continue
 		}
 		centavos += parcela
 	}
@@ -267,12 +287,26 @@ func somar(valores ...string) string {
 	return deCentavos(centavos)
 }
 
-func paraCentavos(inteiro, decimal string) int64 {
-	var total int64
-	for _, digito := range inteiro + decimal {
-		total = total*10 + int64(digito-'0')
+// maxDigitosInteiros is the integer part TSDec15V2 allows: fifteen digits in
+// all, two of them after the point. Every monetary value of the NFS-e fits it,
+// and so does a sum of a handful of them inside an int64 of hundredths.
+const maxDigitosInteiros = 13
+
+// paraCentavos turns the halves partesDoNumero produced into hundredths.
+//
+// The command does not validate the XML against the schema, so a value can be
+// any length. One longer than the schema allows is refused rather than parsed:
+// an int64 overflows quietly, and a total that wrapped around would print as a
+// plausible — even negative — amount on a fiscal document.
+func paraCentavos(inteiro, decimal string) (int64, bool) {
+	if len(strings.TrimPrefix(inteiro, "-")) > maxDigitosInteiros {
+		return 0, false
 	}
-	return total
+	centavos, err := strconv.ParseInt(inteiro+decimal, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return centavos, true
 }
 
 func deCentavos(centavos int64) string {

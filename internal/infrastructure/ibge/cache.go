@@ -3,6 +3,7 @@ package ibge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -116,11 +117,48 @@ func (c *Cache) Gravar() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(c.caminho, append(conteudo, '\n'), 0o644); err != nil {
+	if err := gravarAtomico(c.caminho, append(conteudo, '\n')); err != nil {
 		return err
 	}
 
 	c.alterado = false
+	return nil
+}
+
+// gravarAtomico writes through a temporary file in the same directory and
+// renames it over the destination.
+//
+// Writing in place truncates first: an interrupted run leaves half a JSON
+// document, which carregar then throws away whole, and two runs at once
+// interleave their bytes. A rename is atomic on the same filesystem, so a
+// reader sees the old file or the new one, never a mix. Two concurrent runs
+// still race — the last one wins — but each leaves a file that parses.
+func gravarAtomico(caminho string, conteudo []byte) error {
+	temporario, err := os.CreateTemp(filepath.Dir(caminho), filepath.Base(caminho)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	nome := temporario.Name()
+
+	if _, err := temporario.Write(conteudo); err != nil {
+		temporario.Close()
+		os.Remove(nome)
+		return err
+	}
+	if err := temporario.Close(); err != nil {
+		os.Remove(nome)
+		return err
+	}
+	// CreateTemp opens with 0600; the cache holds public data and used to be
+	// written 0644, which is kept.
+	if err := os.Chmod(nome, 0o644); err != nil {
+		os.Remove(nome)
+		return err
+	}
+	if err := os.Rename(nome, caminho); err != nil {
+		os.Remove(nome)
+		return err
+	}
 	return nil
 }
 
@@ -158,20 +196,41 @@ func (c *Cache) carregar() {
 //
 // It is the shape the DANFSe wants: a lookup that cannot fail. Whatever goes
 // wrong, the answer is "I do not know", and the document prints the code.
+//
+// It also bounds how long "I do not know" can take. A code that failed once is
+// not asked again, and once the service cannot be reached at all — no route, a
+// blocked proxy, a host that never answers — the client is dropped for the rest
+// of the run. Without that, a document with four people blocks waited out the
+// timeout four times over, to print four codes it could have printed at once.
 type Consulta struct {
 	ctx    context.Context
 	client *Client
 	cache  *Cache
 
-	mu        sync.Mutex
-	consultou bool
-	falhas    []string
+	// antes runs once, right before the first request leaves the machine.
+	antes func()
+
+	mu          sync.Mutex
+	anunciou    bool
+	inacessivel bool
+	falharam    map[string]bool
+	falhas      []string
 }
 
 // NovaConsulta wires a client and a cache together. A nil client makes a
 // lookup that only answers from the cache, which is what --sem-rede wants.
 func NovaConsulta(ctx context.Context, client *Client, cache *Cache) *Consulta {
-	return &Consulta{ctx: ctx, client: client, cache: cache}
+	return &Consulta{ctx: ctx, client: client, cache: cache, falharam: map[string]bool{}}
+}
+
+// AntesDeConsultar registers what to do right before the first code is sent
+// to the service — announcing it, in the CLI. It does not run when every code
+// is answered from the cache: nothing left the machine, so there is nothing to
+// announce.
+func (c *Consulta) AntesDeConsultar(f func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.antes = f
 }
 
 // Nome returns the municipality behind a code.
@@ -186,19 +245,15 @@ func (c *Consulta) Nome(codigo string) (string, string, bool) {
 			return municipio.Nome, municipio.UF, true
 		}
 	}
-	if c.client == nil {
+	if !c.deveConsultar(codigo) {
 		return "", "", false
 	}
 
 	municipio, err := c.client.Consultar(c.ctx, codigo)
 	if err != nil {
-		c.registrarFalha(err)
+		c.registrarFalha(codigo, err)
 		return "", "", false
 	}
-
-	c.mu.Lock()
-	c.consultou = true
-	c.mu.Unlock()
 
 	if c.cache != nil {
 		c.cache.Guardar(*municipio)
@@ -206,12 +261,22 @@ func (c *Consulta) Nome(codigo string) (string, string, bool) {
 	return municipio.Nome, municipio.UF, true
 }
 
-// Consultou reports whether anything was actually asked of the service, so the
-// caller can announce the lookup only when it happened.
-func (c *Consulta) Consultou() bool {
+// deveConsultar decides whether a code goes to the service, and announces the
+// first one that does.
+func (c *Consulta) deveConsultar(codigo string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.consultou
+
+	if c.client == nil || c.inacessivel || c.falharam[codigo] {
+		return false
+	}
+	if !c.anunciou {
+		c.anunciou = true
+		if c.antes != nil {
+			c.antes()
+		}
+	}
+	return true
 }
 
 // Falhas lists what went wrong, for a caller that wants to say so once.
@@ -221,9 +286,14 @@ func (c *Consulta) Falhas() []string {
 	return append([]string(nil), c.falhas...)
 }
 
-func (c *Consulta) registrarFalha(err error) {
+func (c *Consulta) registrarFalha(codigo string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	c.falharam[codigo] = true
+	if errors.Is(err, ErrInacessivel) {
+		c.inacessivel = true
+	}
 
 	mensagem := err.Error()
 	for _, existente := range c.falhas {

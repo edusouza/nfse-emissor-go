@@ -165,9 +165,6 @@ func TestConsulta_FalhaNaoDerruba(t *testing.T) {
 	if len(consulta.Falhas()) != 1 {
 		t.Errorf("esperava uma falha registrada, vieram %d", len(consulta.Falhas()))
 	}
-	if consulta.Consultou() {
-		t.Error("uma consulta que falhou nao contou como consulta bem-sucedida")
-	}
 }
 
 // A repeated failure is one message, not one per field on the page.
@@ -176,10 +173,21 @@ func TestConsulta_FalhasNaoSeRepetem(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
 
+	var chamadas int
+	client = servidor(t, func(w http.ResponseWriter, r *http.Request) {
+		chamadas++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+
 	consulta := NovaConsulta(context.Background(), client, nil)
 	consulta.Nome("4106902")
 	consulta.Nome("4106902")
 
+	// The same code is not asked twice: the answer would be the same, and on a
+	// slow service each ask costs the whole timeout.
+	if chamadas != 1 {
+		t.Errorf("o mesmo codigo foi consultado %d vezes, esperava 1", chamadas)
+	}
 	if len(consulta.Falhas()) != 1 {
 		t.Errorf("esperava uma falha registrada, vieram %d: %q", len(consulta.Falhas()), consulta.Falhas())
 	}
@@ -215,5 +223,96 @@ func TestConsulta_SemRedeNaoConsulta(t *testing.T) {
 	}
 	if len(consulta.Falhas()) != 0 {
 		t.Errorf("nao consultar nao e falha: %q", consulta.Falhas())
+	}
+}
+
+// Once the service cannot be reached, nothing else is sent to it during the
+// run: every further code would wait out the same timeout to fail the same
+// way.
+func TestConsulta_DesisteQuandoOServicoEstaInacessivel(t *testing.T) {
+	fechado := httptest.NewServer(http.NotFoundHandler())
+	endereco := fechado.URL
+	fechado.Close()
+
+	consulta := NovaConsulta(context.Background(), New(Config{BaseURL: endereco}), nil)
+	var anuncios int
+	consulta.AntesDeConsultar(func() { anuncios++ })
+
+	if _, _, ok := consulta.Nome("4106902"); ok {
+		t.Fatal("um servico fechado nao pode responder")
+	}
+	if _, _, ok := consulta.Nome("3550308"); ok {
+		t.Fatal("um servico fechado nao pode responder")
+	}
+
+	falhas := consulta.Falhas()
+	if len(falhas) != 1 {
+		t.Fatalf("esperava so a primeira falha, vieram %d: %q", len(falhas), falhas)
+	}
+	if !strings.Contains(falhas[0], "nao foi possivel consultar") {
+		t.Errorf("a falha nao diz o que aconteceu: %q", falhas[0])
+	}
+	if anuncios != 1 {
+		t.Errorf("a consulta foi anunciada %d vezes, esperava 1", anuncios)
+	}
+}
+
+// The announcement is about codes leaving the machine. When the cache answers
+// everything, nothing leaves, and there is nothing to announce.
+func TestConsulta_NaoAnunciaQuandoOCacheResponde(t *testing.T) {
+	cache := NovoCache(filepath.Join(t.TempDir(), "c.json"))
+	cache.Guardar(Municipio{Codigo: "4106902", Nome: "Curitiba", UF: "PR"})
+
+	client := servidor(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Error("com o municipio em cache, o servico nao deveria ser chamado")
+	})
+
+	consulta := NovaConsulta(context.Background(), client, cache)
+	var anunciou bool
+	consulta.AntesDeConsultar(func() { anunciou = true })
+
+	if nome, _, ok := consulta.Nome("4106902"); !ok || nome != "Curitiba" {
+		t.Fatalf("o cache deveria responder: %q (ok=%v)", nome, ok)
+	}
+	if anunciou {
+		t.Error("nada saiu da maquina, e mesmo assim a consulta foi anunciada")
+	}
+}
+
+// The file is replaced whole, never left half-written, and the temporary file
+// used to get there does not stay behind.
+func TestCache_GravacaoNaoDeixaTemporario(t *testing.T) {
+	dir := t.TempDir()
+	arquivo := filepath.Join(dir, "municipios.json")
+
+	cache := NovoCache(arquivo)
+	cache.Guardar(Municipio{Codigo: "4106902", Nome: "Curitiba", UF: "PR"})
+	if err := cache.Gravar(); err != nil {
+		t.Fatalf("Gravar devolveu erro: %v", err)
+	}
+
+	entradas, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entradas) != 1 || entradas[0].Name() != "municipios.json" {
+		var nomes []string
+		for _, e := range entradas {
+			nomes = append(nomes, e.Name())
+		}
+		t.Errorf("esperava so o cache no diretorio, vieram %q", nomes)
+	}
+}
+
+func TestClient_Host(t *testing.T) {
+	casos := []struct{ base, esperado string }{
+		{DefaultBaseURL, "servicodados.ibge.gov.br"},
+		{"http://127.0.0.1:8080/api", "127.0.0.1:8080"},
+		{"nao e uma url", "nao e uma url"},
+	}
+	for _, caso := range casos {
+		if obtido := New(Config{BaseURL: caso.base}).Host(); obtido != caso.esperado {
+			t.Errorf("Host() de %q = %q, esperava %q", caso.base, obtido, caso.esperado)
+		}
 	}
 }

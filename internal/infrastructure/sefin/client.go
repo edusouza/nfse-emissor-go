@@ -32,9 +32,18 @@ const DefaultTimeout = 60 * time.Second
 
 // defaultRetryDelays are the pauses between attempts of a lookup whose
 // connection could not be opened, so a lookup is tried len+1 times. They are
-// short because the outages seen so far last seconds, and each attempt already
-// spends up to ~21s on Windows waiting for the handshake to time out.
+// short because the outages seen so far last seconds.
 var defaultRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
+
+// dialTimeout bounds opening the connection, apart from the request.
+//
+// DefaultTimeout is generous because an emission is processed inside the
+// request, but opening a connection is not where that time goes. Left to the
+// operating system, a host that never answers the handshake takes ~21s on
+// Windows and up to two minutes on Linux, where the SYN is retried — per
+// attempt, and a lookup makes three. Ten seconds is ample for a reachable
+// server, and caps an unreachable one at ~37s in all, retries included.
+const dialTimeout = 10 * time.Second
 
 // Config configures a Client.
 type Config struct {
@@ -55,6 +64,11 @@ type Config struct {
 
 	// HTTPClient overrides the constructed client. Used by tests.
 	HTTPClient *http.Client
+
+	// OnRetry, when set, is called before a lookup is tried again, with the
+	// pause about to be taken and the failure that caused it. Without it the
+	// retries are silent, and half a minute of nothing looks like a hang.
+	OnRetry func(wait time.Duration, err error)
 }
 
 // Client calls the Sefin Nacional emission service.
@@ -63,6 +77,7 @@ type Client struct {
 	baseURL     string
 	env         string
 	retryDelays []time.Duration
+	onRetry     func(time.Duration, error)
 }
 
 // New builds a client for the configured environment.
@@ -98,6 +113,7 @@ func New(cfg Config) (*Client, error) {
 		httpClient = &http.Client{
 			Timeout: timeout,
 			Transport: &http.Transport{
+				DialContext: (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext,
 				TLSClientConfig: &tls.Config{
 					Certificates: []tls.Certificate{*cfg.Certificate},
 					MinVersion:   tls.VersionTLS12,
@@ -122,7 +138,13 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	return &Client{httpClient: httpClient, baseURL: baseURL, env: env, retryDelays: defaultRetryDelays}, nil
+	return &Client{
+		httpClient:  httpClient,
+		baseURL:     baseURL,
+		env:         env,
+		retryDelays: defaultRetryDelays,
+		onRetry:     cfg.OnRetry,
+	}, nil
 }
 
 // Environment reports which environment this client talks to.
@@ -348,10 +370,14 @@ func (c *Client) doIdempotent(ctx context.Context, method, url string) (*http.Re
 			return nil, communicationError(err, attempt)
 		}
 
+		wait := c.retryDelays[attempt-1]
+		if c.onRetry != nil {
+			c.onRetry(wait, err)
+		}
 		select {
 		case <-ctx.Done():
 			return nil, communicationError(err, attempt)
-		case <-time.After(c.retryDelays[attempt-1]):
+		case <-time.After(wait):
 		}
 	}
 }

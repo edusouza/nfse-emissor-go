@@ -24,13 +24,87 @@ func (p *pagina) servico(s danfse.Servico) {
 	p.campo("Código da NBS", s.CodigoNBS, colunaC, servicoY, colunaLargura, blocoAltura)
 	p.campo("Local da Prestação / Sigla UF / País", s.LocalPrestacao, colunaD, servicoY, colunaLargura, blocoAltura)
 
+	// Both descriptions are one line on the NT's table, and both can be far
+	// longer: the national description runs to 170 characters, the service
+	// description to 1300 — about eight lines at seven points. Drawn as one
+	// line, the rest ran off the right edge of the page.
+	//
+	// So they wrap, and their boxes grow by the lines they need. Item 2.3
+	// allows the "Descrição do Serviço" box to grow; the room comes out of the
+	// complementary information, whose foot is fixed by the receipt strip, and
+	// every block in between moves down by the same amount. Growth stops where
+	// the complementary information would drop below four lines, and the
+	// description is cut with an ellipsis there — the page is one sheet by rule.
+	p.pdf.SetFont(fonte, "", corpoTexto)
+	largura := larguraCorpo - 2*recuo
+	codigo := p.linhas(s.DescricaoCodigo, largura)
+	descricao := p.linhas(s.Descricao, largura)
+
+	disponivel := complementaresDisponivel - complementaresMinimo
+	sobra := int(disponivel / entrelinha)
+	codigo, sobra = cortar(p, codigo, 1+sobra, largura)
+	descricao, _ = cortar(p, descricao, 1+sobra, largura)
+
+	extraCodigo := entrelinha * float64(len(codigo)-1)
+	extraDescricao := entrelinha * float64(len(descricao)-1)
+
 	// The description of the taxation code is the one field the nota técnica
 	// gives no label to, and its box is shorter than the others because of it.
-	p.caixa(colunaA, descricaoCodigoY, larguraCorpo, descricaoCodigoH)
-	p.escrever(s.DescricaoCodigo, colunaA+0.08, descricaoCodigoY+0.26, fonte, "", corpoTexto)
+	p.caixa(colunaA, descricaoCodigoY, larguraCorpo, descricaoCodigoH+extraCodigo)
+	for i, linha := range codigo {
+		p.pdf.Text(colunaA+recuo, descricaoCodigoY+0.26+entrelinha*float64(i), linha)
+	}
 
-	p.campo("Descrição do Serviço", s.Descricao, colunaA, descricaoServicoY, larguraCorpo, blocoAltura)
+	y := descricaoServicoY + extraCodigo
+	p.caixa(colunaA, y, larguraCorpo, blocoAltura+extraDescricao)
+	p.escrever("Descrição do Serviço", colunaA+recuo, y+0.24, fonte, "B", corpoMiudo)
+	p.pdf.SetFont(fonte, "", corpoTexto)
+	for i, linha := range descricao {
+		p.pdf.Text(colunaA+recuo, y+0.55+entrelinha*float64(i), linha)
+	}
+
+	p.deslocamento = extraCodigo + extraDescricao
 }
+
+// linhas translates a text and wraps it to a width, in the font already set.
+// An empty text is still one line, so that its box keeps the NT's height.
+func (p *pagina) linhas(texto string, largura float64) []string {
+	if texto == "" {
+		return []string{""}
+	}
+	var linhas []string
+	for _, linha := range p.pdf.SplitLines([]byte(p.converter(texto)), largura) {
+		linhas = append(linhas, string(linha))
+	}
+	if len(linhas) == 0 {
+		return []string{""}
+	}
+	return linhas
+}
+
+// cortar keeps at most max lines, ending the last one kept with an ellipsis
+// when something was left out, and returns how many of the extra lines — the
+// ones beyond the first — the caller still has to give away.
+func cortar(p *pagina, linhas []string, max int, largura float64) ([]string, int) {
+	if max < 1 {
+		max = 1
+	}
+	if len(linhas) <= max {
+		return linhas, max - len(linhas)
+	}
+
+	linhas = linhas[:max]
+	ultima := linhas[max-1]
+	for ultima != "" && p.pdf.GetStringWidth(ultima+reticencias) > largura {
+		ultima = ultima[:len(ultima)-1]
+	}
+	linhas[max-1] = ultima + reticencias
+	return linhas, 0
+}
+
+// reticencias is the ellipsis the nota técnica asks for when a field has to be
+// cut, in the three dots it writes rather than the single glyph.
+const reticencias = "..."
 
 func (p *pagina) issqn(i danfse.ISSQN) {
 	if !i.Incide {
@@ -126,27 +200,28 @@ func (p *pagina) complementares(conteudo string, comCanhoto bool) {
 	p.escrever(tituloComplementares, colunaA+0.08, complementaresTituloY+0.27, fonte, "B", corpoBloco)
 
 	// Without the receipt strip the box may take the room it would have used —
-	// item 2.3.3 says so in as many words.
+	// item 2.3.3 says so in as many words. Its top has moved down by whatever
+	// the service description grew; its foot has not.
 	fim := canhotoY
 	if !comCanhoto {
 		fim = alturaPagina - margem
 	}
-	altura := fim - complementaresY
+	topo := complementaresY + p.deslocamento
+	altura := fim - topo
 	p.caixa(colunaA, complementaresY, larguraCorpo, altura)
 
 	p.pdf.SetFont(fonte, "", corpoTexto)
-	linhas := p.pdf.SplitLines([]byte(p.traduzir(conteudo)), larguraCorpo-0.16)
+	linhas := p.pdf.SplitLines([]byte(p.converter(conteudo)), larguraCorpo-2*recuo)
 
-	const entrelinha = 0.32
 	for i, linha := range linhas {
-		base := complementaresY + entrelinha*float64(i+1) - 0.08
-		if base > complementaresY+altura {
+		base := topo + entrelinha*float64(i+1) - 0.08
+		if base > topo+altura {
 			// The text is longer than the box. NT 008 already caps the field at
 			// 2000 characters; stopping here keeps whatever is left from
 			// running over the blocks below.
 			break
 		}
-		p.pdf.Text(colunaA+0.08, base, string(linha))
+		p.pdf.Text(colunaA+recuo, base, string(linha))
 	}
 }
 
@@ -172,7 +247,7 @@ func (p *pagina) marca(marca danfse.Marca) {
 	p.pdf.SetFont(fonte, "", marcaCorpo)
 	p.pdf.SetTextColor(marcaCinza, marcaCinza, marcaCinza)
 
-	texto := p.traduzir(string(marca))
+	texto := p.converter(string(marca))
 	meioX, meioY := larguraPagina/2, alturaPagina/2
 
 	p.pdf.TransformBegin()

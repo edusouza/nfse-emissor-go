@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/beevik/etree"
 
@@ -41,7 +42,7 @@ const prefixoID = "NFS"
 func Parse(conteudo []byte, municipios Municipios) (*Documento, error) {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(conteudo); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrXMLInvalido, err)
+		return nil, fmt.Errorf("%w: %w", ErrXMLInvalido, err)
 	}
 
 	inf := doc.FindElement("//infNFSe")
@@ -92,7 +93,7 @@ func chaveDeAcesso(inf *etree.Element) (string, error) {
 
 	chave := strings.TrimPrefix(id, prefixoID)
 	if err := query.ValidateAccessKey(chave); err != nil {
-		return "", fmt.Errorf("%w: %v", ErrSemChave, err)
+		return "", fmt.Errorf("%w: %w", ErrSemChave, err)
 	}
 	return chave, nil
 }
@@ -150,6 +151,11 @@ func identificacao(inf, infDPS *etree.Element, chave string) Identificacao {
 // texto returns the trimmed content of a child element, or "" when the path
 // leads nowhere. A missing branch is ordinary here: whole blocks of the NFS-e
 // are optional, and layout v1.00 simply has no IBS/CBS group.
+//
+// Control characters become spaces. The XML may carry a line feed or a tab as
+// a character reference, and every field on the page is a single line drawn at
+// a fixed position: a line feed there is not a new line but a stray glyph, and
+// the text after it lands on top of the next field.
 func texto(raiz *etree.Element, caminho string) string {
 	if raiz == nil {
 		return ""
@@ -158,5 +164,12 @@ func texto(raiz *etree.Element, caminho string) string {
 	if elemento == nil {
 		return ""
 	}
-	return strings.TrimSpace(elemento.Text())
+	return strings.TrimSpace(strings.Map(semControle, elemento.Text()))
+}
+
+func semControle(r rune) rune {
+	if unicode.IsControl(r) {
+		return ' '
+	}
+	return r
 }

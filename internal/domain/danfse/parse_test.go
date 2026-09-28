@@ -175,3 +175,34 @@ func trocar(t *testing.T, texto, velho, novo string) string {
 	}
 	return strings.Replace(texto, velho, novo, 1)
 }
+
+// A line feed written as a character reference is a stray glyph on a
+// single-line field, and pushes the rest of the text over the next one.
+func TestParse_CaracteresDeControleViramEspaco(t *testing.T) {
+	conteudo := trocar(t, string(lerExemplo(t)),
+		"<xDescServ>Desenvolvimento de sistema",
+		"<xDescServ>Desenvolvimento&#10;de&#9;sistema")
+
+	doc, err := Parse([]byte(conteudo), nil)
+	if err != nil {
+		t.Fatalf("Parse devolveu erro: %v", err)
+	}
+	if strings.ContainsAny(doc.Servico.Descricao, "\n\t") {
+		t.Errorf("a descricao ainda tem caracteres de controle: %q", doc.Servico.Descricao)
+	}
+	if !strings.HasPrefix(doc.Servico.Descricao, "Desenvolvimento de sistema") {
+		t.Errorf("descricao: veio %q", doc.Servico.Descricao)
+	}
+}
+
+// The cause of a refusal stays in the chain, not just in the text.
+func TestParse_ErroMantemACausa(t *testing.T) {
+	_, err := Parse([]byte("<NFSe><infNFSe"), nil)
+	if !errors.Is(err, ErrXMLInvalido) {
+		t.Fatalf("esperava ErrXMLInvalido, veio %v", err)
+	}
+	causas, ok := err.(interface{ Unwrap() []error })
+	if !ok || len(causas.Unwrap()) != 2 {
+		t.Errorf("a causa do erro de XML se perdeu: %v", err)
+	}
+}

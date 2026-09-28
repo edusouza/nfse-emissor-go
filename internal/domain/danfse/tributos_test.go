@@ -125,6 +125,52 @@ func TestParse_Federal_PisCofinsRetidos(t *testing.T) {
 	}
 }
 
+// NT 008 writes its rule for code 1, but the schema has ten codes, and several
+// withhold PIS, COFINS or both. Each withheld contribution moves to the
+// withheld total; the ones not withheld stay as the issuer's own debt.
+func TestParse_Federal_RetencaoPorContribuicao(t *testing.T) {
+	casos := []struct {
+		codigo, sociais, pis, cofins string
+	}{
+		{"0", "15,00", "9,75", "45,00"},
+		{"1", "69,75", "0,00", "0,00"},
+		{"2", "15,00", "9,75", "45,00"},
+		{"3", "69,75", "0,00", "0,00"},  // PIS/COFINS/CSLL retidos
+		{"4", "69,75", "0,00", "0,00"},  // PIS/COFINS retidos, CSLL nao
+		{"5", "24,75", "0,00", "45,00"}, // so o PIS
+		{"6", "60,00", "9,75", "0,00"},  // so a COFINS
+		{"7", "60,00", "9,75", "0,00"},  // COFINS/CSLL retidos
+		{"8", "15,00", "9,75", "45,00"}, // so a CSLL
+		{"9", "24,75", "0,00", "45,00"}, // PIS/CSLL retidos
+	}
+
+	for _, caso := range casos {
+		bloco := `<tribFed>
+            <piscofins>
+              <CST>01</CST>
+              <vPis>9.75</vPis>
+              <vCofins>45.00</vCofins>
+              <tpRetPisCofins>` + caso.codigo + `</tpRetPisCofins>
+            </piscofins>
+            <vRetCSLL>15.00</vRetCSLL>
+          </tribFed>`
+		conteudo := []byte(trocar(t, string(lerExemplo(t)),
+			"</tribMun>", "</tribMun>\n            "+bloco))
+
+		doc, err := Parse(conteudo, nil)
+		if err != nil {
+			t.Fatalf("codigo %s: Parse devolveu erro: %v", caso.codigo, err)
+		}
+
+		f := doc.Federal
+		if f.ContribuicoesSociais != caso.sociais || f.PIS != caso.pis || f.COFINS != caso.cofins {
+			t.Errorf("codigo %s: esperava retidas %s, PIS %s, COFINS %s; vieram %s, %s, %s",
+				caso.codigo, caso.sociais, caso.pis, caso.cofins,
+				f.ContribuicoesSociais, f.PIS, f.COFINS)
+		}
+	}
+}
+
 func TestParse_Federal_PisCofinsNaoRetidos(t *testing.T) {
 	const bloco = `<tribFed>
             <piscofins>
@@ -251,6 +297,17 @@ func TestSomar(t *testing.T) {
 	}
 	if soma := somar("0.10", "0.20"); soma != "0.30" {
 		t.Errorf("somar devolveu %q, esperava 0.30 — centavos, nunca float", soma)
+	}
+	if soma := somar("10.00", "-0.50"); soma != "9.50" {
+		t.Errorf("somar devolveu %q, esperava 9.50", soma)
+	}
+	// A value longer than TSDec15V2 allows would overflow the int64 and print
+	// a wrapped-around total. It is left out instead.
+	if soma := somar("15.00", "99999999999999999999.00"); soma != "15.00" {
+		t.Errorf("somar devolveu %q, esperava 15.00 — o valor fora do schema deveria ficar de fora", soma)
+	}
+	if soma := somar("9999999999999.99", "0.01"); soma != "10000000000000.00" {
+		t.Errorf("somar devolveu %q no limite do schema", soma)
 	}
 }
 

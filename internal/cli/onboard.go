@@ -256,7 +256,7 @@ func fillFromCertificate(out io.Writer, data *onboardData, file, password string
 	fmt.Fprintf(tw, "Certificado\t%s\n", file)
 	fmt.Fprintf(tw, "  Titular\t%s\n", info.GetSubjectCN())
 	if cert := info.Certificate; cert != nil {
-		fmt.Fprintf(tw, "  Valido ate\t%s\n", cert.NotAfter.Local().Format("02/01/2006"))
+		fmt.Fprintf(tw, "  Valido ate\t%s\n", cert.NotAfter.Local().Format(layoutData))
 	}
 	if err := tw.Flush(); err != nil {
 		return err

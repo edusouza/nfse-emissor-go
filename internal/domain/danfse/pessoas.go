@@ -34,15 +34,32 @@ func pessoa(raiz *etree.Element, municipios Municipios) Pessoa {
 
 	endereco := caminho(raiz, "end")
 
+	p := campos(raiz, municipio(endereco, municipios), codigoECEP(endereco), logradouro(endereco))
 	return Pessoa{
-		Documento:          campo(documento(raiz)),
-		InscricaoMunicipal: campo(limitar(texto(raiz, "IM"), 15)),
-		Telefone:           campo(limitar(texto(raiz, "fone"), 20)),
-		Nome:               campo(limitar(texto(raiz, "xNome"), 80)),
-		Municipio:          campo(municipio(endereco, municipios)),
-		CodigoCEP:          campo(codigoECEP(endereco)),
-		Endereco:           campo(limitar(logradouro(endereco), 80)),
-		Email:              campo(limitar(texto(raiz, "email"), 80)),
+		Documento:          campo(p.Documento),
+		InscricaoMunicipal: campo(p.InscricaoMunicipal),
+		Telefone:           campo(p.Telefone),
+		Nome:               campo(p.Nome),
+		Municipio:          campo(p.Municipio),
+		CodigoCEP:          campo(p.CodigoCEP),
+		Endereco:           campo(p.Endereco),
+		Email:              campo(p.Email),
+	}
+}
+
+// campos reads what every person carries in the same place, with the lengths
+// item 2.4.5 gives each field. The address is passed in already resolved,
+// because it is the one part the DPS and the emit group lay out differently.
+func campos(raiz *etree.Element, municipio, codigoCEP, endereco string) Pessoa {
+	return Pessoa{
+		Documento:          documento(raiz),
+		InscricaoMunicipal: limitar(texto(raiz, "IM"), 15),
+		Telefone:           limitar(texto(raiz, "fone"), 20),
+		Nome:               limitar(texto(raiz, "xNome"), 80),
+		Municipio:          municipio,
+		CodigoCEP:          codigoCEP,
+		Endereco:           limitar(endereco, 80),
+		Email:              limitar(texto(raiz, "email"), 80),
 	}
 }
 
@@ -244,16 +261,8 @@ func emitente(inf *etree.Element, municipios Municipios) Pessoa {
 		municipio = municipioNacional(texto(endereco, "cMun"), municipios)
 	}
 
-	return Pessoa{
-		Documento:          documento(raiz),
-		InscricaoMunicipal: limitar(texto(raiz, "IM"), 15),
-		Telefone:           limitar(texto(raiz, "fone"), 20),
-		Nome:               limitar(texto(raiz, "xNome"), 80),
-		Municipio:          municipio,
-		CodigoCEP:          limitar(juntar(" / ", texto(endereco, "cMun"), formatarCEP(texto(endereco, "CEP"))), 21),
-		Endereco:           limitar(logradouro(endereco), 80),
-		Email:              limitar(texto(raiz, "email"), 80),
-	}
+	codigoCEP := limitar(juntar(" / ", texto(endereco, "cMun"), formatarCEP(texto(endereco, "CEP"))), 21)
+	return campos(raiz, municipio, codigoCEP, logradouro(endereco))
 }
 
 // completar keeps each field the DPS filled and takes the emitter's for the

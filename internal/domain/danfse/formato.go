@@ -18,6 +18,12 @@ func campo(valor string) string {
 	return valor
 }
 
+// The date layouts of item 2.4.5, day first.
+const (
+	layoutData     = "02/01/2006"
+	layoutDataHora = "02/01/2006 15:04:05"
+)
+
 // data formats TSData (AAAA-MM-DD) as the DD/MM/AAAA the document asks for.
 //
 // A value that does not parse is passed through untouched rather than dropped:
@@ -32,7 +38,7 @@ func data(valor string) string {
 	if err != nil {
 		return valor
 	}
-	return quando.Format("02/01/2006")
+	return quando.Format(layoutData)
 }
 
 // dataHora formats TSDateTimeUTC (AAAA-MM-DDThh:mm:ssTZD) as
@@ -50,7 +56,7 @@ func dataHora(valor string) string {
 	if err != nil {
 		return valor
 	}
-	return quando.Format("02/01/2006 15:04:05")
+	return quando.Format(layoutDataHora)
 }
 
 // limitar truncates a value to at most max characters, ending it with an

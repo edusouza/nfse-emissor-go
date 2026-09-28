@@ -68,7 +68,7 @@ func newNumeroVerCommand() *cobra.Command {
 				}
 				fmt.Fprintf(out, "  %s  ultimo %d, proximo %d   %s%s\n",
 					s, info.LastNumber, info.LastNumber+1,
-					info.UpdatedAt.Local().Format("02/01/2006 15:04"), marca)
+					info.UpdatedAt.Local().Format(layoutDataHora), marca)
 			}
 			fmt.Fprintf(out, "\nArquivo: %s\n", statePath)
 			return nil

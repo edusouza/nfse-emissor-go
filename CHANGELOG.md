@@ -90,7 +90,53 @@ fazer.
   `emitir --enviar`, a mensagem diz que nenhuma NFS-e foi emitida e mostra o
   `nfse enviar <arquivo>` que manda a mesma DPS já gravada, sem gastar outro
   número.
+- **Espera limitada e anunciada.** Abrir a conexão tem prazo próprio de 10 s,
+  em vez de depender do sistema operacional (~21 s no Windows, até 2 min no
+  Linux, por tentativa). Um servidor inacessível custa agora no máximo ~37 s
+  somando as três tentativas, e cada nova tentativa é anunciada:
+  "A Sefin Nacional nao respondeu; tentando de novo em 2s...".
+- A consulta de existência (`consultar --dps --existe`, um `HEAD`) passou a
+  mandar o cabeçalho `Accept: application/json`, como as outras consultas. O
+  corpo da resposta continua ignorado.
 
+### Revisão do DANFSe
+
+- **O destino é conferido antes de qualquer consulta.** Um PDF que já existe
+  recusava o comando só depois de consultar o IBGE e desenhar o documento, e as
+  respostas se perdiam. Agora a recusa vem primeiro, e o cache é gravado assim
+  que as consultas terminam, aconteça o que acontecer depois.
+- **A consulta ao IBGE desiste cedo.** Um código que falhou não é perguntado de
+  novo, e quando o serviço não pode ser alcançado, nenhum outro código é
+  enviado naquela execução — antes, cada bloco de pessoa esperava o prazo de
+  10 s outra vez. O anúncio "serao consultados em" só aparece quando alguma
+  consulta de fato acontece; com tudo em cache, nada sai da máquina.
+- **Cache gravado de forma atômica**, por arquivo temporário e troca de nome:
+  uma interrupção no meio não deixa mais um JSON pela metade.
+- **Descrição do serviço quebra em linhas.** Ela era desenhada numa linha só, e
+  o que passava da largura sumia pela direita da página. Agora quebra dentro do
+  quadro, que cresce o que precisa (item 2.3 da NT), empurrando os blocos de
+  baixo e tomando o espaço das informações complementares, que mantêm ao menos
+  quatro linhas. A descrição do código de tributação faz o mesmo.
+- **Retenção de PIS/COFINS pelos dez códigos do schema.** A NT escreve a regra
+  para `tpRetPisCofins = 1`, mas os códigos 3 e 4 também retêm os dois, e 5, 6,
+  7 e 9 retêm um deles. Um PIS retido com código 3 saía como débito próprio e
+  fora do total retido. A regra agora vale para cada contribuição que o código
+  diz ter sido retida.
+- **Assinatura do governo conferida.** O comando avisa quando o XML não traz a
+  assinatura da Sefin ou quando ela não confere com o conteúdo. A conferência
+  mostra integridade, não origem: a prova de que a nota existe continua sendo a
+  consulta pela chave de acesso, que o QR Code abre.
+- **Aviso de caracteres fora da fonte.** As fontes padrão do PDF só têm o
+  alfabeto cp1252; um nome em cirílico ou em ideogramas saía como pontos, em
+  silêncio. O documento continua saindo, e a saída diz qual texto perdeu
+  caracteres.
+- Caracteres de controle do XML (quebra de linha, tabulação) viram espaço, em
+  vez de caírem num campo de uma linha só.
+- Um valor maior que o schema permite fica fora das somas, em vez de estourar
+  o inteiro e imprimir um total errado.
+- XML maior que 5 MB é recusado: uma NFS-e tem poucos kilobytes.
+- `--fonte` mostra no `--help` o servidor padrão.
+- Os testes do `danfse` não acessam mais o IBGE real nem o cache do usuário.
 
 ## [0.7.0] - 2026-09-21
 

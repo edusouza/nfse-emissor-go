@@ -15,9 +15,11 @@ package ibge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -90,17 +92,21 @@ func New(cfg Config) *Client {
 }
 
 // Host returns the host the client talks to, so the caller can say where the
-// codes are about to be sent.
+// codes are about to be sent. A base URL that does not parse is shown whole:
+// the announcement is about being honest, and the full string is honest.
 func (c *Client) Host() string {
-	rest := c.baseURL
-	if i := strings.Index(rest, "://"); i >= 0 {
-		rest = rest[i+3:]
+	endereco, err := url.Parse(c.baseURL)
+	if err != nil || endereco.Host == "" {
+		return c.baseURL
 	}
-	if i := strings.Index(rest, "/"); i >= 0 {
-		rest = rest[:i]
-	}
-	return rest
+	return endereco.Host
 }
+
+// ErrInacessivel marks a lookup that never reached the service: no route, a
+// refused connection, a timeout. The municipality may well exist; there was
+// just nobody to ask, and asking again during the same run would only wait
+// out the same timeout.
+var ErrInacessivel = errors.New("servico de municipios inacessivel")
 
 // resposta mirrors the shape the service answers with.
 //
@@ -149,8 +155,8 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 		return nil, fmt.Errorf("codigo de municipio %q invalido: sao %d digitos", codigo, CodigoLength)
 	}
 
-	url := fmt.Sprintf("%s/municipios/%s", c.baseURL, codigo)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	endereco := fmt.Sprintf("%s/municipios/%s", c.baseURL, codigo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endereco, nil)
 	if err != nil {
 		return nil, fmt.Errorf("nao foi possivel montar a consulta: %w", err)
 	}
@@ -161,7 +167,7 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel consultar %s: %w", c.Host(), err)
+		return nil, fmt.Errorf("nao foi possivel consultar %s: %w: %w", c.Host(), ErrInacessivel, err)
 	}
 	defer resp.Body.Close()
 

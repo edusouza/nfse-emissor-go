@@ -29,14 +29,24 @@ func copiarExemplo(t *testing.T) (dir, xml string) {
 	return dir, xml
 }
 
+// rodarDanfse runs the command without ever reaching the real IBGE or the
+// user's cache: the fixture carries real municipality codes, and a test that
+// asks the public service depends on the network and waits out its timeout
+// without one. A test that wants a lookup passes --fonte with a local server;
+// every test gets a cache of its own, which one passed explicitly overrides.
 func rodarDanfse(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+
+	padrao := []string{"danfse", "--cache", filepath.Join(t.TempDir(), "municipios.json")}
+	if !contem(args, "--fonte") {
+		padrao = append(padrao, "--sem-rede")
+	}
 
 	cmd := NewRootCommand()
 	var saida bytes.Buffer
 	cmd.SetOut(&saida)
 	cmd.SetErr(&saida)
-	cmd.SetArgs(append([]string{"danfse"}, args...))
+	cmd.SetArgs(append(padrao, args...))
 
 	err := cmd.Execute()
 	return saida.String(), err
@@ -212,5 +222,69 @@ func TestDanfse_SemRedeNaoConsulta(t *testing.T) {
 	}
 	if strings.Contains(saida, "serao consultados em") {
 		t.Errorf("com --sem-rede nao ha consulta a anunciar:\n%s", saida)
+	}
+}
+
+func contem(lista []string, procurado string) bool {
+	for _, item := range lista {
+		if item == procurado {
+			return true
+		}
+	}
+	return false
+}
+
+// Finding out the destination exists only after the lookups sent the codes
+// out for nothing. The refusal comes first, and nothing is asked.
+func TestDanfse_DestinoExistenteRecusaAntesDeConsultar(t *testing.T) {
+	var pedidos int
+	servidor := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pedidos++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer servidor.Close()
+
+	dir, xml := copiarExemplo(t)
+	destino := filepath.Join(dir, "danfse.pdf")
+	if err := os.WriteFile(destino, []byte("ja existe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	saida, err := rodarDanfse(t, xml, "-o", destino, "--fonte", servidor.URL)
+	if err == nil {
+		t.Fatalf("esperava recusa, o PDF existente seria substituido:\n%s", saida)
+	}
+	if pedidos != 0 {
+		t.Errorf("o IBGE foi consultado %d vezes para um documento que nao ia ser gravado", pedidos)
+	}
+	if strings.Contains(saida, "serao consultados em") {
+		t.Errorf("a consulta foi anunciada sem acontecer:\n%s", saida)
+	}
+}
+
+// The fixture has no signature of the government's, and the report says so:
+// nothing guarantees the XML is what the Sefin authorised.
+func TestDanfse_AvisaNFSeSemAssinatura(t *testing.T) {
+	_, xml := copiarExemplo(t)
+
+	saida, err := rodarDanfse(t, xml)
+	if err != nil {
+		t.Fatalf("o comando falhou: %v\n%s", err, saida)
+	}
+	if !strings.Contains(saida, "nao traz a assinatura do governo") {
+		t.Errorf("a saida nao avisa que a NFS-e nao tem assinatura:\n%s", saida)
+	}
+}
+
+func TestDanfse_RecusaArquivoGrandeDemais(t *testing.T) {
+	dir := t.TempDir()
+	grande := filepath.Join(dir, "grande.xml")
+	if err := os.WriteFile(grande, bytes.Repeat([]byte(" "), maxTamanhoNFSe+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := rodarDanfse(t, grande)
+	if err == nil || !strings.Contains(err.Error(), "poucos kilobytes") {
+		t.Fatalf("esperava recusa pelo tamanho, veio %v", err)
 	}
 }

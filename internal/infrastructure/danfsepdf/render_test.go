@@ -49,8 +49,12 @@ func exemplo(t *testing.T) *danfse.Documento {
 
 func TestRender_PaginaA4EmUmaFolhaSo(t *testing.T) {
 	var saida bytes.Buffer
-	if err := Render(exemplo(t), Opcoes{}, &saida); err != nil {
+	avisos, err := Render(exemplo(t), Opcoes{}, &saida)
+	if err != nil {
 		t.Fatalf("Render devolveu erro: %v", err)
+	}
+	if len(avisos) != 0 {
+		t.Errorf("a nota de exemplo cabe na fonte e nao deveria gerar avisos: %q", avisos)
 	}
 
 	pdf := saida.String()
@@ -111,44 +115,106 @@ func TestRender_TarjaSoSaiEmHomologacao(t *testing.T) {
 }
 
 func TestRender_SemDocumento(t *testing.T) {
-	if err := Render(nil, Opcoes{}, &bytes.Buffer{}); err == nil {
+	if _, err := Render(nil, Opcoes{}, &bytes.Buffer{}); err == nil {
 		t.Fatal("esperava erro ao desenhar um documento inexistente")
 	}
 }
 
 // The note under the QR Code has to fit in the three lines of item 2.4.3,
-// inside a box 4,72 cm wide, without dropping a word.
-func TestQuebrarEm_NotaDoQRCodeCabeEmTresLinhas(t *testing.T) {
+// inside a box 4,72 cm wide, and say the whole sentence.
+func TestNotaDoQRCode_CabeEmTresLinhas(t *testing.T) {
 	p := novaPagina()
 	p.pdf.SetFont(fonte, "", corpoMiudo)
 
-	linhas := quebrarEm(p.traduzir(notaQRCode), qrNotaLinhas, p.pdf.GetStringWidth)
-
-	if len(linhas) != qrNotaLinhas {
-		t.Fatalf("esperava %d linhas, vieram %d", qrNotaLinhas, len(linhas))
-	}
-	for i, linha := range linhas {
-		if largura := p.pdf.GetStringWidth(linha); largura > qrNotaLargura {
+	for i, linha := range notaQRCode {
+		// The text starts 0,05 cm into the box, and keeps the same distance
+		// from the other side.
+		if largura := p.pdf.GetStringWidth(p.traduzir(linha)); largura > qrNotaLargura-0.1 {
 			t.Errorf("linha %d tem %.2f cm, mais que os %.2f cm do quadro: %q",
-				i+1, largura, qrNotaLargura, linha)
+				i+1, largura, qrNotaLargura-0.1, linha)
 		}
 	}
 
-	junto := strings.Join(linhas, " ")
-	if junto != p.traduzir(notaQRCode) {
-		t.Errorf("a quebra mudou o texto:\n esperava %q\n veio     %q", notaQRCode, junto)
+	const frase = "A autenticidade desta NFS-e pode ser verificada pela leitura " +
+		"deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e"
+	if junto := strings.Join(notaQRCode[:], " "); junto != frase {
+		t.Errorf("a nota mudou:\n esperava %q\n veio     %q", frase, junto)
 	}
 }
 
-func TestQuebrarEm_MenosPalavrasQueLinhas(t *testing.T) {
-	largura := func(s string) float64 { return float64(len(s)) }
+// A description longer than a line wraps inside its box instead of running
+// off the page, and the blocks below move down to make room.
+func TestRender_DescricaoLongaQuebraEmLinhas(t *testing.T) {
+	doc := exemplo(t)
+	doc.Servico.Descricao = strings.Repeat("Consultoria em sistemas de informacao ", 20)
 
-	linhas := quebrarEm("duas palavras", 3, largura)
-	if len(linhas) != 3 {
-		t.Fatalf("esperava 3 linhas, vieram %d: %q", len(linhas), linhas)
+	p, err := desenhar(doc, Opcoes{})
+	if err != nil {
+		t.Fatalf("desenhar devolveu erro: %v", err)
 	}
-	if linhas[0] != "duas" || linhas[1] != "palavras" || linhas[2] != "" {
-		t.Errorf("quebra inesperada: %q", linhas)
+	if p.deslocamento != 0 {
+		t.Error("o deslocamento tem de voltar a zero antes do canhoto")
+	}
+
+	p = novaPagina()
+	p.pdf.SetFont(fonte, "", corpoTexto)
+	linhas := p.linhas(doc.Servico.Descricao, larguraCorpo-2*recuo)
+	if len(linhas) < 2 {
+		t.Fatalf("a descricao deveria ocupar mais de uma linha, ocupou %d", len(linhas))
+	}
+	for i, linha := range linhas {
+		if largura := p.pdf.GetStringWidth(linha); largura > larguraCorpo-2*recuo {
+			t.Errorf("linha %d passa da largura do quadro: %.2f cm", i+1, largura)
+		}
+	}
+
+	pdf := desenhado(t, doc)
+	if !strings.Contains(pdf, "Consultoria em sistemas") {
+		t.Error("a descricao nao foi para o papel")
+	}
+	if paginas := strings.Count(pdf, "/Type /Page\n"); paginas != 1 {
+		t.Errorf("a descricao longa empurrou o documento para %d paginas", paginas)
+	}
+}
+
+// A description longer than the page can hold stops with an ellipsis, leaving
+// the complementary information its minimum room.
+func TestRender_DescricaoGiganteECortada(t *testing.T) {
+	p := novaPagina()
+	p.pdf.SetFont(fonte, "", corpoTexto)
+	largura := larguraCorpo - 2*recuo
+
+	muitas := p.linhas(strings.Repeat("palavra ", 2000), largura)
+	cortadas, sobra := cortar(p, muitas, 5, largura)
+
+	if len(cortadas) != 5 || sobra != 0 {
+		t.Fatalf("esperava 5 linhas e nada sobrando, vieram %d e %d", len(cortadas), sobra)
+	}
+	if !strings.HasSuffix(cortadas[4], reticencias) {
+		t.Errorf("a ultima linha deveria terminar em reticencias: %q", cortadas[4])
+	}
+	if l := p.pdf.GetStringWidth(cortadas[4]); l > largura {
+		t.Errorf("a linha com reticencias passa da largura: %.2f cm", l)
+	}
+
+	poucas, sobra := cortar(p, []string{"uma"}, 5, largura)
+	if len(poucas) != 1 || sobra != 4 {
+		t.Errorf("uma linha em cinco deveria devolver quatro: %d linhas, sobra %d", len(poucas), sobra)
+	}
+}
+
+// cp1252 has no Cyrillic, and the translator turns what it lacks into dots,
+// silently. The page is still drawn, and the loss is reported.
+func TestRender_AvisaCaracteresForaDaFonte(t *testing.T) {
+	doc := exemplo(t)
+	doc.Tomador.Nome = "Иван Петров"
+
+	avisos, err := Render(doc, Opcoes{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("Render devolveu erro: %v", err)
+	}
+	if len(avisos) != 1 || !strings.Contains(avisos[0], "Иван Петров") {
+		t.Errorf("esperava um aviso sobre o nome do tomador, vieram %q", avisos)
 	}
 }
 

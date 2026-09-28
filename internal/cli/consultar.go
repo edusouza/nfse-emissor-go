@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -102,7 +103,13 @@ func newQueryClient(cmd *cobra.Command, cfg *config.Config, f *consultarFlags) (
 		return nil, fmt.Errorf("certificado nao pode ser usado na conexao: %w", err)
 	}
 
-	return newSefinClient(sefin.Config{Environment: cfg.Ambiente, Certificate: tlsCert})
+	return newSefinClient(sefin.Config{
+		Environment: cfg.Ambiente,
+		Certificate: tlsCert,
+		OnRetry: func(wait time.Duration, _ error) {
+			fmt.Fprintf(cmd.ErrOrStderr(), "A Sefin Nacional nao respondeu; tentando de novo em %s...\n", wait)
+		},
+	})
 }
 
 func consultarPorChave(cmd *cobra.Command, cfg *config.Config, f *consultarFlags, client *sefin.Client, chave string) error {
@@ -125,7 +132,7 @@ func consultarPorChave(cmd *cobra.Command, cfg *config.Config, f *consultarFlags
 	fmt.Fprintf(out, "NFS-e encontrada\n")
 	fmt.Fprintf(out, "  Chave de acesso  %s\n", result.AccessKey)
 	fmt.Fprintf(out, "  Ambiente         %s\n", sefin.EnvironmentName(result.EnvironmentCode))
-	fmt.Fprintf(out, "  Consultada em    %s\n", result.ProcessedAt.Local().Format("02/01/2006 15:04:05"))
+	fmt.Fprintf(out, "  Consultada em    %s\n", result.ProcessedAt.Local().Format(layoutDataHoraSegundos))
 	fmt.Fprintf(out, "  Arquivo          %s\n", path)
 	return nil
 }

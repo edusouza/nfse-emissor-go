@@ -180,3 +180,25 @@ func TestEmit_ConnectionDroppedAfterSendingIsNotUnreachable(t *testing.T) {
 		t.Errorf("a conexao caiu depois do envio, mas o erro diz que nada chegou: %v", err)
 	}
 }
+
+// Retries are announced, so that the pause between them does not look like a
+// hang. The callback sees each pause, once per retry — never on the last
+// failure, when there is nothing left to wait for.
+func TestLookupDPS_AnnouncesEachRetry(t *testing.T) {
+	client, _ := serveFlaky(t, 99, lookupHandler)
+
+	var waits []time.Duration
+	client.onRetry = func(wait time.Duration, err error) {
+		if !isDialError(err) {
+			t.Errorf("OnRetry recebeu um erro que nao e de conexao: %v", err)
+		}
+		waits = append(waits, wait)
+	}
+
+	if _, err := client.LookupDPS(context.Background(), "DPS123"); !errors.Is(err, ErrUnreachable) {
+		t.Fatalf("erro = %v, esperava ErrUnreachable", err)
+	}
+	if len(waits) != len(client.retryDelays) {
+		t.Errorf("OnRetry chamado %d vezes, esperava %d", len(waits), len(client.retryDelays))
+	}
+}

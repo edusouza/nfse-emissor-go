@@ -46,6 +46,13 @@ const (
 	corpoBloco  = 7.0 // block titles, and the labels of the identification block
 	corpoTexto  = 7.0 // field content
 	corpoMiudo  = 6.0 // field labels, and the note under the QR Code
+
+	// entrelinha is the distance between two lines of seven-point text that
+	// wraps inside a box.
+	entrelinha = 0.32
+
+	// recuo is how far text sits from the left edge of its box.
+	recuo = 0.08
 )
 
 // Grey 5% for the shaded areas of item 2.2.3. 5% density of black is 242 on a
@@ -109,10 +116,21 @@ const (
 	tituloDocumento = "DANFSe v2.0"
 	subtituloDoc    = "Documento Auxiliar da NFS-e"
 	semValidade     = "NFS-e SEM VALIDADE JURÍDICA"
-
-	notaQRCode = "A autenticidade desta NFS-e pode ser verificada pela leitura " +
-		"deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e"
 )
+
+// notaQRCode is the sentence item 2.4.3 puts under the code, "disposta em 3
+// (três) linhas" at six points in a box 4,72 cm wide.
+//
+// The breaks are fixed rather than computed, because the text never changes.
+// They are not the obvious ones: greedy wrapping — fill a line until the next
+// word does not fit — packs the first lines full and spills the sentence into
+// a fourth. These three are balanced so that the widest is as narrow as it can
+// be, and a test measures each against the box.
+var notaQRCode = [qrNotaLinhas]string{
+	"A autenticidade desta NFS-e pode ser verificada",
+	"pela leitura deste código QR ou pela consulta da",
+	"chave de acesso no portal nacional da NFS-e",
+}
 
 // Blocks from "SERVIÇO PRESTADO" down to "VALOR TOTAL DA NFS-e", item 2.4.5.
 //
@@ -162,6 +180,15 @@ const (
 	complementaresTituloY = 22.27
 	complementaresY       = 22.68
 	complementaresAltura  = 0.39
+
+	// complementaresMinimo is what the service description may not take from
+	// the complementary information: room for four lines, among them the tax
+	// line of Law 12.741/2012 that note 10 makes mandatory.
+	complementaresMinimo = 4 * entrelinha
+
+	// complementaresDisponivel is the height of the complementary information
+	// box on the NT's table, with the receipt strip in place.
+	complementaresDisponivel = canhotoY - complementaresY
 
 	canhotoY      = 28.10
 	canhotoAltura = 0.67
