@@ -22,6 +22,11 @@ var (
 
 	// ErrUnavailable means the government service is temporarily down.
 	ErrUnavailable = errors.New("servico da Sefin Nacional temporariamente indisponivel")
+
+	// ErrUnreachable means the connection could not be opened, so no request
+	// reached the government. Unlike other transport failures, this one proves
+	// that nothing was processed.
+	ErrUnreachable = errors.New("nao foi possivel conectar a Sefin Nacional")
 )
 
 // Message is one entry of the erros or alertas arrays.

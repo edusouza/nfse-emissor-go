@@ -119,7 +119,7 @@ func runEnviar(cmd *cobra.Command, path string, f *enviarFlags) error {
 	if dps.value != "" {
 		fmt.Fprintf(out, "  Valor            R$ %s\n", dps.value)
 	}
-	fmt.Fprintf(out, "  Processada em    %s\n", result.ProcessedAt.Local().Format("02/01/2006 15:04:05"))
+	fmt.Fprintf(out, "  Processada em    %s\n", result.ProcessedAt.Local().Format(layoutDataHoraSegundos))
 	fmt.Fprintf(out, "  DPS enviada      %s\n", path)
 	fmt.Fprintf(out, "  NFS-e            %s\n", nfsePath)
 

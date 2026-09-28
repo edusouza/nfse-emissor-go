@@ -10,17 +10,15 @@ depender de portal web.
 ## O que funciona
 
 O ciclo completo de uma nota — configurar, achar o código do serviço, montar,
-validar, assinar, transmitir, consultar e cancelar — exercitado ponta a ponta
-contra a Sefin Nacional em **produção restrita**: o ambiente real do governo,
-onde as notas não têm valor fiscal.
+validar, assinar, transmitir, consultar, substituir e cancelar — exercitado
+ponta a ponta contra a Sefin Nacional em **produção restrita**: o ambiente real
+do governo, onde as notas não têm valor fiscal. E o **DANFSe**, o documento
+auxiliar que se entrega ao cliente, desenhado aqui conforme a NT 008.
 
 ## O que ainda não
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- **Gerar o DANFSe**, o PDF que se entrega ao cliente. A API do governo que o
-  gerava foi suspensa em 03/08/2026 pela NT 008, e a geração passou aos
-  softwares de emissão. Até lá, o portal resolve.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
@@ -66,6 +64,7 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
 | `nfse consultar <chave>` | busca a NFS-e, ou a chave a partir do identificador da DPS |
+| `nfse danfse <arquivo.xml>` | gera o DANFSe em PDF a partir do XML da nota |
 | `nfse cancelar <chave>` | registra o evento de cancelamento |
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
 
@@ -482,25 +481,67 @@ códigos são disjuntos e a DPS seria rejeitada pelo schema.
 
 ### Entregar o PDF ao cliente
 
-**Ainda não é possível por aqui.** O DANFSe — o PDF que se entrega ao cliente —
-era gerado por uma API do governo, e a
+O DANFSe — o documento auxiliar que se entrega ao cliente — era gerado por uma
+API do governo, e a
 [NT 008 v1.02, de 14/07/2026](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf)
 **suspendeu essa API em 03/08/2026**, passando a geração para os softwares de
-emissão.
+emissão. O `nfse` gera o documento a partir do XML da nota:
 
-Enquanto o `nfse` não gera o documento ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22)),
-o caminho é o portal: entre em [nfse.gov.br](https://www.nfse.gov.br) com o seu
-certificado e use *Download DANFSe*, tanto na consulta às notas emitidas quanto
-às recebidas (seções 5.5 e 6.3 do guia do Emissor Nacional Web).
+```bash
+nfse consultar 41069022212345678000195000000000000126081234567890
+nfse danfse notas/41069022212345678000195000000000000126081234567890-nfse.xml
+```
 
-O XML que o `nfse` grava continua sendo o documento fiscal válido; o DANFSe é a
-representação auxiliar.
+Sai uma página A4 no leiaute da NT: cabeçalho com QR Code da consulta pública,
+identificação, prestador, tomador, destinatário, intermediário, serviço,
+tributação municipal, federal e IBS/CBS, totais, informações complementares e
+canhoto.
+
+| Opção | Para quê |
+|---|---|
+| `-o arquivo.pdf` | grava em outro caminho (padrão: o mesmo nome do XML) |
+| `--sobrescrever` | substitui o PDF se ele já existir |
+| `--sem-canhoto` | omite o canhoto de recebimento, que a NT deixa opcional |
+| `--cancelada` / `--substituida` | imprime a marca d'água correspondente |
+| `--sem-rede` | não consulta o nome dos municípios; usa só o cache |
+| `--fonte URL` | outro servidor para a consulta de municípios (padrão: o serviço do IBGE) |
+| `--cache arquivo` | onde guardar os municípios já consultados (padrão: o diretório de cache do sistema) |
+
+**A marca d'água vem de você, não do XML.** A NFS-e não guarda registro de ter
+sido cancelada — o cancelamento é um evento à parte — nem de ter sido
+substituída.
+
+**Nota de homologação sai com tarja.** Quando `tpAmb = 2`, o documento leva
+"NFS-e SEM VALIDADE JURÍDICA" em vermelho no cabeçalho, como a NT exige.
+
+**O nome do município é consultado.** O XML traz o código de 7 dígitos do IBGE,
+e a NT pede o nome; o comando pergunta ao serviço público do IBGE e guarda a
+resposta em cache, então a segunda impressão da mesma nota não depende da rede.
+Se a consulta não responder, o documento sai com o código no lugar do nome —
+nunca deixa de sair. Ver [ADR 0012](docs/decisoes/0012-municipio-por-consulta.md).
+
+**A assinatura do governo é conferida, e isso tem limite.** O comando avisa
+quando o XML não traz a assinatura da Sefin ou quando ela não confere com o
+conteúdo — sinal de um XML alterado depois de autorizado. Mas o certificado
+vem de dentro do próprio XML, e nada o liga a uma autoridade confiável: a
+conferência mostra que o conteúdo não mudou, não que a nota exista. A prova é a
+consulta pela chave de acesso no portal nacional, que o QR Code do documento
+abre.
+
+**Descrição longa quebra em linhas.** A descrição do serviço aceita até 1300
+caracteres. Ela quebra dentro do quadro, que cresce o quanto precisa — como o
+item 2.3 da NT permite — tomando o espaço das informações complementares. Se
+nem assim couber, o texto termina em reticências.
+
+O XML continua sendo o documento fiscal válido; o DANFSe é a representação
+auxiliar. O portal também gera o seu, em
+[nfse.gov.br](https://www.nfse.gov.br) → *Download DANFSe*.
 
 ## Roadmap
 
 | Versão | Entrega |
 |--------|---------|
-| v0.8.0 | Gerar o DANFSe localmente (NT 008) |
+| v0.8.0 | DANFSe gerado aqui (NT 008) |
 | v0.9.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 

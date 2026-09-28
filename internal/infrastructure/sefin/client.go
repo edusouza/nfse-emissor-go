@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -28,6 +30,21 @@ const maxResponseSize = 8 << 20
 // more room than a plain lookup.
 const DefaultTimeout = 60 * time.Second
 
+// defaultRetryDelays are the pauses between attempts of a lookup whose
+// connection could not be opened, so a lookup is tried len+1 times. They are
+// short because the outages seen so far last seconds.
+var defaultRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
+
+// dialTimeout bounds opening the connection, apart from the request.
+//
+// DefaultTimeout is generous because an emission is processed inside the
+// request, but opening a connection is not where that time goes. Left to the
+// operating system, a host that never answers the handshake takes ~21s on
+// Windows and up to two minutes on Linux, where the SYN is retried — per
+// attempt, and a lookup makes three. Ten seconds is ample for a reachable
+// server, and caps an unreachable one at ~37s in all, retries included.
+const dialTimeout = 10 * time.Second
+
 // Config configures a Client.
 type Config struct {
 	// Environment is EnvProduction or EnvRestrictedProduction. An empty value
@@ -47,13 +64,20 @@ type Config struct {
 
 	// HTTPClient overrides the constructed client. Used by tests.
 	HTTPClient *http.Client
+
+	// OnRetry, when set, is called before a lookup is tried again, with the
+	// pause about to be taken and the failure that caused it. Without it the
+	// retries are silent, and half a minute of nothing looks like a hang.
+	OnRetry func(wait time.Duration, err error)
 }
 
 // Client calls the Sefin Nacional emission service.
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	env        string
+	httpClient  *http.Client
+	baseURL     string
+	env         string
+	retryDelays []time.Duration
+	onRetry     func(time.Duration, error)
 }
 
 // New builds a client for the configured environment.
@@ -89,6 +113,7 @@ func New(cfg Config) (*Client, error) {
 		httpClient = &http.Client{
 			Timeout: timeout,
 			Transport: &http.Transport{
+				DialContext: (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext,
 				TLSClientConfig: &tls.Config{
 					Certificates: []tls.Certificate{*cfg.Certificate},
 					MinVersion:   tls.VersionTLS12,
@@ -113,7 +138,13 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	return &Client{httpClient: httpClient, baseURL: baseURL, env: env}, nil
+	return &Client{
+		httpClient:  httpClient,
+		baseURL:     baseURL,
+		env:         env,
+		retryDelays: defaultRetryDelays,
+		onRetry:     cfg.OnRetry,
+	}, nil
 }
 
 // Environment reports which environment this client talks to.
@@ -168,7 +199,7 @@ func (c *Client) post(ctx context.Context, url string, payload []byte) ([]byte, 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+		return nil, 0, communicationError(err, 1)
 	}
 	defer resp.Body.Close()
 
@@ -178,6 +209,36 @@ func (c *Client) post(ctx context.Context, url string, payload []byte) ([]byte, 
 	}
 
 	return body, resp.StatusCode, nil
+}
+
+// communicationError explains a request that got no response.
+//
+// A failure to open the connection is set apart because it is the one case
+// where the outcome is certain: nothing reached the government. Any later
+// failure may have happened after an invoice was issued.
+func communicationError(err error, attempts int) error {
+	if !isDialError(err) {
+		return fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+	}
+
+	tried := ""
+	if attempts > 1 {
+		tried = fmt.Sprintf(" depois de %d tentativas", attempts)
+	}
+	return fmt.Errorf("%w%s: a requisicao nao chegou ao servidor, entao nada foi processado. "+
+		"Confira a conexao com a internet e tente de novo em alguns minutos; "+
+		"se persistir, o servico do governo pode estar fora do ar\ndetalhe: %w", ErrUnreachable, tried, err)
+}
+
+// isDialError reports whether err happened while opening the connection:
+// resolving the name or completing the TCP handshake.
+//
+// net/http retries a POST on a fresh connection only when nothing was written
+// on the previous one, so a dial error as the final outcome holds for every
+// attempt the transport made.
+func isDialError(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "dial"
 }
 
 // classify maps an error status onto the sentinel a caller can branch on.
@@ -252,14 +313,9 @@ func (c *Client) LookupDPS(ctx context.Context, dpsID string) (*DPSLookup, error
 // restricted to the parties on the invoice — so this answers "did my emission
 // go through?" even when the caller cannot read the document itself.
 func (c *Client) DPSExists(ctx context.Context, dpsID string) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL+pathDPS+url.PathEscape(dpsID), nil)
+	resp, err := c.doIdempotent(ctx, http.MethodHead, c.baseURL+pathDPS+url.PathEscape(dpsID))
 	if err != nil {
-		return false, fmt.Errorf("falha ao montar a requisicao: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+		return false, err
 	}
 	defer resp.Body.Close()
 	// A HEAD response carries no body, but draining keeps the connection reusable.
@@ -279,15 +335,9 @@ func (c *Client) DPSExists(ctx context.Context, dpsID string) (bool, error) {
 
 // get performs a single GET and returns the body and status.
 func (c *Client) get(ctx context.Context, url string) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := c.doIdempotent(ctx, http.MethodGet, url)
 	if err != nil {
-		return nil, 0, fmt.Errorf("falha ao montar a requisicao: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, 0, fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
@@ -296,6 +346,40 @@ func (c *Client) get(ctx context.Context, url string) ([]byte, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("falha ao ler a resposta da Sefin Nacional: %w", err)
 	}
 	return body, resp.StatusCode, nil
+}
+
+// doIdempotent sends a bodiless lookup, trying again when the connection could
+// not be opened.
+//
+// Only that failure is retried. A lookup is safe to repeat whatever happened,
+// but a server that answered, even with an error, will most likely answer the
+// same way again, and the retry would only delay the message.
+func (c *Client) doIdempotent(ctx context.Context, method, url string) (*http.Response, error) {
+	for attempt := 1; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("falha ao montar a requisicao: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+		if !isDialError(err) || attempt > len(c.retryDelays) {
+			return nil, communicationError(err, attempt)
+		}
+
+		wait := c.retryDelays[attempt-1]
+		if c.onRetry != nil {
+			c.onRetry(wait, err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, communicationError(err, attempt)
+		case <-time.After(wait):
+		}
+	}
 }
 
 // EventResult is a registered event.

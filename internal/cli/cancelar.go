@@ -142,7 +142,7 @@ func runCancelar(cmd *cobra.Command, chave string, f *cancelarFlags) error {
 	fmt.Fprintf(out, "  NFS-e            %s\n", chave)
 	fmt.Fprintf(out, "  Pedido           %s\n", built.RequestID)
 	fmt.Fprintf(out, "  Ambiente         %s\n", sefin.EnvironmentName(result.EnvironmentCode))
-	fmt.Fprintf(out, "  Processado em    %s\n", result.ProcessedAt.Local().Format("02/01/2006 15:04:05"))
+	fmt.Fprintf(out, "  Processado em    %s\n", result.ProcessedAt.Local().Format(layoutDataHoraSegundos))
 	fmt.Fprintf(out, "  Evento           %s\n", path)
 	return nil
 }

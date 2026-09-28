@@ -13,6 +13,131 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
+
+O leiaute inteiro da NT 008 sai em uma página A4.
+
+- **`nfse danfse <arquivo-da-nfse.xml>`** desenha o PDF a partir do XML
+  autorizado, o mesmo que o `consultar` grava. Recusa uma DPS: o DANFSe
+  representa a nota que existe, e só a resposta do governo traz chave, número
+  e situação.
+- Leiaute conforme a [NT 008 v1.02](docs/notas-tecnicas/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf):
+  A4 retrato em página única, coordenadas em centímetros, linhas de 0,5 ponto,
+  borda de 1 ponto e sombreamento cinza a 5%.
+- **QR Code da consulta pública** desenhado como vetor, módulo a módulo, em vez
+  de imagem incorporada.
+- **Tarja "NFS-e SEM VALIDADE JURÍDICA"** em vermelho quando `tpAmb = 2`, como
+  a NT exige — e só nesse caso.
+- **Informações complementares** reunidas na ordem e com os prefixos da NT,
+  separadas por pipes, terminando sempre na linha de **totais aproximados de
+  tributos da Lei 12.741/2012** — que sai mesmo quando a nota não declara
+  estimativa, porque a NT a torna obrigatória.
+- **Canhoto de recebimento**, que a NT deixa opcional: `--sem-canhoto` o omite
+  e devolve o espaço às informações complementares.
+- **Marcas d'água `CANCELADA` e `SUBSTITUÍDA`**, na diagonal, em cinza K35.
+  Elas vêm de `--cancelada` e `--substituida`, não do XML: a NFS-e não guarda
+  registro de ter sido cancelada — o cancelamento é um evento à parte — nem de
+  ter sido substituída, e as duas marcas se excluem.
+- **Prestador, tomador, destinatário e intermediário**, com os documentos
+  formatados e o endereço concatenado. Um bloco sem ninguém vira a frase que a
+  NT manda — "TOMADOR/ADQUIRENTE DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e" e as
+  irmãs dela — e, quando a nota diz que o destinatário é o próprio tomador
+  (`indDest = 0`), o bloco diz isso em vez de repetir a mesma pessoa.
+- **Dados de quem emitiu vêm do grupo `emit` da NFS-e** quando a DPS não os
+  traz. A NT aponta o bloco do prestador para a DPS, mas numa nota emitida pelo
+  próprio prestador a DPS só leva o CNPJ — a regra E0121 rejeita o nome ali — e
+  nome, endereço, telefone e e-mail voltam no `emit`, preenchidos pelo governo.
+  Seguir a NT ao pé da letra imprimia o bloco inteiro em traços. O que a DPS
+  declarou continua prevalecendo, campo a campo.
+- **Local da prestação e município de incidência** no formato da NT,
+  "Município / UF / País" (`Curitiba / PR / BR`). A nota só traz o nome da
+  cidade; a UF sai dos dois primeiros dígitos do código do IBGE, sem consulta.
+- **Nome do município por consulta ao IBGE**, com cache em disco: a segunda
+  impressão da mesma nota não depende da rede. A consulta é anunciada antes de
+  acontecer, `--sem-rede` a desliga, e uma falha nunca impede o documento — o
+  campo sai com o código do IBGE e a saída explica por quê.
+  Ver [ADR 0012](docs/decisoes/0012-municipio-por-consulta.md).
+- Duas dependências novas, ambas sem `cgo`: `go-pdf/fpdf` e
+  `boombuler/barcode`. Ver [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md).
+
+**Pendência de verificação:** o contrato da consulta ao IBGE não foi
+exercitado contra o serviço real — o ambiente onde este código foi escrito não
+alcança `servicodados.ibge.gov.br`. Os campos vêm da documentação do serviço e
+os testes usam um servidor local. É a mesma pendência que a BrasilAPI tem desde
+a v0.6.0.
+
+**Achado na leitura da NT:** o item 2.2.2 limita as margens a 0,20 cm, mas a
+tabela de coordenadas do item 2.4.5 posiciona tudo a partir de 0,30 cm — e
+0,30 + 20,40 + 0,30 fecha exatamente os 21 cm da folha A4. As duas partes da
+nota técnica se contradizem; o emissor segue a tabela, que é a que posiciona os
+campos e de onde o modelo do Anexo I foi desenhado.
+
+### Falha de conexão com a Sefin
+
+Uma instabilidade da produção restrita derrubou um `consultar --dps` com o erro
+cru do Windows (`dial tcp ...: connectex: ... não respondeu`), sem dizer o que
+fazer.
+
+- **Consultas tentam de novo sozinhas** quando a conexão nem chega a abrir:
+  `consultar` por chave, por DPS e com `--existe` fazem até 3 tentativas,
+  com pausas de 2 s e 5 s. Uma resposta do servidor, mesmo de erro, não é
+  repetida.
+- **Mensagem que diz o que aconteceu:** se a conexão não abriu, a requisição
+  não chegou ao governo e nada foi processado. O erro agora afirma isso e
+  sugere tentar de novo em alguns minutos. Uma queda *depois* do envio continua
+  com a mensagem anterior, porque aí a nota pode ter sido emitida.
+- **Emissão e cancelamento continuam sem repetição automática.** No
+  `emitir --enviar`, a mensagem diz que nenhuma NFS-e foi emitida e mostra o
+  `nfse enviar <arquivo>` que manda a mesma DPS já gravada, sem gastar outro
+  número.
+- **Espera limitada e anunciada.** Abrir a conexão tem prazo próprio de 10 s,
+  em vez de depender do sistema operacional (~21 s no Windows, até 2 min no
+  Linux, por tentativa). Um servidor inacessível custa agora no máximo ~37 s
+  somando as três tentativas, e cada nova tentativa é anunciada:
+  "A Sefin Nacional nao respondeu; tentando de novo em 2s...".
+- A consulta de existência (`consultar --dps --existe`, um `HEAD`) passou a
+  mandar o cabeçalho `Accept: application/json`, como as outras consultas. O
+  corpo da resposta continua ignorado.
+
+### Revisão do DANFSe
+
+- **O destino é conferido antes de qualquer consulta.** Um PDF que já existe
+  recusava o comando só depois de consultar o IBGE e desenhar o documento, e as
+  respostas se perdiam. Agora a recusa vem primeiro, e o cache é gravado assim
+  que as consultas terminam, aconteça o que acontecer depois.
+- **A consulta ao IBGE desiste cedo.** Um código que falhou não é perguntado de
+  novo, e quando o serviço não pode ser alcançado, nenhum outro código é
+  enviado naquela execução — antes, cada bloco de pessoa esperava o prazo de
+  10 s outra vez. O anúncio "serao consultados em" só aparece quando alguma
+  consulta de fato acontece; com tudo em cache, nada sai da máquina.
+- **Cache gravado de forma atômica**, por arquivo temporário e troca de nome:
+  uma interrupção no meio não deixa mais um JSON pela metade.
+- **Descrição do serviço quebra em linhas.** Ela era desenhada numa linha só, e
+  o que passava da largura sumia pela direita da página. Agora quebra dentro do
+  quadro, que cresce o que precisa (item 2.3 da NT), empurrando os blocos de
+  baixo e tomando o espaço das informações complementares, que mantêm ao menos
+  quatro linhas. A descrição do código de tributação faz o mesmo.
+- **Retenção de PIS/COFINS pelos dez códigos do schema.** A NT escreve a regra
+  para `tpRetPisCofins = 1`, mas os códigos 3 e 4 também retêm os dois, e 5, 6,
+  7 e 9 retêm um deles. Um PIS retido com código 3 saía como débito próprio e
+  fora do total retido. A regra agora vale para cada contribuição que o código
+  diz ter sido retida.
+- **Assinatura do governo conferida.** O comando avisa quando o XML não traz a
+  assinatura da Sefin ou quando ela não confere com o conteúdo. A conferência
+  mostra integridade, não origem: a prova de que a nota existe continua sendo a
+  consulta pela chave de acesso, que o QR Code abre.
+- **Aviso de caracteres fora da fonte.** As fontes padrão do PDF só têm o
+  alfabeto cp1252; um nome em cirílico ou em ideogramas saía como pontos, em
+  silêncio. O documento continua saindo, e a saída diz qual texto perdeu
+  caracteres.
+- Caracteres de controle do XML (quebra de linha, tabulação) viram espaço, em
+  vez de caírem num campo de uma linha só.
+- Um valor maior que o schema permite fica fora das somas, em vez de estourar
+  o inteiro e imprimir um total errado.
+- XML maior que 5 MB é recusado: uma NFS-e tem poucos kilobytes.
+- `--fonte` mostra no `--help` o servidor padrão.
+- Os testes do `danfse` não acessam mais o IBGE real nem o cache do usuário.
+
 ## [0.7.0] - 2026-09-21
 
 Fecha a substituição de NFS-e. A DANFSe foi implementada e **removida antes do
