@@ -2,6 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +14,7 @@ import (
 	"github.com/beevik/etree"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 )
 
@@ -167,6 +171,40 @@ func TestEmitir_MinimalInvoice(t *testing.T) {
 	// The config default marks the taker as unidentified, so <toma> is omitted.
 	if doc.FindElement("DPS/infDPS/toma") != nil {
 		t.Error("<toma> nao deveria existir para tomador nao identificado")
+	}
+}
+
+// TestEmitir_UnreachableSefinPointsToEnviar covers a transmission that never
+// left the machine. The DPS is already on disk with its number spent, so
+// running emitir again would build a different document; enviar sends this one.
+func TestEmitir_UnreachableSefinPointsToEnviar(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	baseURL := srv.URL
+	srv.Close()
+
+	original := newSefinClient
+	newSefinClient = func(cfg sefin.Config) (*sefin.Client, error) {
+		cfg.BaseURL = baseURL
+		cfg.HTTPClient = &http.Client{}
+		return sefin.New(cfg)
+	}
+	t.Cleanup(func() { newSefinClient = original })
+
+	dir := workspace(t)
+	out, err := runEmit(t, dir, "--numero", "7", "--valor", "100.00", "--enviar")
+	if !errors.Is(err, sefin.ErrUnreachable) {
+		t.Fatalf("erro = %v, esperava ErrUnreachable\n%s", err, out)
+	}
+
+	dpsFiles, _ := filepath.Glob(filepath.Join(dir, "notas", "*-dps.xml"))
+	if len(dpsFiles) != 1 {
+		t.Fatalf("esperava a DPS assinada em disco, encontrei %v", dpsFiles)
+	}
+	if !strings.Contains(err.Error(), "nfse enviar "+dpsFiles[0]) {
+		t.Errorf("a mensagem nao mostra como reenviar a mesma DPS: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Nenhuma NFS-e foi emitida") {
+		t.Errorf("a mensagem nao diz que nenhuma nota saiu: %v", err)
 	}
 }
 

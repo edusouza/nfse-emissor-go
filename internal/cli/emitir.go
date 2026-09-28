@@ -225,6 +225,12 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 
 	result, err := transmit(cmd.Context(), cfg, certInfo, signedXML)
 	if err != nil {
+		// The DPS is on disk and its number already spent. Running emitir again
+		// would build a new document, so point at the command that sends this one.
+		if errors.Is(err, sefin.ErrUnreachable) {
+			return fmt.Errorf("%w\n\nNenhuma NFS-e foi emitida. A DPS assinada ficou gravada; "+
+				"para enviar essa mesma DPS, sem gastar outro numero:\n  nfse enviar %s", err, dpsPath)
+		}
 		return err
 	}
 

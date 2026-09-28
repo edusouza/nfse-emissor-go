@@ -63,6 +63,25 @@ tabela de coordenadas do item 2.4.5 posiciona tudo a partir de 0,30 cm — e
 nota técnica se contradizem; o emissor segue a tabela, que é a que posiciona os
 campos e de onde o modelo do Anexo I foi desenhado.
 
+### Falha de conexão com a Sefin
+
+Uma instabilidade da produção restrita derrubou um `consultar --dps` com o erro
+cru do Windows (`dial tcp ...: connectex: ... não respondeu`), sem dizer o que
+fazer.
+
+- **Consultas tentam de novo sozinhas** quando a conexão nem chega a abrir:
+  `consultar` por chave, por DPS e com `--existe` fazem até 3 tentativas,
+  com pausas de 2 s e 5 s. Uma resposta do servidor, mesmo de erro, não é
+  repetida.
+- **Mensagem que diz o que aconteceu:** se a conexão não abriu, a requisição
+  não chegou ao governo e nada foi processado. O erro agora afirma isso e
+  sugere tentar de novo em alguns minutos. Uma queda *depois* do envio continua
+  com a mensagem anterior, porque aí a nota pode ter sido emitida.
+- **Emissão e cancelamento continuam sem repetição automática.** No
+  `emitir --enviar`, a mensagem diz que nenhuma NFS-e foi emitida e mostra o
+  `nfse enviar <arquivo>` que manda a mesma DPS já gravada, sem gastar outro
+  número.
+
 
 ## [0.7.0] - 2026-09-21
 
