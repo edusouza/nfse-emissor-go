@@ -31,12 +31,11 @@ func (m municipioInformado) String() string {
 // buscaMunicipio carries what resolving a name needs: where to ask, where to
 // remember, and whether asking is allowed at all.
 type buscaMunicipio struct {
-	ctx     context.Context
-	out     io.Writer
-	errOut  io.Writer
-	cache   *ibge.Cache
-	client  *ibge.Client // nil under --sem-rede
-	semRede bool
+	ctx    context.Context
+	out    io.Writer
+	errOut io.Writer
+	cache  *ibge.Cache
+	client *ibge.Client // nil under --sem-rede: the name resolves from the cache or not at all
 }
 
 // resolver turns --municipio into a checked IBGE code.
@@ -63,10 +62,11 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 
 	nome, uf, ok := separarUF(valor)
 	if !ok {
-		return municipioInformado{}, fmt.Errorf("--municipio %q: informe a UF junto do nome, como \"Curitiba/PR\" — "+
+		return municipioInformado{}, fmt.Errorf("--municipio %q: nao encontrei a UF; escreva como \"Curitiba/PR\" — "+
 			"ha municipios com o mesmo nome em estados diferentes; ou use o codigo IBGE de 7 digitos", valor)
 	}
-	if texto.Chave(nome) == "" {
+	chave := texto.Chave(nome)
+	if chave == "" {
 		return municipioInformado{}, fmt.Errorf("--municipio %q: falta o nome do municipio", valor)
 	}
 
@@ -74,7 +74,7 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 		return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: "--municipio"}, nil
 	}
 
-	if b.semRede || b.client == nil {
+	if b.client == nil {
 		return municipioInformado{}, fmt.Errorf("--municipio %q: sem rede, so da para achar um nome que ja esteja "+
 			"no cache de municipios, e este nao esta; informe o codigo IBGE de 7 digitos, "+
 			"ou rode uma vez sem --sem-rede", valor)
@@ -94,7 +94,6 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 		fmt.Fprintf(b.errOut, "aviso: nao consegui gravar o cache de municipios: %v\n", err)
 	}
 
-	chave := texto.Chave(nome)
 	for _, m := range lista {
 		if texto.Chave(m.Nome) == chave {
 			return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: "--municipio, consultado em " + b.client.Host()}, nil
@@ -108,10 +107,13 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 	return municipioInformado{}, errors.New(msg)
 }
 
-// separarUF splits "Nome/UF", "Nome - UF" or "Nome, UF". The state is what
-// comes after the last separator, and has to be one of the 27.
+// separarUF splits "Nome/UF", "Nome - UF", "Nome-UF" or "Nome, UF". The state
+// is what comes after the last separator, and has to be one of the 27: a
+// hyphen inside a name, as in Embu-Guaçu, leaves a word that is not a state
+// and the next separator is tried. No official name ends in a hyphen or a
+// slash followed by a state's abbreviation, which a test holds to ANEXO_A.
 func separarUF(valor string) (nome, uf string, ok bool) {
-	for _, sep := range []string{"/", " - ", ","} {
+	for _, sep := range []string{"/", " - ", ",", "-"} {
 		if i := strings.LastIndex(valor, sep); i >= 0 {
 			nome = strings.TrimSpace(valor[:i])
 			uf = strings.ToUpper(strings.TrimSpace(valor[i+len(sep):]))
@@ -124,25 +126,31 @@ func separarUF(valor string) (nome, uf string, ok bool) {
 }
 
 // parecidos lists the names in a state that start with, or contain, what was
-// typed — what a person who misspelled the end or the start of a name needs.
+// typed — or that what was typed starts with, for an extra letter at the end
+// — in alphabetical order, prefixes first.
 func parecidos(lista []ibge.Municipio, chave string, limite int) []string {
-	var comeca, contem []string
+	var comeca, contem []ibge.Municipio
 	for _, m := range lista {
 		k := texto.Chave(m.Nome)
-		rotulo := fmt.Sprintf("%s  %s/%s", m.Codigo, m.Nome, m.UF)
 		switch {
 		case strings.HasPrefix(k, chave) || strings.HasPrefix(chave, k):
-			comeca = append(comeca, rotulo)
+			comeca = append(comeca, m)
 		case strings.Contains(k, chave):
-			contem = append(contem, rotulo)
+			contem = append(contem, m)
 		}
 	}
-	sort.Strings(comeca)
-	sort.Strings(contem)
+	porNome := func(s []ibge.Municipio) {
+		sort.Slice(s, func(i, j int) bool { return texto.Chave(s[i].Nome) < texto.Chave(s[j].Nome) })
+	}
+	porNome(comeca)
+	porNome(contem)
 
-	out := append(comeca, contem...)
-	if len(out) > limite {
-		out = out[:limite]
+	var out []string
+	for _, m := range append(comeca, contem...) {
+		if len(out) == limite {
+			break
+		}
+		out = append(out, fmt.Sprintf("%s  %s/%s", m.Codigo, m.Nome, m.UF))
 	}
 	return out
 }

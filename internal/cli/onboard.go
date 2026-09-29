@@ -141,7 +141,7 @@ escrito a mao no nfse.yaml.`,
 			if municipioFlag != "" {
 				busca := buscaMunicipio{
 					ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
-					cache: ibge.NovoCache(cacheMunicipios), semRede: semRede,
+					cache: ibge.NovoCache(cacheMunicipios),
 				}
 				if !semRede {
 					busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
