@@ -12,10 +12,10 @@ import (
 )
 
 // certFor builds a CertificateInfo carrying only what the check reads: the
-// ICP-Brasil common name.
-func certFor(cn string) *xmlsigner.CertificateInfo {
+// common name and, optionally, the subjectAltName.
+func certFor(cn string, extensions ...pkix.Extension) *xmlsigner.CertificateInfo {
 	return &xmlsigner.CertificateInfo{
-		Certificate: &x509.Certificate{Subject: pkix.Name{CommonName: cn}},
+		Certificate: &x509.Certificate{Subject: pkix.Name{CommonName: cn}, Extensions: extensions},
 	}
 }
 
@@ -30,10 +30,10 @@ func TestEnsureCertificateBelongsToProvider(t *testing.T) {
 		{"CNPJ do prestador mascarado", "EMPRESA LTDA:12345678000195", "12.345.678/0001-95", false},
 		{"outra empresa", "EMPRESA LTDA:12345678000195", "11222333000181", true},
 
-		// The emitter only knows the certificate's CNPJ when the common name
+		// The emitter only knows the certificate's CNPJ when the certificate
 		// follows the ICP-Brasil layout. Refusing anything else would lock out
 		// certificates laid out differently, so silence is the safe answer.
-		{"certificado sem CNPJ no CN", "EMPRESA LTDA", "11222333000181", false},
+		{"certificado sem CNPJ no CN nem no SAN", "EMPRESA LTDA", "11222333000181", false},
 		{"CN com digitos invalidos", "EMPRESA LTDA:12345678000100", "11222333000181", false},
 		{"prestador desconhecido", "EMPRESA LTDA:12345678000195", "", false},
 	} {
@@ -46,6 +46,42 @@ func TestEnsureCertificateBelongsToProvider(t *testing.T) {
 				t.Fatalf("nao esperava erro: %v", err)
 			}
 		})
+	}
+}
+
+// The Sefin identifies the signer by the subjectAltName, so that is what the
+// check compares — including when the common name has no CNPJ, or a different
+// one.
+func TestEnsureCertificateBelongsToProvider_PeloSubjectAltName(t *testing.T) {
+	san := icpBrasilCNPJExtension(t, "12345678000195")
+
+	for _, tc := range []struct {
+		name     string
+		cn       string
+		provider string
+		wantErr  bool
+	}{
+		{"mesmo CNPJ", "EMPRESA LTDA", "12345678000195", false},
+		{"outra empresa", "EMPRESA LTDA", "11222333000181", true},
+		{"CN diz outra empresa, SAN diz o prestador", "EMPRESA LTDA:11222333000181", "12345678000195", false},
+		{"CN diz o prestador, SAN diz outra empresa", "EMPRESA LTDA:11222333000181", "11222333000181", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ensureCertificateBelongsToProvider(certFor(tc.cn, san), tc.provider)
+			if tc.wantErr && err == nil {
+				t.Fatal("esperava recusa")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("nao esperava erro: %v", err)
+			}
+		})
+	}
+
+	err := ensureCertificateBelongsToProvider(certFor("EMPRESA LTDA", san), "11222333000181")
+	for _, want := range []string{"12.345.678/0001-95", "11.222.333/0001-81", "EMPRESA LTDA"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("mensagem nao menciona %q:\n%v", want, err)
+		}
 	}
 }
 
