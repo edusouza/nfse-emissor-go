@@ -562,6 +562,7 @@ pkg/
   xmlbuilder/      montagem do XML da DPS
   cnpjcpf/         validação de CNPJ e CPF
   dpsid/           identificador da DPS (42 caracteres)
+  codmun/          código de município do IBGE (UF e dígito verificador)
 exemplos/          passo a passo executável
 docs/
   api/             especificações OpenAPI oficiais do governo
@@ -577,6 +578,18 @@ go test ./...          # suíte completa (~75s: inclui testes de backoff reais)
 go test -short ./...   # rápida (~2s), pulando os testes dependentes de relógio
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
+```
+
+Os clientes da BrasilAPI e do IBGE foram escritos a partir da documentação
+desses serviços, e os testes de unidade usam servidores locais. Os testes de
+contrato conferem as respostas reais e ficam desligados por padrão; a CI os
+roda quando os clientes mudam, toda semana e sob demanda:
+
+```bash
+NFSE_TESTE_CONTRATO=1 go test -run Contrato -v ./internal/infrastructure/brasilapi/ ./internal/infrastructure/ibge/
+
+# para conferir também as opções pelo MEI e pelo Simples de um MEI de verdade
+NFSE_TESTE_CONTRATO=1 NFSE_TESTE_CNPJ_MEI=<cnpj> go test -run Contrato -v ./internal/infrastructure/brasilapi/
 ```
 
 ## O que a validação local cobre

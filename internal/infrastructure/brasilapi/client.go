@@ -15,6 +15,7 @@ package brasilapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
+	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
 
 // DefaultBaseURL is the public BrasilAPI endpoint.
@@ -116,6 +118,29 @@ type Empresa struct {
 	// a wrong regApTribSN in every invoice.
 	OpcaoPeloMEI     *bool `json:"opcao_pelo_mei"`
 	OpcaoPeloSimples *bool `json:"opcao_pelo_simples"`
+}
+
+// MunicipioIBGE returns the seven-digit IBGE code of the registered address,
+// or why it cannot be trusted.
+//
+// The response carries two municipality codes: codigo_municipio_ibge and
+// codigo_municipio, the Receita Federal's four-digit TOM code. Taking the
+// wrong one, or a field renamed under us, would send every invoice to the
+// wrong municipality with nothing complaining — the Sefin accepts any valid
+// code. So the value is held to the IBGE check digit and to the state the same
+// response names, and an empty field is reported as absent.
+func (e *Empresa) MunicipioIBGE() (string, error) {
+	codigo := e.CodigoMunicipioIBGE.String()
+	if codigo == "" {
+		return "", errors.New("a resposta nao trouxe codigo_municipio_ibge")
+	}
+	if err := codmun.Validar(codigo); err != nil {
+		return "", err
+	}
+	if uf := strings.TrimSpace(e.UF); uf != "" && !strings.EqualFold(uf, codmun.UF(codigo)) {
+		return "", fmt.Errorf("o codigo %s e de %s, mas o cadastro informa a UF %s", codigo, codmun.UF(codigo), uf)
+	}
+	return codigo, nil
 }
 
 // Ativa reports whether the registration is active. An inactive CNPJ cannot

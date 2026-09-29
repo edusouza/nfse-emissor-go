@@ -1,5 +1,7 @@
 package danfse
 
+import "github.com/edusouza/nfse-emissor-go/pkg/codmun"
+
 // The XML carries codes; NT 008 says to print the descriptions ("Utilizar a
 // descrição destas opções"). The descriptions below are the ones the schema
 // documents for each type, so the two artefacts can be compared side by side
@@ -144,22 +146,8 @@ var apuracaoSimplesNacional = map[string]string{
 // paisBrasil is Brazil in the two-letter ISO table NT 008 prints countries in.
 const paisBrasil = "BR"
 
-// ufPorCodigo maps the first two digits of an IBGE municipality code — the
-// state's own IBGE code — to its abbreviation.
-var ufPorCodigo = map[string]string{
-	"11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
-	"21": "MA", "22": "PI", "23": "CE", "24": "RN", "25": "PB", "26": "PE", "27": "AL",
-	"28": "SE", "29": "BA",
-	"31": "MG", "32": "ES", "33": "RJ", "35": "SP",
-	"41": "PR", "42": "SC", "43": "RS",
-	"50": "MS", "51": "MT", "52": "GO", "53": "DF",
-}
-
 // siglaUF returns the state of a seven-digit IBGE code, or "" for anything
 // else.
 func siglaUF(codigo string) string {
-	if len(codigo) != 7 || !apenasDigitos(codigo) {
-		return ""
-	}
-	return ufPorCodigo[codigo[:2]]
+	return codmun.UF(codigo)
 }
