@@ -123,3 +123,19 @@ func TestTaxRegimeFromSimples(t *testing.T) {
 		})
 	}
 }
+
+// The default description is the one field the user types in full; it has
+// to reach padroes.servico.descricao and survive quotes and line breaks.
+func TestRenderOnboardedDescricao(t *testing.T) {
+	rendered, err := RenderOnboarded(Onboarded{Descricao: `Consultoria em "TI"` + "\nsob demanda"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Decode(strings.NewReader(rendered))
+	if err != nil {
+		t.Fatalf("YAML invalido: %v\n%s", err, rendered)
+	}
+	if got := cfg.Padroes.Servico.Descricao; got != `Consultoria em "TI" sob demanda` {
+		t.Errorf("descricao = %q", got)
+	}
+}

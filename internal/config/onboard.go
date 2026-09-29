@@ -29,6 +29,10 @@ type Onboarded struct {
 	Servico          string
 	ServicoDescricao string
 
+	// Descricao is padroes.servico.descricao, the text that goes in xDescServ
+	// when --descricao is not given. Only the user can say it.
+	Descricao string
+
 	// SugestoesServico are candidate codes ranked from the provider's CNAE and
 	// written commented out, for the user to uncomment one.
 	//
