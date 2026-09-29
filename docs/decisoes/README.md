@@ -21,3 +21,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0010](0010-substituicao-e-danfse.md) | Substituição de NFS-e e DANFSe | Aceita |
 | [0011](0011-bibliotecas-de-pdf-e-qr-code.md) | Bibliotecas de PDF e QR Code para gerar o DANFSe | Aceita |
 | [0012](0012-municipio-por-consulta.md) | Traduzir o código do município por consulta, não por tabela embutida | Aceita |
+| [0014](0014-validacao-pelo-xsd.md) | Validar a DPS lendo os XSDs oficiais, com um validador próprio | Aceita |

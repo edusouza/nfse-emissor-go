@@ -19,9 +19,8 @@ auxiliar que se entrega ao cliente, desenhado aqui conforme a NT 008.
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- **Validação XSD completa** e as regras que dependem do convênio do município
-  com o Sistema Nacional — veja
-  [o que a validação local cobre](#o-que-a-validação-local-cobre).
+- As regras que dependem do convênio do município com o Sistema Nacional —
+  veja [o que a validação local cobre](#o-que-a-validação-local-cobre).
 - **Código IBGE offline**, para o `nfse onboard --sem-rede`, e um `onboard`
   interativo.
 
@@ -554,6 +553,7 @@ cmd/nfse/          binário do CLI
 internal/
   cli/             comandos e apresentação
   domain/          regras de negócio (cálculo de valores, validações, rejeições)
+    esquema/       validação contra os XSDs oficiais, embutidos
   infrastructure/
     xmlsigner/     assinatura XMLDSig e leitura do certificado A1
     sefin/         cliente da API do governo
@@ -581,15 +581,33 @@ gofmt -l ./cmd ./internal ./pkg
 
 ## O que a validação local cobre
 
-O CLI valida a DPS antes de assinar, mas essa validação **não substitui** a da
-Sefin Nacional. Ela confere estrutura, tipos, formatos, regras de valores
-monetários e as regras de alíquota do ISS que dependem só do regime do
-prestador (E0595, E0600, E0621, E0625). Não faz validação XSD completa nem
-conhece as parametrizações municipais — as regras que dependem do convênio do
-município (E0635, E0640) ficam de fora de propósito. A palavra final é sempre
-do governo.
+O CLI valida a DPS antes de assinar, em duas camadas.
 
-Veja as issues [#4](https://github.com/edusouza/nfse-emissor-go/issues/4) e
+**O schema oficial, inteiro.** A DPS é conferida contra os XSDs do pacote
+v1.01 do Sistema Nacional, os mesmos que a Sefin usa, lidos dos próprios
+arquivos: ordem e cardinalidade dos elementos, escolhas (`CNPJ` ou `CPF`,
+`vDR` ou `pDR`), enumerações, padrões, tamanhos e a assinatura XML-DSig.
+Cada problema sai com o caminho do campo, antes de o certificado ser usado:
+
+```
+a DPS nao passou no schema oficial (XSD v1.01), e a Sefin a recusaria:
+  - /DPS/infDPS/verAplic: "nfse—v0.9.0" nao segue o formato de TSString (...);
+    o caractere '—' esta fora do Latin-1 que o schema aceita
+```
+
+O validador é Go puro, sem `cgo`, e implementa o subconjunto de XSD que esses
+schemas usam. Se uma versão futura trouxer uma construção nova, ele se recusa
+a carregar em vez de ignorá-la. Por quê:
+[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md).
+
+**As regras de negócio que o schema não expressa:** valores monetários, as
+regras de alíquota do ISS que dependem só do regime do prestador (E0595,
+E0600, E0621, E0625) e o dígito verificador de CNPJ, CPF e código de
+município.
+
+O que fica de fora de propósito são as parametrizações municipais: as regras
+que dependem do convênio do município (E0635, E0640) só a Sefin conhece. A
+palavra final é sempre do governo. Veja a issue
 [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
 
 ## Glossário

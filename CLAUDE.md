@@ -40,7 +40,8 @@ internal/
   cli/                     comandos cobra, apresentação e leitura de entrada
   domain/                  regras de negócio, sem I/O
     emission/              cálculo de valores, tradução de rejeições
-    validation/            validação da DPS
+    validation/            regras de negócio da DPS que o XSD não expressa
+    esquema/               validação contra os XSDs oficiais (v1.01, embutidos)
     query/                 chave de acesso e respostas de consulta
     danfse/                modelo do documento auxiliar, montado do XML da NFS-e
   infrastructure/
