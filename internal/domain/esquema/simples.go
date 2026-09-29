@@ -22,17 +22,30 @@ var primitivos = map[string]func(string) bool{
 	"base64Binary": base64Valido,
 }
 
-var formatoData = regexp.MustCompile(`^([0-9]{4})-([0-9]{2})-([0-9]{2})(Z|[+-][0-9]{2}:[0-9]{2})?$`)
+var formatoData = regexp.MustCompile(`^([0-9]{4})-([0-9]{2})-([0-9]{2})(Z|[+-]([0-9]{2}):([0-9]{2}))?$`)
 
-// dataValida accepts xs:date: a calendar date that exists, with an optional
-// time zone. The emitter only writes four-digit years.
+// dataValida accepts xs:date: a calendar date that exists, in a year other
+// than 0000, with an optional time zone within ±14:00. The emitter only
+// writes four-digit years.
 func dataValida(v string) bool {
 	m := formatoData.FindStringSubmatch(v)
-	if m == nil {
+	if m == nil || m[1] == "0000" {
 		return false
 	}
-	_, err := time.Parse("2006-01-02", m[1]+"-"+m[2]+"-"+m[3])
-	return err == nil
+	if _, err := time.Parse("2006-01-02", m[1]+"-"+m[2]+"-"+m[3]); err != nil {
+		return false
+	}
+	if m[5] != "" {
+		horas, minutos := atoi2(m[5]), atoi2(m[6])
+		if minutos > 59 || horas > 14 || (horas == 14 && minutos != 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func atoi2(s string) int {
+	return int(s[0]-'0')*10 + int(s[1]-'0')
 }
 
 func base64Valido(v string) bool {
@@ -42,29 +55,110 @@ func base64Valido(v string) bool {
 		}
 		return r
 	}, v)
-	_, err := base64.StdEncoding.DecodeString(limpo)
+	// Strict: XSD's canonical lexical space leaves no stray bits in the
+	// padding, so "AB==" is not base64Binary.
+	_, err := base64.StdEncoding.Strict().DecodeString(limpo)
 	return err == nil
 }
 
 // traduzirPadrao turns an XSD pattern into a Go regular expression.
 //
 // An XSD pattern always matches the whole value, so it is anchored here. The
-// schemas are otherwise written in the common subset of both dialects, with
-// one exception: TSSerieDPS is "^0{0,4}\d{1,5}$". In XSD, ^ and $ are
-// ordinary characters, and read that way no series could ever be valid. The
-// Sefin reads them as anchors — a DPS with series 00001 was authorized on
-// 18/09/2026 — so a pattern wrapped in both is read the same way.
+// two dialects agree on most syntax and differ on a few points, handled as
+// the pattern is copied:
+//
+//   - \d is any Unicode decimal digit in XSD and ASCII in Go: it becomes
+//     \p{Nd}, and \D becomes \P{Nd}.
+//   - . excludes \r as well as \n in XSD: it becomes [^\n\r].
+//   - ^ and $ are ordinary characters in XSD: they are escaped — except when
+//     they wrap the whole pattern. TSSerieDPS is "^0{0,4}\d{1,5}$", which
+//     read literally would make every series invalid; the Sefin reads the
+//     two as anchors (a DPS with series 00001 was authorized on 18/09/2026),
+//     and so does this.
+//
+// Syntax that exists in only one of the dialects, or means something else in
+// each (\w, \b, \i, \c, class subtraction, (?...), lazy quantifiers), is
+// refused, so that a schema using it fails to load instead of being checked
+// by a rule nobody wrote.
 func traduzirPadrao(p string) (*regexp.Regexp, error) {
 	corpo := p
-	if len(corpo) >= 2 && strings.HasPrefix(corpo, "^") && strings.HasSuffix(corpo, "$") && !strings.HasSuffix(corpo, `\$`) {
+	if len(corpo) >= 2 && corpo[0] == '^' && corpo[len(corpo)-1] == '$' && !strings.HasSuffix(corpo, `\$`) {
 		corpo = corpo[1 : len(corpo)-1]
 	}
-	for _, xsdOnly := range []string{`\i`, `\I`, `\c`, `\C`, `-[`} {
-		if strings.Contains(corpo, xsdOnly) {
-			return nil, fmt.Errorf("%q usa %s, que so existe em XSD", p, xsdOnly)
+
+	var b strings.Builder
+	runas := []rune(corpo)
+	naClasse := false
+	for i := 0; i < len(runas); i++ {
+		r := runas[i]
+		switch {
+		case r == '\\':
+			if i+1 >= len(runas) {
+				return nil, fmt.Errorf("%q termina com uma barra invertida", p)
+			}
+			i++
+			switch e := runas[i]; e {
+			case 'd':
+				b.WriteString(`\p{Nd}`)
+			case 'D':
+				if naClasse {
+					return nil, fmt.Errorf("%q usa \\D dentro de uma classe", p)
+				}
+				b.WriteString(`\P{Nd}`)
+			case 's', 'S', 'n', 'r', 't', 'p', 'P',
+				'\\', '|', '.', '-', '^', '?', '*', '+', '{', '}', '(', ')', '[', ']', '$':
+				b.WriteRune('\\')
+				b.WriteRune(e)
+			default:
+				return nil, fmt.Errorf("%q usa \\%c, que XSD e Go leem de jeitos diferentes", p, e)
+			}
+		case naClasse:
+			if r == '[' {
+				return nil, fmt.Errorf("%q usa subtracao ou aninhamento de classes, que so existe em XSD", p)
+			}
+			if r == ']' {
+				naClasse = false
+			}
+			b.WriteRune(r)
+		case r == '[':
+			naClasse = true
+			b.WriteRune(r)
+			// A ] right after [ or [^ is a literal in both dialects.
+			if i+1 < len(runas) && runas[i+1] == '^' {
+				i++
+				b.WriteRune('^')
+			}
+			if i+1 < len(runas) && runas[i+1] == ']' {
+				i++
+				b.WriteString(`\]`)
+			}
+		case r == '.':
+			b.WriteString(`[^\n\r]`)
+		case r == '^' || r == '$':
+			b.WriteRune('\\')
+			b.WriteRune(r)
+		case r == '(' && i+1 < len(runas) && runas[i+1] == '?':
+			return nil, fmt.Errorf("%q usa (?, que so existe em Go", p)
+		case r == '?' && i > 0 && strings.ContainsRune("*+?}", runas[i-1]) && !escapado(runas, i-1):
+			return nil, fmt.Errorf("%q usa um quantificador preguicoso, que so existe em Go", p)
+		default:
+			b.WriteRune(r)
 		}
 	}
-	return regexp.Compile(`^(?:` + corpo + `)$`)
+	if naClasse {
+		return nil, fmt.Errorf("%q abre uma classe e nao fecha", p)
+	}
+	return regexp.Compile(`^(?:` + b.String() + `)$`)
+}
+
+// escapado reports whether the rune at i is preceded by an odd number of
+// backslashes.
+func escapado(runas []rune, i int) bool {
+	n := 0
+	for j := i - 1; j >= 0 && runas[j] == '\\'; j-- {
+		n++
+	}
+	return n%2 == 1
 }
 
 // espacos returns the whiteSpace in force: the nearest level that sets it.

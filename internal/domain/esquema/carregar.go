@@ -119,6 +119,16 @@ func (c *carregador) carregarArquivo(caminho string) (*arquivo, error) {
 		alvo:        raiz.SelectAttrValue("targetNamespace", ""),
 		qualificado: raiz.SelectAttrValue("elementFormDefault", "unqualified") == "qualified",
 	}
+	// Local attributes are read as unqualified; a schema that says otherwise
+	// is one this validator would misread.
+	if f := raiz.SelectAttrValue("attributeFormDefault", "unqualified"); f != "unqualified" {
+		return nil, fmt.Errorf("schema %s: attributeFormDefault=%q nao e suportado", caminho, f)
+	}
+	for _, proibido := range []string{"blockDefault", "finalDefault"} {
+		if raiz.SelectAttr(proibido) != nil {
+			return nil, fmt.Errorf("schema %s: %s nao e suportado", caminho, proibido)
+		}
+	}
 	c.arquivos[caminho] = a
 
 	for _, filho := range raiz.ChildElements() {
@@ -442,7 +452,7 @@ func (c *carregador) elemento(n nome) (*elemento, error) {
 }
 
 func (c *carregador) tipoDoElemento(e *elemento, el *etree.Element, a *arquivo) error {
-	for _, proibido := range []string{"default", "fixed", "nillable", "abstract", "substitutionGroup"} {
+	for _, proibido := range []string{"default", "fixed", "nillable", "abstract", "substitutionGroup", "form", "block", "final"} {
 		if el.SelectAttr(proibido) != nil {
 			return fmt.Errorf("schema %s: elemento %s com %q nao suportado", a.nome, e.nome.local, proibido)
 		}
