@@ -102,7 +102,7 @@ const digitadoNoTerminal = "digitado no terminal"
 // guessing a field that decides regApTribSN on every invoice (ADR 0007). The
 // service code gets none either: the candidates are a word ranking, not an
 // answer (ADR 0009).
-func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio, serie *string, perguntarSerie bool) error {
+func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio, serie *string, perguntarSerie bool) {
 	busca.origem = digitadoNoTerminal
 	fmt.Fprintf(p.out, "\nFaltam alguns campos. Enter deixa o campo em branco, para preencher depois no arquivo.\n\n")
 
@@ -142,9 +142,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			if data.regime != "" {
 				return nil
 			}
-			fmt.Fprintf(p.out, "Regime tributario:\n"+
-				"  mei     Microempreendedor Individual; o ISS vai no DAS\n"+
-				"  me_epp  Microempresa ou Empresa de Pequeno Porte no Simples Nacional\n")
+			fmt.Fprintf(p.out, "Regime tributario: mei e o Microempreendedor Individual; me_epp, a ME ou EPP do Simples Nacional.\n")
 			regime, err := p.ateValer("Regime (mei | me_epp)", "", func(v string) error {
 				if v != config.RegimeMEI && v != config.RegimeMEEPP {
 					return fmt.Errorf("%q nao e um regime; responda mei ou me_epp", v)
@@ -204,13 +202,13 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 
 	for _, passo := range passos {
 		if err := passo(); err != nil {
-			if errors.Is(err, io.EOF) {
-				// Ctrl-D: the user is done answering, not failing.
-				fmt.Fprintf(p.out, "\n")
-				return nil
+			// Ctrl-D is the user done answering. Any other read error ends
+			// the questions the same way: what the certificate and the
+			// registry answered is still worth a file.
+			if !errors.Is(err, io.EOF) {
+				fmt.Fprintf(p.out, "aviso: falha ao ler a resposta (%v); o arquivo sai com o que ja se sabe\n", err)
 			}
-			return fmt.Errorf("falha ao ler a resposta: %w", err)
+			return
 		}
 	}
-	return nil
 }

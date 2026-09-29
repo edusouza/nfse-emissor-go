@@ -218,9 +218,7 @@ escrito a mao no nfse.yaml.`,
 				// Questions go where the password prompt goes: stderr, so
 				// that `nfse onboard > log` still shows them.
 				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
-				if err := completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie")); err != nil {
-					return err
-				}
+				completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie"))
 			}
 
 			rendered, err := config.RenderOnboarded(config.Onboarded{
