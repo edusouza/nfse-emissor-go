@@ -102,17 +102,21 @@ func consultar(t *testing.T, cnpj string) *Empresa {
 
 // A CNPJ with valid check digits that the Receita never issued must come back
 // as "not found", not as an empty company.
+//
+// 11.111.111/0001-91, the number test suites everywhere use, turned out to be
+// a real registration, and a person's. The base 99.999.999 is far past the
+// numeric bases issued so far. If it ever exists, the test says so without
+// printing whose it is: a CNPJ's registered name can be a person's.
 func TestContratoCNPJInexistente(t *testing.T) {
 	contratoHabilitado(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// 11.111.111/0001-91 is the number test suites everywhere use, precisely
-	// because the Receita never issued it.
-	empresa, err := New(Config{}).ConsultarCNPJ(ctx, "11111111000191")
+	const cnpj = "99999999000191"
+	_, err := New(Config{}).ConsultarCNPJ(ctx, cnpj)
 	if err == nil {
-		t.Fatalf("esperava erro para um CNPJ que nao existe; veio %q — escolha outro numero", empresa.RazaoSocial)
+		t.Fatalf("%s existe no cadastro; escolha outro numero para este teste", cnpj)
 	}
 	if !strings.Contains(err.Error(), "nao encontrado") {
 		t.Errorf("erro = %v; esperava a mensagem de CNPJ nao encontrado", err)
