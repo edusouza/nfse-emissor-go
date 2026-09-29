@@ -3,6 +3,8 @@ package cli
 import (
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +85,41 @@ func TestEnsureCertificateBelongsToProvider_PeloSubjectAltName(t *testing.T) {
 			t.Errorf("mensagem nao menciona %q:\n%v", want, err)
 		}
 	}
+}
+
+// A certificate whose CNPJ entry contradicts itself says something about its
+// holder, and the Sefin reads that same entry: it is refused, not waved
+// through as if it had no CNPJ at all.
+func TestEnsureCertificateBelongsToProvider_RecusaCertificadoAmbiguo(t *testing.T) {
+	ambiguo := pkix.Extension{Id: asn1.ObjectIdentifier{2, 5, 29, 17}, Value: sanDoisCNPJs(t)}
+
+	for _, cn := range []string{"EMPRESA LTDA", "EMPRESA LTDA:12345678000195"} {
+		err := ensureCertificateBelongsToProvider(certFor(cn, ambiguo), "12345678000195")
+		if !errors.Is(err, xmlsigner.ErrCNPJAmbiguo) {
+			t.Errorf("CN %q: esperava a recusa por ambiguidade; veio %v", cn, err)
+		}
+	}
+}
+
+// sanDoisCNPJs is a subjectAltName with two CNPJ otherNames naming different
+// companies.
+func sanDoisCNPJs(t *testing.T) []byte {
+	t.Helper()
+
+	var nomes []asn1.RawValue
+	for _, cnpj := range []string{"12345678000195", "11222333000181"} {
+		ext := icpBrasilCNPJExtension(t, cnpj)
+		var um []asn1.RawValue
+		if _, err := asn1.Unmarshal(ext.Value, &um); err != nil {
+			t.Fatal(err)
+		}
+		nomes = append(nomes, um...)
+	}
+	b, err := asn1.Marshal(nomes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // The message exists to end a specific confusion, so it has to name both

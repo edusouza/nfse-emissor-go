@@ -32,8 +32,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
     responsável, que nunca pode passar pelo CNPJ da empresa.
   - A leitura é estrita. O valor precisa ter exatamente 14 dígitos, sem nada
     antes ou depois; duas entradas com CNPJs diferentes, ou uma entrada
-    ilegível, tornam o certificado ambíguo, e aí o emissor pede `--cnpj` em
-    vez de escolher.
+    ilegível, tornam o certificado ambíguo. O emissor não escolhe um lado:
+    o `onboard` pede `--cnpj`, e o `emitir` e o `enviar` recusam assinar com
+    esse certificado.
   - Sem dependência nova: a extensão é decodificada com `encoding/asn1`, e um
     alvo de *fuzzing* garante que nenhum certificado derruba o parser.
 

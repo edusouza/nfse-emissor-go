@@ -192,13 +192,30 @@ func (c *CertificateInfo) GetSubjectCN() string {
 // fourteen digits is not evidence enough to fill a fiscal document with, nor
 // to refuse one.
 func (c *CertificateInfo) SubjectCNPJ() string {
+	cnpj, _ := c.SubjectCNPJConferido()
+	return cnpj
+}
+
+// ErrCNPJAmbiguo marks a certificate whose subjectAltName carries a CNPJ entry
+// that cannot be trusted: unreadable, or two entries naming different
+// companies. It is not the same as a certificate without a CNPJ: this one
+// says something about its holder, and what it says is contradictory.
+var ErrCNPJAmbiguo = errors.New("o certificado traz na extensao subjectAltName um CNPJ ilegivel ou mais de um CNPJ")
+
+// SubjectCNPJConferido is SubjectCNPJ for the callers that must tell "no
+// CNPJ here" from "a CNPJ entry that contradicts itself": the ownership check
+// before signing refuses the second and lets the first through.
+func (c *CertificateInfo) SubjectCNPJConferido() (string, error) {
 	if c.Certificate == nil {
-		return ""
+		return "", nil
 	}
 	if cnpj, found := subjectAltNameCNPJ(c.Certificate); found {
-		return cnpj
+		if cnpj == "" {
+			return "", ErrCNPJAmbiguo
+		}
+		return cnpj, nil
 	}
-	return c.commonNameCNPJ()
+	return c.commonNameCNPJ(), nil
 }
 
 // commonNameCNPJ reads the CNPJ from the "RAZAO SOCIAL:CNPJ" common name.
@@ -225,9 +242,9 @@ func (c *CertificateInfo) commonNameCNPJ() string {
 func (c *CertificateInfo) SubjectHolderName() string {
 	cn := c.GetSubjectCN()
 
-	// Only a suffix that is itself a valid CNPJ is stripped. When the CNPJ
-	// came from the subjectAltName, the common name is left as the authority
-	// wrote it.
+	// Only a suffix that is itself a valid CNPJ is stripped, whatever
+	// SubjectCNPJ returned: the name is read from the common name alone, so
+	// a CN that is not in "NOME:CNPJ" form is shown as the authority wrote it.
 	if c.commonNameCNPJ() == "" {
 		return cn
 	}
