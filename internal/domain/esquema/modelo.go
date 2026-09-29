@@ -68,6 +68,9 @@ type tipoComplexo struct {
 	simples   *tipoSimples // simpleContent
 	misto     bool
 	atributos []atributo
+
+	// declaracoes indexes the element declarations of conteudo by name.
+	declaracoes map[nome]*elemento
 }
 
 // elemento is an element declaration: exactly one of the two types is set.

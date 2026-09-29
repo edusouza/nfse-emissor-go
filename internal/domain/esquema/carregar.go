@@ -24,9 +24,15 @@ var arquivos embed.FS
 // ArquivoDPS is the entry point of the DPS schema.
 const ArquivoDPS = "xsd/DPS_v1.01.xsd"
 
-// Esquema is a loaded schema: the global elements a document may start with.
+// Esquema is a loaded schema.
 type Esquema struct {
+	// raizes are the elements a document may start with: those the entry
+	// file declares. A DPS schema accepts a DPS, not a bare ds:Signature.
 	raizes map[nome]*elemento
+
+	// globais are every global element of every file loaded, which a lax
+	// or strict wildcard validates against.
+	globais map[nome]*elemento
 }
 
 var dps = sync.OnceValues(func() (*Esquema, error) {
@@ -49,7 +55,8 @@ func Carregar(fsys fs.FS, entrada string) (*Esquema, error) {
 		complexos: map[nome]*tipoComplexo{},
 		elementos: map[nome]*elemento{},
 	}
-	if _, err := c.carregarArquivo(entrada); err != nil {
+	principal, err := c.carregarArquivo(entrada)
+	if err != nil {
 		return nil, err
 	}
 
@@ -72,7 +79,13 @@ func Carregar(fsys fs.FS, entrada string) (*Esquema, error) {
 			}
 		}
 	}
-	return &Esquema{raizes: c.elementos}, nil
+	raizes := map[nome]*elemento{}
+	for n, d := range c.brutos["element"] {
+		if d.arq == principal {
+			raizes[n] = c.elementos[n]
+		}
+	}
+	return &Esquema{raizes: raizes, globais: c.elementos}, nil
 }
 
 type arquivo struct {
@@ -302,7 +315,7 @@ func (c *carregador) preencherComplexo(t *tipoComplexo, el *etree.Element, a *ar
 		switch filho.Tag {
 		case "annotation":
 		case "sequence", "choice":
-			if t.conteudo != nil {
+			if t.conteudo != nil || t.simples != nil {
 				return fmt.Errorf("schema %s: %s tem dois modelos de conteudo", a.nome, t.nome.local)
 			}
 			p, err := c.particula(filho, a)
@@ -317,6 +330,9 @@ func (c *carregador) preencherComplexo(t *tipoComplexo, el *etree.Element, a *ar
 			}
 			t.atributos = append(t.atributos, at)
 		case "simpleContent":
+			if t.conteudo != nil || t.simples != nil {
+				return fmt.Errorf("schema %s: %s tem dois modelos de conteudo", a.nome, t.nome.local)
+			}
 			ext := filhoXSD(filho, "extension")
 			if ext == nil || len(filho.ChildElements()) != 1 {
 				return naoSuportado(a, filho)
@@ -340,6 +356,13 @@ func (c *carregador) preencherComplexo(t *tipoComplexo, el *etree.Element, a *ar
 			return naoSuportado(a, filho)
 		}
 	}
+
+	// The name-to-declaration index of the content model, built once here
+	// instead of for every element validated.
+	if t.conteudo != nil {
+		t.declaracoes = map[nome]*elemento{}
+		coletar(t.conteudo, t.declaracoes)
+	}
 	return nil
 }
 
@@ -355,6 +378,15 @@ func (c *carregador) atributo(el *etree.Element, a *arquivo) (atributo, error) {
 	at := atributo{
 		nome:        nome{local: el.SelectAttrValue("name", "")},
 		obrigatorio: el.SelectAttrValue("use", "optional") == "required",
+	}
+	if at.nome.local == "" {
+		return atributo{}, fmt.Errorf("schema %s: atributo sem nome", a.nome)
+	}
+	if uso := el.SelectAttrValue("use", "optional"); uso != "optional" && uso != "required" {
+		return atributo{}, fmt.Errorf("schema %s: use=%q no atributo %s nao e suportado", a.nome, uso, at.nome.local)
+	}
+	if el.SelectAttr("type") != nil && filhoXSD(el, "simpleType") != nil {
+		return atributo{}, fmt.Errorf("schema %s: atributo %s com type e tipo inline", a.nome, at.nome.local)
 	}
 
 	var err error
@@ -417,6 +449,24 @@ func (c *carregador) particula(el *etree.Element, a *arquivo) (*particula, error
 		p.namespaces = strings.Fields(el.SelectAttrValue("namespace", "##any"))
 		p.alvo = a.alvo
 		p.processamento = el.SelectAttrValue("processContents", "strict")
+		for _, ns := range p.namespaces {
+			if strings.HasPrefix(ns, "##") && ns != "##any" && ns != "##other" && ns != "##targetNamespace" && ns != "##local" {
+				return nil, fmt.Errorf("schema %s: namespace=%q em xs:any nao e suportado", a.nome, ns)
+			}
+		}
+		if (contem(p.namespaces, "##any") || contem(p.namespaces, "##other")) && len(p.namespaces) > 1 {
+			return nil, fmt.Errorf("schema %s: %s so pode aparecer sozinho em xs:any", a.nome, strings.Join(p.namespaces, " "))
+		}
+		switch p.processamento {
+		case "strict", "lax", "skip":
+		default:
+			return nil, fmt.Errorf("schema %s: processContents=%q nao e suportado", a.nome, p.processamento)
+		}
+		for _, proibido := range []string{"notNamespace", "notQName"} {
+			if el.SelectAttr(proibido) != nil {
+				return nil, fmt.Errorf("schema %s: %s em xs:any nao e suportado", a.nome, proibido)
+			}
+		}
 	default:
 		return nil, naoSuportado(a, el)
 	}
@@ -431,6 +481,9 @@ func (c *carregador) elementoLocal(el *etree.Element, a *arquivo) (*elemento, er
 	}
 
 	n := nome{local: el.SelectAttrValue("name", "")}
+	if n.local == "" {
+		return nil, fmt.Errorf("schema %s: elemento local sem nome nem ref", a.nome)
+	}
 	if a.qualificado {
 		n.ns = a.alvo
 	}
@@ -456,6 +509,22 @@ func (c *carregador) tipoDoElemento(e *elemento, el *etree.Element, a *arquivo) 
 		if el.SelectAttr(proibido) != nil {
 			return fmt.Errorf("schema %s: elemento %s com %q nao suportado", a.nome, e.nome.local, proibido)
 		}
+	}
+
+	inlines := 0
+	for _, filho := range el.ChildElements() {
+		switch {
+		case deXSD(filho, "annotation"):
+		case deXSD(filho, "complexType"), deXSD(filho, "simpleType"):
+			inlines++
+		default:
+			// xs:key, xs:unique and xs:keyref among them: identity
+			// constraints this validator does not check.
+			return naoSuportado(a, filho)
+		}
+	}
+	if inlines > 1 || (inlines == 1 && el.SelectAttr("type") != nil) {
+		return fmt.Errorf("schema %s: elemento %s com mais de uma definicao de tipo", a.nome, e.nome.local)
 	}
 
 	if tipo := el.SelectAttrValue("type", ""); tipo != "" {

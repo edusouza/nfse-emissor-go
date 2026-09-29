@@ -15,8 +15,13 @@ func TestDPSCarrega(t *testing.T) {
 	if _, ok := e.raizes[nome{ns: "http://www.sped.fazenda.gov.br/nfse", local: "DPS"}]; !ok {
 		t.Error("o elemento DPS nao esta entre as raizes")
 	}
-	if _, ok := e.raizes[nome{ns: "http://www.w3.org/2000/09/xmldsig#", local: "Signature"}]; !ok {
+	assinatura := nome{ns: "http://www.w3.org/2000/09/xmldsig#", local: "Signature"}
+	if _, ok := e.globais[assinatura]; !ok {
 		t.Error("ds:Signature nao foi importado")
+	}
+	// A DPS schema validates a DPS; a bare signature is not one.
+	if _, ok := e.raizes[assinatura]; ok {
+		t.Error("ds:Signature aceito como raiz de uma DPS")
 	}
 }
 

@@ -129,8 +129,7 @@ func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) 
 		return
 	}
 
-	declaracoes := map[nome]*elemento{}
-	coletar(t.conteudo, declaracoes)
+	declaracoes := t.declaracoes
 	total := map[string]int{}
 	for _, filho := range filhos {
 		total[filho.Tag]++
@@ -163,8 +162,7 @@ func (v *validador) qualquer(el *etree.Element, conteudo *particula, caminho str
 	if processamento == "skip" {
 		return
 	}
-	// The root table holds every global declaration of every schema loaded.
-	if decl, ok := v.esquema.raizes[nomeDe(el)]; ok {
+	if decl, ok := v.esquema.globais[nomeDe(el)]; ok {
 		v.elemento(el, decl, caminho)
 		return
 	}
@@ -231,10 +229,33 @@ type casamento struct {
 	longe     int
 	esperados []string
 	alcance   int
+
+	// memo holds the end positions already computed for a particle from a
+	// position. Nested unbounded groups revisit the same pair many times;
+	// without it the work grows with the square of the children.
+	memo map[chaveMemo][]int
+}
+
+type chaveMemo struct {
+	p   *particula
+	pos int
 }
 
 // ocorrencias matches p, repeated between its bounds, from pos.
 func (c *casamento) ocorrencias(p *particula, pos int) []int {
+	chave := chaveMemo{p, pos}
+	if fins, ok := c.memo[chave]; ok {
+		return fins
+	}
+	if c.memo == nil {
+		c.memo = map[chaveMemo][]int{}
+	}
+	fins := c.ocorrenciasSemMemo(p, pos)
+	c.memo[chave] = fins
+	return fins
+}
+
+func (c *casamento) ocorrenciasSemMemo(p *particula, pos int) []int {
 	fins := map[int]bool{}
 	if p.min == 0 {
 		fins[pos] = true
@@ -324,10 +345,24 @@ func (c *casamento) esperar(pos int, oQue string) {
 // onde is the path the error is reported at: the unexpected child, or the
 // parent when what is missing comes at the end.
 func (c *casamento) onde(caminho string) string {
-	if p := c.posicaoDoErro(); p < len(c.filhos) {
-		return caminho + "/" + c.filhos[p].Tag
+	p := c.posicaoDoErro()
+	if p >= len(c.filhos) {
+		return caminho
 	}
-	return caminho
+	tag := c.filhos[p].Tag
+	total, ordem := 0, 0
+	for i, f := range c.filhos {
+		if f.Tag == tag {
+			total++
+			if i <= p {
+				ordem++
+			}
+		}
+	}
+	if total > 1 {
+		return fmt.Sprintf("%s/%s[%d]", caminho, tag, ordem)
+	}
+	return caminho + "/" + tag
 }
 
 func (c *casamento) posicaoDoErro() int {

@@ -2,6 +2,8 @@
 // according to Brazilian government specifications.
 package xmlbuilder
 
+import "strings"
+
 // AddressConfig contains address information for XML generation.
 //
 // The DPS builder writes it as TCEndereco; see buildTakerAddress.
@@ -42,5 +44,5 @@ type AddressConfig struct {
 
 // IsForeign returns true if this address configuration represents a foreign address.
 func (c *AddressConfig) IsForeign() bool {
-	return c.CountryCode != "" && c.CountryCode != "BR"
+	return c.CountryCode != "" && !strings.EqualFold(c.CountryCode, "BR")
 }
