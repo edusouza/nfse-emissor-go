@@ -62,7 +62,7 @@ envolvido nos dois.
   jeitos**: sem o atributo `versao`, com um `Id` fora do `TSIdDPS` e sem
   `regTrib`. É a divergência que a #4 descrevia, até nos dados de teste. O
   validador antigo foi removido.
-- **O binário cresce ~230 KB** com os quatro XSDs. É o custo de a regra estar
+- **O binário cresce ~270 KB (1,8%)**, ~200 KB dos quais são os quatro XSDs. É o custo de a regra estar
   no arquivo oficial, e não numa cópia escrita à mão.
 - **Carregar o schema leva ~7 ms**, uma vez por processo. Validar uma DPS leva
   ~0,1 ms.
