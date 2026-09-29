@@ -1,6 +1,8 @@
 package esquema
 
 import (
+	"bytes"
+	"encoding/xml"
 	"fmt"
 	"sort"
 	"strings"
@@ -30,12 +32,32 @@ func (e *Esquema) Validar(documento []byte) []Erro {
 	if err := doc.ReadFromBytes(documento); err != nil {
 		return []Erro{{Caminho: "/", Mensagem: fmt.Sprintf("XML malformado: %v", err)}}
 	}
+	if err := atributoRepetido(documento); err != nil {
+		return []Erro{{Caminho: "/", Mensagem: "XML malformado: " + err.Error()}}
+	}
 	raiz := doc.Root()
 	if raiz == nil {
 		return []Erro{{Caminho: "/", Mensagem: "documento vazio"}}
 	}
+	// etree is lenient where XML is not: text or a second element beside the
+	// root, and a repeated attribute, would otherwise pass as valid.
+	for _, token := range doc.Child {
+		switch t := token.(type) {
+		case *etree.Element:
+			if t != raiz {
+				return []Erro{{Caminho: "/", Mensagem: "XML malformado: mais de um elemento raiz"}}
+			}
+		case *etree.CharData:
+			if !soEspacoXML(t.Data) {
+				return []Erro{{Caminho: "/", Mensagem: "XML malformado: texto fora do elemento raiz"}}
+			}
+		}
+	}
 
 	v := &validador{esquema: e}
+	if caminho, problema := atributosMalformados(raiz, "/"+raiz.Tag); problema != "" {
+		return []Erro{{Caminho: caminho, Mensagem: "XML malformado: " + problema}}
+	}
 	decl, ok := e.raizes[nomeDe(raiz)]
 	if !ok {
 		return []Erro{{Caminho: "/" + raiz.Tag, Mensagem: fmt.Sprintf(
@@ -54,7 +76,16 @@ func (v *validador) erro(caminho, formato string, args ...any) {
 	v.erros = append(v.erros, Erro{Caminho: caminho, Mensagem: fmt.Sprintf(formato, args...)})
 }
 
+// profundidadeMaxima bounds how deep a document may nest. A DPS is five
+// levels deep, its signature a few more; the wildcard in the XML-DSig schema
+// would otherwise let a document nest inside itself without end.
+const profundidadeMaxima = 64
+
 func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) {
+	if strings.Count(caminho, "/") > profundidadeMaxima {
+		v.erro(caminho, "aninhamento alem de %d niveis", profundidadeMaxima)
+		return
+	}
 	if decl.simples != nil {
 		v.atributos(el, nil, caminho)
 		if len(el.ChildElements()) > 0 {
@@ -80,7 +111,7 @@ func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) 
 			v.erro(caminho, "%s", problema)
 		}
 		return
-	case !t.misto && strings.TrimSpace(texto(el)) != "":
+	case !t.misto && !soEspacoXML(texto(el)):
 		v.erro(caminho, "nao pode conter texto, so elementos")
 	}
 
@@ -100,11 +131,15 @@ func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) 
 
 	declaracoes := map[nome]*elemento{}
 	coletar(t.conteudo, declaracoes)
+	total := map[string]int{}
+	for _, filho := range filhos {
+		total[filho.Tag]++
+	}
 	contagem := map[string]int{}
 	for _, filho := range filhos {
 		contagem[filho.Tag]++
 		caminhoFilho := caminho + "/" + filho.Tag
-		if n := contarIrmaos(filhos, filho.Tag); n > 1 {
+		if total[filho.Tag] > 1 {
 			caminhoFilho = fmt.Sprintf("%s[%d]", caminhoFilho, contagem[filho.Tag])
 		}
 
@@ -148,7 +183,9 @@ func (v *validador) atributos(el *etree.Element, declarados []atributo, caminho 
 		if at.Space != "" {
 			n.ns = namespaceDoPrefixo(el, at.Space)
 		}
-		if n.ns == nsXSI {
+		// xsi:schemaLocation only points at a schema; xsi:type and xsi:nil
+		// change what an element means, and the schemas here allow neither.
+		if n.ns == nsXSI && (n.local == "schemaLocation" || n.local == "noNamespaceSchemaLocation") {
 			continue
 		}
 		presentes[n] = at.Value
@@ -209,22 +246,22 @@ func (c *casamento) ocorrencias(p *particula, pos int) []int {
 		var prox []int
 		for _, x := range atual {
 			for _, y := range c.uma(p, x) {
-				// Past the minimum, a position already reached adds
-				// nothing: whatever follows it has been explored.
-				if i > p.min && visto[y] {
-					continue
-				}
-				visto[y] = true
-				prox = append(prox, y)
+				// From the minimum on, a position already reached adds
+				// nothing: whatever follows it has been explored. Below
+				// the minimum it does — reaching the same position after
+				// more repetitions can be what satisfies the bound — so
+				// positions are only remembered once it is met.
 				if i >= p.min {
+					if visto[y] {
+						continue
+					}
+					visto[y] = true
 					fins[y] = true
 				}
+				prox = append(prox, y)
 			}
 		}
 		atual = unicos(prox)
-		if i > p.min+len(c.filhos)+1 {
-			break
-		}
 	}
 
 	out := make([]int, 0, len(fins))
@@ -380,16 +417,6 @@ func texto(el *etree.Element) string {
 	return b.String()
 }
 
-func contarIrmaos(filhos []*etree.Element, tag string) int {
-	n := 0
-	for _, f := range filhos {
-		if f.Tag == tag {
-			n++
-		}
-	}
-	return n
-}
-
 func contemPosicao(posicoes []int, p int) bool {
 	for _, x := range posicoes {
 		if x == p {
@@ -411,4 +438,67 @@ func unicos(xs []int) []int {
 		}
 	}
 	return out
+}
+
+// soEspacoXML reports whether s holds only the four characters XML counts as
+// whitespace. strings.TrimSpace would also drop Unicode spaces, which are
+// text as far as the schema is concerned.
+func soEspacoXML(s string) bool {
+	return strings.Trim(s, " \t\r\n") == ""
+}
+
+// atributoRepetido finds an attribute written twice on one element, which
+// etree resolves silently by keeping the last value. It reads the raw tokens,
+// before any namespace resolution, which is where XML defines the rule.
+func atributoRepetido(documento []byte) error {
+	d := xml.NewDecoder(bytes.NewReader(documento))
+	for {
+		tok, err := d.RawToken()
+		if err != nil {
+			return nil // io.EOF, or an error etree has already reported
+		}
+		inicio, ok := tok.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		vistos := make(map[xml.Name]bool, len(inicio.Attr))
+		for _, at := range inicio.Attr {
+			if vistos[at.Name] {
+				return fmt.Errorf("o atributo %s aparece duas vezes em %s", at.Name.Local, inicio.Name.Local)
+			}
+			vistos[at.Name] = true
+		}
+	}
+}
+
+// atributosMalformados finds, anywhere in the tree, a prefix no declaration
+// binds — an error of well-formedness etree lets through by dropping the
+// prefix.
+func atributosMalformados(el *etree.Element, caminho string) (string, string) {
+	vistos := map[nome]bool{}
+	for _, at := range el.Attr {
+		if at.Space == "xmlns" || (at.Space == "" && at.Key == "xmlns") {
+			continue
+		}
+		n := nome{local: at.Key}
+		if at.Space != "" {
+			if n.ns = namespaceDoPrefixo(el, at.Space); n.ns == "" {
+				return caminho, fmt.Sprintf("o prefixo %q de %s:%s nao foi declarado", at.Space, at.Space, at.Key)
+			}
+		}
+		// Two prefixes bound to one namespace name the same attribute.
+		if vistos[n] {
+			return caminho, fmt.Sprintf("o atributo %s aparece duas vezes", at.Key)
+		}
+		vistos[n] = true
+	}
+	if el.Space != "" && el.NamespaceURI() == "" {
+		return caminho, fmt.Sprintf("o prefixo %q de %s nao foi declarado", el.Space, el.Tag)
+	}
+	for _, filho := range el.ChildElements() {
+		if c, p := atributosMalformados(filho, caminho+"/"+filho.Tag); p != "" {
+			return c, p
+		}
+	}
+	return "", ""
 }
