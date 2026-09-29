@@ -11,7 +11,7 @@ import (
 // dpsDoEmissor builds a DPS the way the emitter does, so the schema is held
 // against real output rather than hand-written fixtures — the fixtures were
 // how the old validator's mistakes went unnoticed (issue #4).
-func dpsDoEmissor(t *testing.T, ajustar func(*xmlbuilder.DPSConfig)) string {
+func dpsDoEmissor(t testing.TB, ajustar func(*xmlbuilder.DPSConfig)) string {
 	t.Helper()
 
 	cfg := xmlbuilder.DPSConfig{
