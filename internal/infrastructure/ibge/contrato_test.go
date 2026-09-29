@@ -41,3 +41,29 @@ func TestContratoConsultar(t *testing.T) {
 		})
 	}
 }
+
+// onboard resolves "Cidade/UF" from the state's list, so the list shape is
+// part of the contract too. The counts are the IBGE's since 2013 and change
+// only when a municipality is created or merged — a failure here is worth
+// reading, not only fixing.
+func TestContratoMunicipios(t *testing.T) {
+	if os.Getenv("NFSE_TESTE_CONTRATO") != "1" {
+		t.Skip("contrato com o servico real: defina NFSE_TESTE_CONTRATO=1 para rodar")
+	}
+
+	client := New(Config{})
+	for uf, quantos := range map[string]int{"DF": 1, "PR": 399, "MG": 853} {
+		t.Run(uf, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			municipios, err := client.Municipios(ctx, uf)
+			if err != nil {
+				t.Fatalf("consulta falhou: %v", err)
+			}
+			if len(municipios) != quantos {
+				t.Errorf("%s tem %d municipios na resposta, esperava %d", uf, len(municipios), quantos)
+			}
+		})
+	}
+}

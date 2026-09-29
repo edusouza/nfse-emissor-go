@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
 
 // DefaultBaseURL is the IBGE's public localities service.
@@ -155,29 +157,9 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 		return nil, fmt.Errorf("codigo de municipio %q invalido: sao %d digitos", codigo, CodigoLength)
 	}
 
-	endereco := fmt.Sprintf("%s/municipios/%s", c.baseURL, codigo)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endereco, nil)
+	body, err := c.get(ctx, "/municipios/"+codigo, maxResponseSize, "o municipio "+codigo)
 	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel montar a consulta: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel consultar %s: %w: %w", c.Host(), ErrInacessivel, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
-	if err != nil {
-		return nil, fmt.Errorf("falha ao ler a resposta de %s: %w", c.Host(), err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s respondeu %d para o municipio %s", c.Host(), resp.StatusCode, codigo)
+		return nil, err
 	}
 
 	// The service answers an unknown code with an empty array instead of a
@@ -195,6 +177,81 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 	}
 
 	return &Municipio{Codigo: codigo, Nome: strings.TrimSpace(dados.Nome), UF: dados.uf()}, nil
+}
+
+// maxListaSize caps the answer for a whole state. Minas Gerais has 853
+// municipalities, each a few hundred bytes in the service's nested format.
+const maxListaSize = 8 << 20
+
+// Municipios fetches every municipality of a state, which is how a name typed
+// by a person is turned into a code without carrying the table in the binary.
+//
+// The answer is checked, not trusted: every code must be a valid IBGE code of
+// the state that was asked for. One that is not means the service is not
+// answering what this client thinks it is, and a list that might put a name on
+// the wrong code is refused whole.
+func (c *Client) Municipios(ctx context.Context, uf string) ([]Municipio, error) {
+	uf = strings.ToUpper(strings.TrimSpace(uf))
+	if !codmun.UFExiste(uf) {
+		return nil, fmt.Errorf("%q nao e a sigla de uma UF", uf)
+	}
+
+	body, err := c.get(ctx, "/estados/"+uf+"/municipios", maxListaSize, "os municipios de "+uf)
+	if err != nil {
+		return nil, err
+	}
+
+	var dados []resposta
+	if err := json.Unmarshal(body, &dados); err != nil {
+		return nil, fmt.Errorf("resposta de %s nao e o JSON esperado: %w", c.Host(), err)
+	}
+	if len(dados) == 0 {
+		return nil, fmt.Errorf("%s nao devolveu municipios para %s", c.Host(), uf)
+	}
+
+	municipios := make([]Municipio, 0, len(dados))
+	for _, d := range dados {
+		codigo := d.ID.String()
+		if err := codmun.Validar(codigo); err != nil || codmun.UF(codigo) != uf {
+			return nil, fmt.Errorf("%s devolveu o codigo %q entre os municipios de %s; a resposta foi descartada",
+				c.Host(), codigo, uf)
+		}
+		nome := strings.TrimSpace(d.Nome)
+		if nome == "" {
+			return nil, fmt.Errorf("%s devolveu o municipio %s sem nome", c.Host(), codigo)
+		}
+		municipios = append(municipios, Municipio{Codigo: codigo, Nome: nome, UF: uf})
+	}
+	return municipios, nil
+}
+
+// get performs one GET against the service and returns the body of a 200.
+// oQue names what was asked for, for the error messages.
+func (c *Client) get(ctx context.Context, caminho string, limite int64, oQue string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+caminho, nil)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel montar a consulta: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel consultar %s: %w: %w", c.Host(), ErrInacessivel, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limite))
+	if err != nil {
+		return nil, fmt.Errorf("falha ao ler a resposta de %s: %w", c.Host(), err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s respondeu %d para %s", c.Host(), resp.StatusCode, oQue)
+	}
+	return body, nil
 }
 
 // vazia reports whether the body is an empty JSON array, which is how the

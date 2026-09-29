@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/edusouza/nfse-emissor-go/internal/domain/texto"
 )
 
 // Cache remembers the municipalities already looked up, on disk.
@@ -84,6 +86,27 @@ func (c *Cache) Guardar(municipio Municipio) {
 	}
 	c.dados[municipio.Codigo] = municipio
 	c.alterado = true
+}
+
+// BuscarPorNome finds a remembered municipality by name within a state.
+// The comparison folds case, accents and punctuation (texto.Chave), which the
+// official table shows to be unambiguous inside one state.
+func (c *Cache) BuscarPorNome(nome, uf string) (Municipio, bool) {
+	chave := texto.Chave(nome)
+	if chave == "" {
+		return Municipio{}, false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.carregar()
+	for _, municipio := range c.dados {
+		if strings.EqualFold(municipio.UF, uf) && texto.Chave(municipio.Nome) == chave {
+			return municipio, true
+		}
+	}
+	return Municipio{}, false
 }
 
 // Gravar writes the cache out, if anything changed. The error is returned for
