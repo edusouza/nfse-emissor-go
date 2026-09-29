@@ -42,8 +42,13 @@ const respostaMEI = `{
 }`
 
 // runOnboard executes the command and returns its combined output.
+//
+// The user's cache directory is pointed at a temporary one, so that a test
+// that forgets --cache-municipios can neither read nor write the real cache.
 func runOnboard(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 
 	var out bytes.Buffer
 	root := NewRootCommand()

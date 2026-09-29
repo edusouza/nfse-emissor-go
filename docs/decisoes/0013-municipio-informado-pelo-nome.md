@@ -59,6 +59,11 @@ código ou rodar uma vez com rede.
   `nfse.yaml` que o `config check` aceitava pode passar a ser recusado. Isso só
   acontece se o código estiver errado, e nesse caso as notas emitidas com ele
   foram para a cidade errada.
+- **O cache também é conferido.** Ele é um JSON no diretório de cache do
+  usuário e é compartilhado com o DANFSe, e o `onboard` grava o que encontra
+  nele no `nfse.yaml`. Toda entrada que entra no cache, é lida dele ou sai
+  dele passa pelas mesmas regras da lista. Um nome que duas entradas
+  respondem não resolve para nenhuma delas.
 - **A lista do IBGE é conferida, não aceita de boa-fé.** Todo código que vem
   nela precisa ser válido e da UF pedida. Senão, a resposta é descartada
   inteira: uma lista que pode pôr um nome no código errado é pior do que

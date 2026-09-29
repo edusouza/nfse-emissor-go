@@ -67,6 +67,19 @@ func TestUF(t *testing.T) {
 	}
 }
 
+func TestUFExiste(t *testing.T) {
+	for _, uf := range ufPorPrefixo {
+		if !UFExiste(uf) {
+			t.Errorf("UFExiste(%q) = false", uf)
+		}
+	}
+	for _, uf := range []string{"pr", "XX", "", "P", "PRR"} {
+		if UFExiste(uf) {
+			t.Errorf("UFExiste(%q) = true", uf)
+		}
+	}
+}
+
 // Every code in the official table must pass, and the check-digit exceptions
 // must be exactly the codes the table has that fail the algorithm — a code
 // listed as an exception but valid by the algorithm would hide a typo in the

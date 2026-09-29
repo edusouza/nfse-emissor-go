@@ -21,14 +21,19 @@ aparece: a Sefin aceita qualquer código válido. Ver
 [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md).
 
 - **`nfse onboard --municipio`** aceita o código IBGE de 7 dígitos, conferido
-  sem rede, ou o nome com a UF: `"Curitiba/PR"`, `"curitiba - pr"` e
-  `"CURITIBA, PR"` dão no mesmo. O nome é procurado na lista do estado no
+  sem rede, ou o nome com a UF: `"Curitiba/PR"`, `"curitiba - pr"`,
+  `"Curitiba-PR"` e `"CURITIBA, PR"` dão no mesmo. O nome é procurado na lista do estado no
   IBGE, e a lista inteira fica em cache: da segunda vez em diante, qualquer
   município daquela UF funciona com `--sem-rede`. Um nome digitado errado
   volta com os nomes parecidos, e um nome sem UF é recusado, porque 232 nomes
   se repetem entre estados.
 - O `--municipio` vale mais que o cadastro público. Quando os dois
   divergem, o comando avisa.
+- **O cache de municípios é conferido, não aceito de boa-fé.** Toda entrada
+  que entra, é lida do disco ou sai dele precisa de um código IBGE válido,
+  da UF desse código e de um nome imprimível. Um cache adulterado, que ligue
+  "Curitiba/PR" ao código de São Paulo, é ignorado, e a lista é consultada de
+  novo. A mesma regra vale para o `nfse danfse`, que usa o mesmo cache.
 - **O `config check` e o `emitir` conferem o dígito verificador** de
   `prestador.municipio` e de `servico.municipio_prestacao`. Antes, só o
   tamanho era conferido.
