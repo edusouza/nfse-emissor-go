@@ -24,49 +24,80 @@ func contratoHabilitado(t *testing.T) {
 // from a real answer (issue #12). This holds the decoder to the live service.
 //
 // Banco do Brasil (00.000.000/0001-91) stands in for "a company everyone can
-// look up": it is public, stable and not a person. Its answer says nothing
-// about the MEI flags of an actual MEI; NFSE_TESTE_CNPJ_MEI checks those
-// against a CNPJ the person running the test chooses, and is never committed.
+// look up": public, stable, headquartered in Brasília, and not a person. Its
+// answer is checked field by field, so a renamed field or a code for the
+// wrong municipality fails here instead of in someone's invoice.
 func TestContratoConsultarCNPJ(t *testing.T) {
 	contratoHabilitado(t)
 
-	casos := map[string]string{"banco do brasil": "00000000000191"}
-	if mei := os.Getenv("NFSE_TESTE_CNPJ_MEI"); mei != "" {
-		casos["MEI informado"] = mei
+	empresa := consultar(t, "00000000000191")
+
+	if strings.TrimSpace(empresa.RazaoSocial) == "" {
+		t.Error("razao_social veio vazia")
+	}
+	if !empresa.Ativa() {
+		t.Errorf("descricao_situacao_cadastral = %q, esperava ATIVA", empresa.DescricaoSituacaoCadastral)
+	}
+	// The dangerous one: it must be the IBGE code, not the four-digit TOM
+	// code in codigo_municipio, and it must be Brasília's.
+	codigo, err := empresa.MunicipioIBGE()
+	if err != nil {
+		t.Errorf("codigo_municipio_ibge = %q: %v", empresa.CodigoMunicipioIBGE, err)
+	}
+	if codigo != "5300108" || !strings.EqualFold(empresa.UF, "DF") {
+		t.Errorf("municipio = %s/%s, esperava 5300108/DF", codigo, empresa.UF)
+	}
+	if empresa.CNAEFiscal == "" {
+		t.Error("cnae_fiscal veio vazio")
+	}
+	// A bank can opt for neither regime. Whether the registry says so with
+	// false or with null is what this log records; true would mean the fields
+	// are being read from the wrong place.
+	if opcao(empresa.OpcaoPeloMEI) == "true" || opcao(empresa.OpcaoPeloSimples) == "true" {
+		t.Errorf("opcao_pelo_mei=%s opcao_pelo_simples=%s para um banco",
+			opcao(empresa.OpcaoPeloMEI), opcao(empresa.OpcaoPeloSimples))
 	}
 
-	client := New(Config{UserAgent: "nfse-emissor-go/teste-de-contrato"})
-	for nome, cnpj := range casos {
-		t.Run(nome, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
+	t.Logf("municipio=%q uf=%q codigo_municipio_ibge=%s situacao=%q "+
+		"opcao_pelo_mei=%s opcao_pelo_simples=%s cnae_fiscal=%s",
+		empresa.Municipio, empresa.UF, codigo, empresa.DescricaoSituacaoCadastral,
+		opcao(empresa.OpcaoPeloMEI), opcao(empresa.OpcaoPeloSimples), empresa.CNAEFiscal)
+}
 
-			empresa, err := client.ConsultarCNPJ(ctx, cnpj)
-			if err != nil {
-				t.Fatalf("consulta falhou: %v", err)
-			}
+// The MEI flags decide regApTribSN, and a bank cannot show them set.
+// NFSE_TESTE_CNPJ_MEI names an active MEI the person running the test
+// chooses. A MEI's registered name is its owner's full name, often followed by
+// the owner's CPF, so nothing from that answer but the flags is logged — and
+// the variable is never set in CI, where logs are public.
+func TestContratoOpcoesDeUmMEI(t *testing.T) {
+	contratoHabilitado(t)
 
-			if strings.TrimSpace(empresa.RazaoSocial) == "" {
-				t.Error("razao_social veio vazia")
-			}
-			if empresa.DescricaoSituacaoCadastral == "" {
-				t.Error("descricao_situacao_cadastral veio vazia")
-			}
-			// The dangerous one: a wrong code sends invoices to the wrong
-			// municipality. It must be the IBGE code, not the TOM code, and
-			// agree with the state the same answer names.
-			codigo, err := empresa.MunicipioIBGE()
-			if err != nil {
-				t.Errorf("codigo_municipio_ibge = %q: %v", empresa.CodigoMunicipioIBGE, err)
-			}
-
-			t.Logf("razao_social=%q municipio=%q uf=%q codigo_municipio_ibge=%s situacao=%q "+
-				"opcao_pelo_mei=%s opcao_pelo_simples=%s cnae_fiscal=%s",
-				empresa.RazaoSocial, empresa.Municipio, empresa.UF, codigo,
-				empresa.DescricaoSituacaoCadastral,
-				opcao(empresa.OpcaoPeloMEI), opcao(empresa.OpcaoPeloSimples), empresa.CNAEFiscal)
-		})
+	cnpj := os.Getenv("NFSE_TESTE_CNPJ_MEI")
+	if cnpj == "" {
+		t.Skip("defina NFSE_TESTE_CNPJ_MEI com o CNPJ de um MEI ativo para conferir as opcoes")
 	}
+
+	empresa := consultar(t, cnpj)
+	if opcao(empresa.OpcaoPeloMEI) != "true" || opcao(empresa.OpcaoPeloSimples) != "true" {
+		t.Errorf("opcao_pelo_mei=%s opcao_pelo_simples=%s; um MEI ativo tem as duas",
+			opcao(empresa.OpcaoPeloMEI), opcao(empresa.OpcaoPeloSimples))
+	}
+	if _, err := empresa.MunicipioIBGE(); err != nil {
+		t.Errorf("codigo_municipio_ibge: %v", err)
+	}
+}
+
+func consultar(t *testing.T, cnpj string) *Empresa {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	empresa, err := New(Config{UserAgent: "nfse-emissor-go/teste-de-contrato"}).ConsultarCNPJ(ctx, cnpj)
+	if err != nil {
+		t.Fatalf("consulta falhou: %v", err)
+	}
+	return empresa
 }
 
 // A CNPJ with valid check digits that the Receita never issued must come back
@@ -79,9 +110,9 @@ func TestContratoCNPJInexistente(t *testing.T) {
 
 	// 11.111.111/0001-91 is the number test suites everywhere use, precisely
 	// because the Receita never issued it.
-	_, err := New(Config{}).ConsultarCNPJ(ctx, "11111111000191")
+	empresa, err := New(Config{}).ConsultarCNPJ(ctx, "11111111000191")
 	if err == nil {
-		t.Fatal("esperava erro para um CNPJ que nao existe")
+		t.Fatalf("esperava erro para um CNPJ que nao existe; veio %q — escolha outro numero", empresa.RazaoSocial)
 	}
 	if !strings.Contains(err.Error(), "nao encontrado") {
 		t.Errorf("erro = %v; esperava a mensagem de CNPJ nao encontrado", err)

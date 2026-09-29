@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+# Rapid pushes to a pull request should not each hit the public services.
+concurrency:
+  group: contrato-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contrato:
     name: BrasilAPI e IBGE
@@ -34,6 +39,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # NFSE_TESTE_CNPJ_MEI is deliberately absent: a MEI's registered name is
+      # a person's name and CPF, and the logs of a public repository are
+      # public. That check runs on a maintainer's machine.
       - name: Testes de contrato
         env:
           NFSE_TESTE_CONTRATO: "1"
