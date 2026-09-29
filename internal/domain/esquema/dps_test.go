@@ -73,6 +73,15 @@ func TestDPSDoEmissorPassaNoSchema(t *testing.T) {
 				},
 			}
 		},
+		"tomador no exterior": func(c *xmlbuilder.DPSConfig) {
+			c.Taker = &xmlbuilder.DPSTaker{
+				NIF: "PT123456789", Name: "CLIENTE LDA",
+				Address: &xmlbuilder.AddressConfig{
+					Street: "Rua Augusta", Number: "100", Neighborhood: "Baixa",
+					City: "Lisboa", State: "Lisboa", PostalCode: "1100-148", CountryCode: "PT",
+				},
+			}
+		},
 		"tomador com CPF": func(c *xmlbuilder.DPSConfig) {
 			c.Taker = &xmlbuilder.DPSTaker{CPF: "12345678909", Name: "FULANO DE TAL"}
 		},

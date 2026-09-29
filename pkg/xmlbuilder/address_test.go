@@ -60,7 +60,18 @@ func TestDPSBuilder_EnderecoEstrangeiroDoTomador(t *testing.T) {
 	if got := filhosDe(t, xmlStr, "DPS/infDPS/toma/end/endExt"); got != "cPais,cEndPost,xCidade,xEstProvReg" {
 		t.Errorf("filhos de endExt = %s", got)
 	}
-	if got := path(t, xmlStr, "DPS/infDPS/toma/end/endExt/cPais"); got != "PT" {
-		t.Errorf("cPais = %q", got)
+	for campo, quer := range map[string]string{"cPais": "PT", "cEndPost": "1100-148", "xCidade": "Lisboa", "xEstProvReg": "Lisboa"} {
+		if got := path(t, xmlStr, "DPS/infDPS/toma/end/endExt/"+campo); got != quer {
+			t.Errorf("%s = %q, esperava %q", campo, got, quer)
+		}
+	}
+}
+
+// "br" is Brazil too.
+func TestAddressConfig_IsForeign(t *testing.T) {
+	for pais, estrangeiro := range map[string]bool{"": false, "BR": false, "br": false, "PT": true, "pt": true} {
+		if got := (&AddressConfig{CountryCode: pais}).IsForeign(); got != estrangeiro {
+			t.Errorf("IsForeign(%q) = %v", pais, got)
+		}
 	}
 }
