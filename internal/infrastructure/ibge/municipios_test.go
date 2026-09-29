@@ -3,8 +3,10 @@ package ibge
 import (
 	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -57,15 +59,15 @@ func TestMunicipios_RecusaRespostaIncoerente(t *testing.T) {
 }
 
 func TestMunicipios_UFInvalidaNaoSaiDaMaquina(t *testing.T) {
-	chamou := false
-	client := servidor(t, func(http.ResponseWriter, *http.Request) { chamou = true })
+	var chamou atomic.Bool
+	client := servidor(t, func(http.ResponseWriter, *http.Request) { chamou.Store(true) })
 
 	for _, uf := range []string{"", "XX", "P", "PR/../..", "41"} {
 		if _, err := client.Municipios(context.Background(), uf); err == nil {
 			t.Errorf("Municipios(%q) nao recusou", uf)
 		}
 	}
-	if chamou {
+	if chamou.Load() {
 		t.Error("uma UF invalida chegou ao servico")
 	}
 }
@@ -106,7 +108,101 @@ func TestCache_BuscarPorNome(t *testing.T) {
 	if m, ok := relido.BuscarPorNome("Curitiba", "PR"); !ok || m.Codigo != "4106902" {
 		t.Errorf("depois de gravar e reler: %+v, %v", m, ok)
 	}
-	if !strings.HasSuffix(relido.caminho, NomeArquivo) {
-		t.Errorf("caminho = %q", relido.caminho)
+}
+
+// The cache file is plain JSON in the user's cache directory. An entry that
+// pairs a name with another state's code, a code that fails its check digit,
+// or a name carrying escape sequences must never come back out of it.
+func TestCache_DescartaEntradasQueNaoConferem(t *testing.T) {
+	caminho := filepath.Join(t.TempDir(), NomeArquivo)
+	envenenado := `[
+		{"codigo": "3550308", "nome": "Curitiba", "uf": "PR"},
+		{"codigo": "1234567", "nome": "Londrina", "uf": "PR"},
+		{"codigo": "4105805", "nome": "Colombo\u001b[31m", "uf": "PR"},
+		{"codigo": "4100103", "nome": "Abatiá", "uf": "PR"}
+	]`
+	if err := os.WriteFile(caminho, []byte(envenenado), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := NovoCache(caminho)
+	for _, nome := range []string{"Curitiba", "Londrina", "Colombo"} {
+		if m, ok := cache.BuscarPorNome(nome, "PR"); ok {
+			t.Errorf("BuscarPorNome(%q) devolveu uma entrada envenenada: %+v", nome, m)
+		}
+	}
+	for _, codigo := range []string{"3550308", "1234567", "4105805"} {
+		if m, ok := cache.Buscar(codigo); ok {
+			t.Errorf("Buscar(%s) devolveu uma entrada envenenada: %+v", codigo, m)
+		}
+	}
+	if m, ok := cache.BuscarPorNome("abatia", "PR"); !ok || m.Codigo != "4100103" {
+		t.Errorf("a entrada valida se perdeu: %+v, %v", m, ok)
+	}
+}
+
+func TestCache_GuardarRecusaEntradaIncoerente(t *testing.T) {
+	cache := NovoCache(filepath.Join(t.TempDir(), NomeArquivo))
+	cache.Guardar(Municipio{Codigo: "3550308", Nome: "Curitiba", UF: "PR"})
+	cache.Guardar(Municipio{Codigo: "4106902", Nome: "Curitiba\a", UF: "PR"})
+
+	if _, ok := cache.BuscarPorNome("Curitiba", "PR"); ok {
+		t.Error("uma entrada incoerente entrou no cache")
+	}
+}
+
+// Two entries answering one name within a state cannot both be right; the
+// lookup finds nothing and the caller asks the service.
+func TestCache_NomeAmbiguoNaoResolve(t *testing.T) {
+	cache := NovoCache(filepath.Join(t.TempDir(), NomeArquivo))
+	cache.Guardar(Municipio{Codigo: "4106902", Nome: "Curitiba", UF: "PR"})
+	cache.Guardar(Municipio{Codigo: "4105805", Nome: "Curitiba", UF: "PR"})
+
+	if m, ok := cache.BuscarPorNome("Curitiba", "PR"); ok {
+		t.Errorf("resolveu um nome ambiguo para %+v", m)
+	}
+}
+
+func TestMunicipios_RecusaNomeComCaracterDeControle(t *testing.T) {
+	client := servidor(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`[{"id": 4106902, "nome": "Curitiba\u001b]0;x\u0007"}]`))
+	})
+	if municipios, err := client.Municipios(context.Background(), "PR"); err == nil {
+		t.Errorf("aceitou %+v", municipios)
+	}
+}
+
+func TestMunicipios_RecusaRespostaGrandeDemais(t *testing.T) {
+	client := servidor(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("[" + strings.Repeat(`{},`, maxListaSize/3+10) + "{}]"))
+	})
+	_, err := client.Municipios(context.Background(), "PR")
+	if err == nil || !strings.Contains(err.Error(), "MB") {
+		t.Errorf("esperava a recusa pelo tamanho; veio %v", err)
+	}
+}
+
+// The state comes from the code; the answer only has to agree with it.
+func TestConsultar_UFVemDoCodigo(t *testing.T) {
+	casos := map[string]struct {
+		corpo string
+		quer  string // "" means an error
+	}{
+		"UF ausente":      {`{"id": 4106902, "nome": "Curitiba"}`, "PR"},
+		"UF que discorda": {`{"id": 4106902, "nome": "Curitiba", "microrregiao": {"mesorregiao": {"UF": {"sigla": "SP"}}}}`, ""},
+		"nome com escape": {`{"id": 4106902, "nome": "Curitiba\u001b[2J"}`, ""},
+		"UF que concorda": {respostaCuritiba, "PR"},
+	}
+	for nome, c := range casos {
+		t.Run(nome, func(t *testing.T) {
+			client := servidor(t, func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(c.corpo)) })
+			m, err := client.Consultar(context.Background(), "4106902")
+			switch {
+			case c.quer == "" && err == nil:
+				t.Errorf("aceitou %+v", m)
+			case c.quer != "" && (err != nil || m.UF != c.quer):
+				t.Errorf("Consultar = %+v, %v; esperava UF %s", m, err, c.quer)
+			}
+		})
 	}
 }

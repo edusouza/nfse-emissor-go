@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
@@ -46,6 +47,30 @@ type Municipio struct {
 	Codigo string `json:"codigo"`
 	Nome   string `json:"nome"`
 	UF     string `json:"uf"`
+}
+
+// coerente reports whether a municipality can be trusted as a translation:
+// a valid IBGE code, the state that code belongs to, and a printable name.
+//
+// Every entry that reaches the cache or leaves this package passes through
+// it. The cache is shared by the DANFSe and by onboard, and onboard writes
+// what it finds into nfse.yaml: an entry that pairs a name with another
+// state's code — from a lying server, a proxy, or a hand-edited file — would
+// otherwise put every invoice in the wrong municipality. A name with control
+// characters would reach the terminal as escape sequences.
+func (m Municipio) coerente() bool {
+	if codmun.Validar(m.Codigo) != nil || m.UF != codmun.UF(m.Codigo) {
+		return false
+	}
+	if strings.TrimSpace(m.Nome) == "" {
+		return false
+	}
+	for _, r := range m.Nome {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // Config configures a Client.
@@ -176,12 +201,23 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 		return nil, fmt.Errorf("resposta de %s nao trouxe o nome do municipio %s", c.Host(), codigo)
 	}
 
-	return &Municipio{Codigo: codigo, Nome: strings.TrimSpace(dados.Nome), UF: dados.uf()}, nil
+	// The state comes from the code, which is checked; the answer's own UF
+	// only has to agree with it.
+	m := &Municipio{Codigo: codigo, Nome: strings.TrimSpace(dados.Nome), UF: codmun.UF(codigo)}
+	if uf := dados.uf(); uf != "" && !strings.EqualFold(uf, m.UF) {
+		return nil, fmt.Errorf("%s respondeu a UF %s para o municipio %s, que e de %s", c.Host(), uf, codigo, m.UF)
+	}
+	if !m.coerente() {
+		return nil, fmt.Errorf("%s respondeu um municipio %s que nao confere; a resposta foi descartada", c.Host(), codigo)
+	}
+	return m, nil
 }
 
 // maxListaSize caps the answer for a whole state. Minas Gerais has 853
-// municipalities, each a few hundred bytes in the service's nested format.
-const maxListaSize = 8 << 20
+// municipalities, each a few hundred bytes in the service's nested format:
+// about 1 MB. A larger body is refused rather than decoded, because the
+// decoder would hold all of it, several times over, before any check ran.
+const maxListaSize = 2 << 20
 
 // Municipios fetches every municipality of a state, which is how a name typed
 // by a person is turned into a code without carrying the table in the binary.
@@ -196,9 +232,13 @@ func (c *Client) Municipios(ctx context.Context, uf string) ([]Municipio, error)
 		return nil, fmt.Errorf("%q nao e a sigla de uma UF", uf)
 	}
 
-	body, err := c.get(ctx, "/estados/"+uf+"/municipios", maxListaSize, "os municipios de "+uf)
+	body, err := c.get(ctx, "/estados/"+uf+"/municipios", maxListaSize+1, "os municipios de "+uf)
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > maxListaSize {
+		return nil, fmt.Errorf("%s devolveu mais de %d MB para os municipios de %s; a resposta foi descartada",
+			c.Host(), maxListaSize>>20, uf)
 	}
 
 	var dados []resposta
@@ -211,16 +251,12 @@ func (c *Client) Municipios(ctx context.Context, uf string) ([]Municipio, error)
 
 	municipios := make([]Municipio, 0, len(dados))
 	for _, d := range dados {
-		codigo := d.ID.String()
-		if err := codmun.Validar(codigo); err != nil || codmun.UF(codigo) != uf {
-			return nil, fmt.Errorf("%s devolveu o codigo %q entre os municipios de %s; a resposta foi descartada",
-				c.Host(), codigo, uf)
+		m := Municipio{Codigo: d.ID.String(), Nome: strings.TrimSpace(d.Nome), UF: uf}
+		if !m.coerente() {
+			return nil, fmt.Errorf("%s devolveu %q entre os municipios de %s, que nao confere; a resposta foi descartada",
+				c.Host(), m.Codigo, uf)
 		}
-		nome := strings.TrimSpace(d.Nome)
-		if nome == "" {
-			return nil, fmt.Errorf("%s devolveu o municipio %s sem nome", c.Host(), codigo)
-		}
-		municipios = append(municipios, Municipio{Codigo: codigo, Nome: nome, UF: uf})
+		municipios = append(municipios, m)
 	}
 	return municipios, nil
 }

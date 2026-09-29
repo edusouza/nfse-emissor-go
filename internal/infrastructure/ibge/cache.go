@@ -72,8 +72,9 @@ func (c *Cache) Buscar(codigo string) (Municipio, bool) {
 }
 
 // Guardar records a municipality, in memory now and on disk when Gravar runs.
+// An entry that does not hold together is dropped (see coerente).
 func (c *Cache) Guardar(municipio Municipio) {
-	if municipio.Codigo == "" {
+	if !municipio.coerente() {
 		return
 	}
 
@@ -90,7 +91,9 @@ func (c *Cache) Guardar(municipio Municipio) {
 
 // BuscarPorNome finds a remembered municipality by name within a state.
 // The comparison folds case, accents and punctuation (texto.Chave), which the
-// official table shows to be unambiguous inside one state.
+// official table shows to be unambiguous inside one state. Two entries that
+// answer the same name are not: the lookup then finds nothing, and the caller
+// asks the service again.
 func (c *Cache) BuscarPorNome(nome, uf string) (Municipio, bool) {
 	chave := texto.Chave(nome)
 	if chave == "" {
@@ -101,12 +104,17 @@ func (c *Cache) BuscarPorNome(nome, uf string) (Municipio, bool) {
 	defer c.mu.Unlock()
 
 	c.carregar()
+	var achado Municipio
 	for _, municipio := range c.dados {
-		if strings.EqualFold(municipio.UF, uf) && texto.Chave(municipio.Nome) == chave {
-			return municipio, true
+		if !strings.EqualFold(municipio.UF, uf) || texto.Chave(municipio.Nome) != chave {
+			continue
 		}
+		if achado.Codigo != "" && achado.Codigo != municipio.Codigo {
+			return Municipio{}, false
+		}
+		achado = municipio
 	}
-	return Municipio{}, false
+	return achado, achado.Codigo != ""
 }
 
 // Gravar writes the cache out, if anything changed. The error is returned for
@@ -207,8 +215,10 @@ func (c *Cache) carregar() {
 		// that cannot be asked for again.
 		return
 	}
+	// The file is plain JSON in the user's cache directory, and anything
+	// can have written it: entries are checked on the way in, not trusted.
 	for _, municipio := range lista {
-		if municipio.Codigo != "" {
+		if municipio.coerente() {
 			c.dados[municipio.Codigo] = municipio
 		}
 	}
