@@ -15,17 +15,27 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
-- **CNPJ lido também da extensão `subjectAltName` do certificado**
-  ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)). O
-  `common name` no formato `RAZÃO SOCIAL:CNPJ` continua sendo lido primeiro —
-  é onde todo A1 visto na prática o traz —, mas uma AC que grave o titular de
-  outro jeito deixava o `nfse onboard --certificado` sem CNPJ e o usuário no
-  `--cnpj`. Agora o emissor procura no `otherName` de OID 2.16.76.1.3.3, o
-  lugar que o DOC-ICP-04 define. Só esse identificador é lido: os vizinhos
-  dele trazem o CPF do responsável, que nunca pode passar pelo CNPJ da
-  empresa. A mesma leitura vale para a conferência do `emitir` e do `enviar`,
-  que recusam assinar com o certificado de outro prestador. Sem dependência
-  nova: a extensão é decodificada com `encoding/asn1`.
+- **CNPJ do certificado lido da extensão `subjectAltName`**
+  ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)). O emissor lia
+  só o *common name* no formato `RAZÃO SOCIAL:CNPJ`, e uma AC que gravasse o
+  titular de outro jeito deixava o `nfse onboard --certificado` sem CNPJ. O
+  lugar normativo é o `otherName` de OID 2.16.76.1.3.3, definido no
+  DOC-ICP-04 — e é por ele que a Sefin identifica quem assina: o ANEXO I
+  recusa a assinatura de um certificado que não o traga. Por isso ele passa a
+  ser lido **primeiro**, e o *common name* fica como reserva para certificados
+  fora do ICP-Brasil, como o de teste em `exemplos/`.
+  - A conferência do `emitir` e do `enviar`, que recusa assinar com o
+    certificado de outro prestador, compara agora o mesmo número que a Sefin
+    vai comparar. Um *common name* que discorde da extensão não passa mais por
+    ela.
+  - Só esse identificador é lido: os vizinhos dele trazem o CPF do
+    responsável, que nunca pode passar pelo CNPJ da empresa.
+  - A leitura é estrita. O valor precisa ter exatamente 14 dígitos, sem nada
+    antes ou depois; duas entradas com CNPJs diferentes, ou uma entrada
+    ilegível, tornam o certificado ambíguo, e aí o emissor pede `--cnpj` em
+    vez de escolher.
+  - Sem dependência nova: a extensão é decodificada com `encoding/asn1`, e um
+    alvo de *fuzzing* garante que nenhum certificado derruba o parser.
 
 ## [0.8.0] - 2026-09-29
 
