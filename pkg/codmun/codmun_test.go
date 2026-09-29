@@ -23,21 +23,31 @@ func TestValidar(t *testing.T) {
 		}
 	}
 
-	invalidos := map[string]string{
-		"":         "vazio",
-		"7107":     "codigo TOM da Receita, 4 digitos",
-		"41":       "codigo da UF",
-		"41069020": "8 digitos",
-		"410690a":  "letra",
-		"4106903":  "digito verificador errado",
-		"4160902":  "digitos transpostos",
-		"3450308":  "prefixo 34 nao e UF",
-		"9999999":  "prefixo 99 nao e UF",
-		" 4106902": "espaco",
+	// Each case names the rule that must refuse it, so that a rule removed
+	// cannot hide behind another one rejecting the same code.
+	invalidos := []struct {
+		codigo, motivo, mensagem string
+	}{
+		{"", "vazio", "7 digitos"},
+		{"7107", "codigo TOM da Receita, 4 digitos", "7 digitos"},
+		{"41", "codigo da UF", "7 digitos"},
+		{"41069020", "8 digitos", "7 digitos"},
+		{"410690a", "letra", "7 digitos"},
+		{" 4106902", "espaco", "7 digitos"},
+		{"4106903", "digito verificador errado", "digito verificador"},
+		{"4160902", "digitos transpostos", "digito verificador"},
+		{"3400009", "prefixo 34 nao e UF, digito verificador certo", "codigo de uma UF"},
+		{"9900002", "prefixo 99 nao e UF, digito verificador certo", "codigo de uma UF"},
+		{"0000000", "zeros, digito verificador certo", "codigo de uma UF"},
 	}
-	for codigo, motivo := range invalidos {
-		if err := Validar(codigo); err == nil {
-			t.Errorf("Validar(%q) aceitou (%s)", codigo, motivo)
+	for _, c := range invalidos {
+		err := Validar(c.codigo)
+		if err == nil {
+			t.Errorf("Validar(%q) aceitou (%s)", c.codigo, c.motivo)
+			continue
+		}
+		if !strings.Contains(err.Error(), c.mensagem) {
+			t.Errorf("Validar(%q) = %v; esperava a regra %q (%s)", c.codigo, err, c.mensagem, c.motivo)
 		}
 	}
 }
@@ -83,6 +93,16 @@ func TestValidarContraOAnexoA(t *testing.T) {
 		}
 	}
 
+	ufs := ufsDoAnexoA(t)
+	for prefixo, nome := range ufs {
+		if quer := siglaPorNome[nome]; quer == "" || ufPorPrefixo[prefixo] != quer {
+			t.Errorf("prefixo %s e %q no ANEXO_A; a tabela diz %q", prefixo, nome, ufPorPrefixo[prefixo])
+		}
+	}
+	if len(ufs) != len(ufPorPrefixo) {
+		t.Errorf("o ANEXO_A tem %d UFs; a tabela tem %d", len(ufs), len(ufPorPrefixo))
+	}
+
 	for codigo := range semDigitoVerificador {
 		if !excecoes[codigo] {
 			t.Errorf("%s esta na lista de excecoes, mas nao e excecao no ANEXO_A", codigo)
@@ -94,10 +114,49 @@ func TestValidarContraOAnexoA(t *testing.T) {
 	}
 }
 
-// codigosDoAnexoA reads column D of the first sheet, where the annex keeps the
-// seven-digit codes, with archive/zip and encoding/xml like the generators in
-// this repository do.
+// siglaPorNome is written from the state names, not from the annex's own
+// "Sigla UF" column, which is empty for most rows.
+var siglaPorNome = map[string]string{
+	"Rondônia": "RO", "Acre": "AC", "Amazonas": "AM", "Roraima": "RR", "Pará": "PA",
+	"Amapá": "AP", "Tocantins": "TO", "Maranhão": "MA", "Piauí": "PI", "Ceará": "CE",
+	"Rio Grande do Norte": "RN", "Paraíba": "PB", "Pernambuco": "PE", "Alagoas": "AL",
+	"Sergipe": "SE", "Bahia": "BA", "Minas Gerais": "MG", "Espírito Santo": "ES",
+	"Rio de Janeiro": "RJ", "São Paulo": "SP", "Paraná": "PR", "Santa Catarina": "SC",
+	"Rio Grande do Sul": "RS", "Mato Grosso do Sul": "MS", "Mato Grosso": "MT",
+	"Goiás": "GO", "Distrito Federal": "DF",
+}
+
+type linhaAnexoA struct {
+	nomeUF string
+	codigo string
+}
+
 func codigosDoAnexoA(t *testing.T) []string {
+	var codigos []string
+	for _, l := range linhasDoAnexoA(t) {
+		codigos = append(codigos, l.codigo)
+	}
+	return codigos
+}
+
+// ufsDoAnexoA maps each code prefix to the state name the annex gives it, and
+// fails if one prefix appears under two names.
+func ufsDoAnexoA(t *testing.T) map[string]string {
+	ufs := map[string]string{}
+	for _, l := range linhasDoAnexoA(t) {
+		prefixo := l.codigo[:2]
+		if nome, ok := ufs[prefixo]; ok && nome != l.nomeUF {
+			t.Fatalf("prefixo %s aparece como %q e %q no ANEXO_A", prefixo, nome, l.nomeUF)
+		}
+		ufs[prefixo] = l.nomeUF
+	}
+	return ufs
+}
+
+// linhasDoAnexoA reads the state name (column A) and the seven-digit code
+// (column D) of the first sheet, with archive/zip and encoding/xml like the
+// generators in this repository do.
+func linhasDoAnexoA(t *testing.T) []linhaAnexoA {
 	t.Helper()
 
 	zr, err := zip.OpenReader(anexoA)
@@ -137,13 +196,10 @@ func codigosDoAnexoA(t *testing.T) []string {
 		} `xml:"sheetData>row"`
 	}](t, &zr.Reader, "xl/worksheets/sheet1.xml")
 
-	var codigos []string
+	var linhas []linhaAnexoA
 	for _, row := range sheet.Rows {
+		var l linhaAnexoA
 		for _, c := range row.Cells {
-			// Column D; the header row fails the digit check below.
-			if !strings.HasPrefix(c.Ref, "D") {
-				continue
-			}
 			valor := c.Value
 			if c.Type == "s" {
 				i, err := strconv.Atoi(valor)
@@ -152,12 +208,19 @@ func codigosDoAnexoA(t *testing.T) []string {
 				}
 				valor = strs[i]
 			}
-			if valor = strings.TrimSpace(valor); digitos(valor) {
-				codigos = append(codigos, valor)
+			switch {
+			case strings.HasPrefix(c.Ref, "A"):
+				l.nomeUF = strings.TrimSpace(valor)
+			case strings.HasPrefix(c.Ref, "D"):
+				l.codigo = strings.TrimSpace(valor)
 			}
 		}
+		// The header row fails the digit check.
+		if digitos(l.codigo) {
+			linhas = append(linhas, l)
+		}
 	}
-	return codigos
+	return linhas
 }
 
 func lerXML[T any](t *testing.T, zr *zip.Reader, nome string) T {
