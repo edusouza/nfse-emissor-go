@@ -15,6 +15,7 @@ import (
 	"github.com/edusouza/nfse-emissor-go/internal/config"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/brasilapi"
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/ibge"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 )
@@ -71,6 +72,10 @@ func newOnboardCommand() *cobra.Command {
 		semRede     bool
 		fonte       string
 		force       bool
+
+		municipioFlag   string
+		fonteMunicipios string
+		cacheMunicipios string
 	)
 
 	cmd := &cobra.Command{
@@ -86,6 +91,11 @@ municipio e regime tributario.
 A consulta envia o seu CNPJ para um servico de terceiros. O comando avisa antes
 de sair para a rede e ` + "`--sem-rede`" + ` desliga a consulta: nesse caso o arquivo sai
 com o que o certificado informa.
+
+O municipio pode vir de --municipio, que vale mais que o cadastro. Aceita o
+codigo IBGE de 7 digitos — conferido pelo digito verificador, sem rede — ou o
+nome com a UF, "Curitiba/PR", que o comando procura na lista do IBGE e guarda
+em cache: depois da primeira vez, o nome funciona tambem com --sem-rede.
 
 O codigo de tributacao nacional do servico (cTribNac) e o unico campo que
 nenhuma consulta responde: ele depende do que voce presta, nao de quem voce e.
@@ -124,6 +134,26 @@ escrito a mao no nfse.yaml.`,
 
 			out := cmd.OutOrStdout()
 			data := &onboardData{}
+
+			// Resolved before the password prompt and before the registry:
+			// a municipality that does not exist is a reason to stop, and
+			// the flag outranks what the registry says.
+			if municipioFlag != "" {
+				busca := buscaMunicipio{
+					ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
+					cache: ibge.NovoCache(cacheMunicipios), semRede: semRede,
+				}
+				if !semRede {
+					busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
+				}
+				m, err := busca.resolver(municipioFlag)
+				if err != nil {
+					return err
+				}
+				data.municipio = m.codigo
+				data.origem("prestador.municipio", m.fonte)
+				fmt.Fprintf(out, "Municipio  %s\n\n", m)
+			}
 
 			if servicoFlag != "" {
 				s, ok := servico.PorCodigo(servicoFlag)
@@ -210,9 +240,12 @@ escrito a mao no nfse.yaml.`,
 	cmd.Flags().StringVarP(&path, "arquivo", "a", config.DefaultFileName, "caminho do arquivo a criar")
 	cmd.Flags().StringVar(&serie, "serie", "00001", "serie da DPS, 5 digitos")
 	cmd.Flags().StringVar(&ambiente, "ambiente", config.EnvProducaoRestrita, "producao-restrita | producao")
-	cmd.Flags().BoolVar(&semRede, "sem-rede", false, "nao consulta o cadastro publico de CNPJ")
+	cmd.Flags().BoolVar(&semRede, "sem-rede", false, "nao consulta servico nenhum (cadastro de CNPJ, IBGE)")
 	cmd.Flags().StringVar(&fonte, "fonte", brasilapi.DefaultBaseURL, "URL base da consulta de CNPJ")
 	cmd.Flags().BoolVar(&force, "forcar", false, "sobrescreve um arquivo existente")
+	cmd.Flags().StringVar(&municipioFlag, "municipio", "", `municipio do prestador: codigo IBGE de 7 digitos, ou "Cidade/UF"`)
+	cmd.Flags().StringVar(&fonteMunicipios, "fonte-municipios", ibge.DefaultBaseURL, "servidor da consulta de municipios")
+	cmd.Flags().StringVar(&cacheMunicipios, "cache-municipios", "", "arquivo de cache dos municipios (padrao: o diretorio de cache do sistema)")
 
 	return cmd
 }
@@ -305,10 +338,17 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	// A municipality code that fails its own check digit is left pending rather
 	// than written: the field is the one mistake the Sefin does not catch.
 	codigoIBGE, errIBGE := empresa.MunicipioIBGE()
-	if errIBGE == nil {
+	switch {
+	case errIBGE == nil && data.municipio != "" && data.municipio != codigoIBGE:
+		// The registry knows the address the Receita has on file; a
+		// disagreement usually means one of the two is out of date, and the
+		// person typing the flag is the one who knows which.
+		fmt.Fprintf(errOut, "aviso: o cadastro informa o municipio %s, mas vale o --municipio %s; "+
+			"confira qual dos dois esta desatualizado\n", codigoIBGE, data.municipio)
+	case errIBGE == nil && data.municipio == "":
 		data.municipio = codigoIBGE
 		data.origem("prestador.municipio", fonte)
-	} else if empresa.CodigoMunicipioIBGE != "" {
+	case errIBGE != nil && empresa.CodigoMunicipioIBGE != "":
 		fmt.Fprintf(errOut, "aviso: o municipio do cadastro nao foi aproveitado: %v\n", errIBGE)
 	}
 
