@@ -572,6 +572,7 @@ internal/
     xmlsigner/     assinatura XMLDSig e leitura do certificado A1
     sefin/         cliente da API do governo
     brasilapi/     consulta do cadastro publico de CNPJ (so no `onboard`)
+    ibge/          municipios do IBGE, com cache (`danfse` e `onboard --municipio`)
 pkg/
   xmlbuilder/      montagem do XML da DPS
   cnpjcpf/         validação de CNPJ e CPF
