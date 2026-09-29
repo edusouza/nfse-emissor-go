@@ -175,17 +175,32 @@ func (c *CertificateInfo) GetSubjectCN() string {
 // SubjectCNPJ returns the CNPJ the certificate was issued to, or an empty
 // string when it cannot be read.
 //
-// ICP-Brasil writes the holder of an e-CNPJ as "RAZAO SOCIAL:CNPJ" in the
-// subject's common name, so the taxpayer number travels with the file. Reading
-// it serves two callers: onboard fills the configuration from it instead of
-// asking for a number the user cannot mistype, and emitir/enviar check, before
-// opening a connection, that the certificate belongs to the provider named in
-// the document.
+// Reading it serves two callers: onboard fills the configuration from it
+// instead of asking for a number the user cannot mistype, and emitir/enviar
+// check, before opening a connection, that the certificate belongs to the
+// provider named in the document.
 //
-// The check digits are verified: a common name that merely ends in fourteen
-// digits is not evidence enough to fill a fiscal document with, nor to refuse
-// one.
+// ICP-Brasil writes the holder of an e-CNPJ as "RAZAO SOCIAL:CNPJ" in the
+// subject's common name, which is where every A1 seen in practice carries it,
+// so that is tried first. The normative place, per DOC-ICP-04, is an otherName
+// in the subjectAltName extension; it is the fallback for an authority that
+// formats the common name some other way.
+//
+// The check digits are verified either way: a field that merely holds
+// fourteen digits is not evidence enough to fill a fiscal document with, nor
+// to refuse one.
 func (c *CertificateInfo) SubjectCNPJ() string {
+	if cnpj := c.commonNameCNPJ(); cnpj != "" {
+		return cnpj
+	}
+	if c.Certificate == nil {
+		return ""
+	}
+	return subjectAltNameCNPJ(c.Certificate)
+}
+
+// commonNameCNPJ reads the CNPJ from the "RAZAO SOCIAL:CNPJ" common name.
+func (c *CertificateInfo) commonNameCNPJ() string {
 	cn := c.GetSubjectCN()
 
 	i := strings.LastIndex(cn, ":")
@@ -208,7 +223,10 @@ func (c *CertificateInfo) SubjectCNPJ() string {
 func (c *CertificateInfo) SubjectHolderName() string {
 	cn := c.GetSubjectCN()
 
-	if c.SubjectCNPJ() == "" {
+	// Only a suffix that is itself a valid CNPJ is stripped. When the CNPJ
+	// came from the subjectAltName, the common name is left as the authority
+	// wrote it.
+	if c.commonNameCNPJ() == "" {
 		return cn
 	}
 	return strings.TrimSpace(cn[:strings.LastIndex(cn, ":")])

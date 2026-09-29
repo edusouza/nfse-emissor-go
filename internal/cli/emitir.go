@@ -491,7 +491,8 @@ func takerFor(nota config.Nota) *xmlbuilder.DPSTaker {
 // the signature inside the XML is part of what the government validates.
 //
 // An unreadable certificate CNPJ is not an error. Only ICP-Brasil guarantees
-// the "RAZAO SOCIAL:CNPJ" form, and refusing everything else would break
+// where the holder's CNPJ is written — the "RAZAO SOCIAL:CNPJ" common name or
+// the subjectAltName otherName — and refusing everything else would break
 // anyone whose certificate is laid out differently.
 func ensureCertificateBelongsToProvider(certInfo *xmlsigner.CertificateInfo, providerCNPJ string) error {
 	certCNPJ := certInfo.SubjectCNPJ()
