@@ -167,7 +167,8 @@ type DPSValues struct {
 	Deductions float64
 
 	// DeductionPercentage is the deduction as a percentage of service value
-	// (pDR). Computed from Deductions when left at zero.
+	// (pDR). The schema takes one or the other, so it is used only when
+	// Deductions is zero.
 	DeductionPercentage float64
 
 	// ISSRate is the ISS tax rate percentage (pAliq). Zero is valid and is the
@@ -411,7 +412,13 @@ func (b *DPSBuilder) buildTaker() *tomaXML {
 	return toma
 }
 
-// buildTakerAddress creates the address (end) XML element for the taker.
+// buildTakerAddress creates the taker's address as TCEndereco lays it out:
+// endNac or endExt first, then the street.
+//
+// A national address has no UF and no country in the layout — the IBGE code
+// already says which state it is in. This builder used to write cMun, UF, CEP
+// and cPais loose after the street, a DPS the schema refuses; the schema
+// validator of issue #4 caught it.
 func (b *DPSBuilder) buildTakerAddress(addr *AddressConfig) *endXML {
 	if addr == nil {
 		return nil
@@ -420,37 +427,22 @@ func (b *DPSBuilder) buildTakerAddress(addr *AddressConfig) *endXML {
 	end := &endXML{
 		XLgr:    addr.Street,
 		Nro:     addr.Number,
+		XCpl:    addr.Complement,
 		XBairro: addr.Neighborhood,
 	}
-
-	// Set complement if provided
-	if addr.Complement != "" {
-		end.XCpl = addr.Complement
-	}
-
-	// Set fields based on whether this is a national or foreign address
 	if addr.IsForeign() {
-		// Foreign address: only country code required
-		end.CPais = strings.ToUpper(addr.CountryCode)
+		end.EndExt = &endExtXML{
+			CPais:       strings.ToUpper(addr.CountryCode),
+			CEndPost:    addr.PostalCode,
+			XCidade:     addr.City,
+			XEstProvReg: addr.State,
+		}
 	} else {
-		// National address: include all fields
-		if addr.MunicipalityCode != "" {
-			end.CMun = addr.MunicipalityCode
+		end.EndNac = &endNacXML{
+			CMun: addr.MunicipalityCode,
+			CEP:  cleanPostalCode(addr.PostalCode),
 		}
-		if addr.State != "" {
-			end.UF = strings.ToUpper(addr.State)
-		}
-		if addr.PostalCode != "" {
-			end.CEP = cleanPostalCode(addr.PostalCode)
-		}
-		// Default to BR for national addresses
-		countryCode := addr.CountryCode
-		if countryCode == "" {
-			countryCode = "BR"
-		}
-		end.CPais = strings.ToUpper(countryCode)
 	}
-
 	return end
 }
 
@@ -508,8 +500,8 @@ func (b *DPSBuilder) buildValues() valoresXML {
 		valores.VDescCondIncond = b.buildDiscountSection()
 	}
 
-	if b.config.Values.Deductions > 0 {
-		valores.VDedRed = b.buildDeductionSection()
+	if d := b.buildDeductionSection(); d != nil {
+		valores.VDedRed = d
 	}
 
 	return valores
@@ -539,20 +531,20 @@ func (b *DPSBuilder) buildDiscountSection() *vDescCondIncondXML {
 }
 
 // buildDeductionSection creates the vDedRed section.
+//
+// TCInfoDedRed is a choice: the deduction is stated as a value (vDR), as a
+// percentage (pDR) or as a list of documents, never two of them. The value
+// wins when both are configured, because it is what the taxpayer actually
+// has in hand; the percentage is emitted only when it is all there is.
 func (b *DPSBuilder) buildDeductionSection() *vDedRedXML {
-	if b.config.Values.Deductions <= 0 {
-		return nil
+	v := b.config.Values
+	switch {
+	case v.Deductions > 0:
+		return &vDedRedXML{VDR: formatMoney(v.Deductions)}
+	case v.DeductionPercentage > 0:
+		return &vDedRedXML{PDR: formatMoney(v.DeductionPercentage)}
 	}
-
-	percentage := b.config.Values.DeductionPercentage
-	if percentage == 0 && b.config.Values.ServiceValue > 0 {
-		percentage = (b.config.Values.Deductions / b.config.Values.ServiceValue) * 100
-	}
-
-	return &vDedRedXML{
-		VDR: formatMoney(b.config.Values.Deductions),
-		PDR: formatMoney(percentage),
-	}
+	return nil
 }
 
 // buildTaxSection creates the <trib> element.
@@ -675,16 +667,28 @@ type tomaXML struct {
 	Email string  `xml:"email,omitempty"`
 }
 
-// endXML mirrors TCEndereco.
+// endXML mirrors TCEndereco: a choice of endNac or endExt, then the street.
 type endXML struct {
-	XLgr    string `xml:"xLgr"`
-	Nro     string `xml:"nro"`
-	XCpl    string `xml:"xCpl,omitempty"`
-	XBairro string `xml:"xBairro"`
-	CMun    string `xml:"cMun,omitempty"`
-	UF      string `xml:"UF,omitempty"`
-	CEP     string `xml:"CEP,omitempty"`
-	CPais   string `xml:"cPais,omitempty"`
+	EndNac  *endNacXML `xml:"endNac,omitempty"`
+	EndExt  *endExtXML `xml:"endExt,omitempty"`
+	XLgr    string     `xml:"xLgr"`
+	Nro     string     `xml:"nro"`
+	XCpl    string     `xml:"xCpl,omitempty"`
+	XBairro string     `xml:"xBairro"`
+}
+
+// endNacXML mirrors TCEnderNac.
+type endNacXML struct {
+	CMun string `xml:"cMun"`
+	CEP  string `xml:"CEP"`
+}
+
+// endExtXML mirrors TCEnderExt.
+type endExtXML struct {
+	CPais       string `xml:"cPais"`
+	CEndPost    string `xml:"cEndPost"`
+	XCidade     string `xml:"xCidade"`
+	XEstProvReg string `xml:"xEstProvReg"`
 }
 
 // servXML mirrors TCServ.
@@ -728,8 +732,8 @@ type vDescCondIncondXML struct {
 
 // vDedRedXML mirrors TCInfoDedRed.
 type vDedRedXML struct {
-	VDR string `xml:"vDR"`
-	PDR string `xml:"pDR"`
+	PDR string `xml:"pDR,omitempty"`
+	VDR string `xml:"vDR,omitempty"`
 }
 
 // tribXML mirrors TCInfoTributacao.
