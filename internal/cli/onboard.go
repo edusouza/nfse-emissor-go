@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,9 @@ type onboardData struct {
 	municipio string
 	regime    string
 	origens   []string
+
+	// descricao is padroes.servico.descricao, which only the user can say.
+	descricao string
 
 	// servico is cTribNac, and it is the one field nothing can discover:
 	// it says what the provider does, and only the provider knows that. It is
@@ -76,6 +80,7 @@ func newOnboardCommand() *cobra.Command {
 		municipioFlag   string
 		fonteMunicipios string
 		cacheMunicipios string
+		naoInterativo   bool
 	)
 
 	cmd := &cobra.Command{
@@ -103,6 +108,10 @@ Informe em --servico se ja souber; senao, o comando usa o CNAE do cadastro para
 sugerir candidatos, e deixa a escolha para voce. Para procurar:
 
   nfse servico buscar "o que voce faz"
+
+No terminal, o comando pergunta o que a consulta nao respondeu — so isso — e
+Enter deixa o campo em branco. --nao-interativo desliga as perguntas; sem
+terminal (num script, por exemplo) elas nunca aparecem.
 
 Nada aqui e obrigatorio para emitir: tudo que o comando preenche pode ser
 escrito a mao no nfse.yaml.`,
@@ -135,17 +144,18 @@ escrito a mao no nfse.yaml.`,
 			out := cmd.OutOrStdout()
 			data := &onboardData{}
 
+			busca := buscaMunicipio{
+				ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
+				cache: ibge.NovoCache(cacheMunicipios),
+			}
+			if !semRede {
+				busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
+			}
+
 			// Resolved before the password prompt and before the registry:
 			// a municipality that does not exist is a reason to stop, and
 			// the flag outranks what the registry says.
 			if municipioFlag != "" {
-				busca := buscaMunicipio{
-					ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
-					cache: ibge.NovoCache(cacheMunicipios),
-				}
-				if !semRede {
-					busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
-				}
 				m, err := busca.resolver(municipioFlag)
 				if err != nil {
 					return err
@@ -204,6 +214,13 @@ escrito a mao no nfse.yaml.`,
 
 			sugerirServico(out, data)
 
+			if !naoInterativo && stdinEhTerminal() {
+				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: out}
+				if err := completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie")); err != nil {
+					return err
+				}
+			}
+
 			rendered, err := config.RenderOnboarded(config.Onboarded{
 				Ambiente:           ambiente,
 				CertificadoArquivo: certFile,
@@ -214,6 +231,7 @@ escrito a mao no nfse.yaml.`,
 				Serie:              serie,
 				Servico:            data.servico.Codigo,
 				ServicoDescricao:   umaLinha(data.servico.Descricao, comentarioLargura),
+				Descricao:          data.descricao,
 				SugestoesServico:   sugestoesParaOArquivo(data.sugestoes),
 				CNAE:               formatCNAE(data.cnae),
 				CNAEDescricao:      umaLinha(data.cnaeDesc, comentarioLargura),
@@ -245,6 +263,7 @@ escrito a mao no nfse.yaml.`,
 	cmd.Flags().BoolVar(&force, "forcar", false, "sobrescreve um arquivo existente")
 	cmd.Flags().StringVar(&municipioFlag, "municipio", "", `municipio do prestador: codigo IBGE de 7 digitos, ou "Cidade/UF"`)
 	cmd.Flags().StringVar(&fonteMunicipios, "fonte-municipios", ibge.DefaultBaseURL, "servidor da consulta de municipios")
+	cmd.Flags().BoolVar(&naoInterativo, "nao-interativo", false, "nao pergunta nada no terminal; so grava o que descobriu")
 	cmd.Flags().StringVar(&cacheMunicipios, "cache-municipios", "", "arquivo de cache dos municipios (padrao: o diretorio de cache do sistema)")
 
 	return cmd
@@ -482,9 +501,15 @@ func printPending(out io.Writer, data *onboardData, certFile, path string) {
 		}
 		pending = append(pending, linha)
 	}
-	pending = append(pending, "padroes.servico.descricao — o que voce presta")
+	if data.descricao == "" {
+		pending = append(pending, "padroes.servico.descricao — o que voce presta")
+	}
 
-	fmt.Fprintf(out, "\nFalta preencher em %s:\n", path)
+	if len(pending) == 0 {
+		fmt.Fprintf(out, "\nNada ficou em branco em %s.\n", path)
+	} else {
+		fmt.Fprintf(out, "\nFalta preencher em %s:\n", path)
+	}
 	for _, p := range pending {
 		for i, linha := range quebrar(p, larguraTexto-4) {
 			prefixo := "  - "
