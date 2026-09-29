@@ -215,7 +215,9 @@ escrito a mao no nfse.yaml.`,
 			sugerirServico(out, data)
 
 			if !naoInterativo && stdinEhTerminal() {
-				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: out}
+				// Questions go where the password prompt goes: stderr, so
+				// that `nfse onboard > log` still shows them.
+				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
 				if err := completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie")); err != nil {
 					return err
 				}
@@ -239,6 +241,13 @@ escrito a mao no nfse.yaml.`,
 			})
 			if err != nil {
 				return err
+			}
+
+			// What is written must read back: a file config check cannot
+			// open is worse than no file, because it looks like success.
+			if _, err := config.Decode(strings.NewReader(rendered)); err != nil {
+				return fmt.Errorf("o arquivo montado nao e um YAML valido (%w); nada foi gravado. "+
+					"Informe o problema no repositorio do emissor", err)
 			}
 
 			if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {

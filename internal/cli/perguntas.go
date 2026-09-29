@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 
@@ -66,8 +68,28 @@ func (p *perguntador) ateValer(pergunta, sugestao string, aceitar func(string) e
 		}
 		fmt.Fprintf(p.out, "  %v\n", problema)
 	}
+	if sugestao != "" {
+		fmt.Fprintf(p.out, "  Fica o valor sugerido, %s.\n", sugestao)
+		return sugestao, nil
+	}
 	fmt.Fprintf(p.out, "  O campo fica em branco; preencha depois no arquivo.\n")
 	return "", nil
+}
+
+// textoImprimivel refuses what a terminal can slip into a line: an arrow key
+// pressed to fix a typo arrives as ESC [ D, a Latin-1 terminal sends bytes
+// that are not UTF-8. Either would make nfse.yaml unreadable, and C0 control
+// characters are not even allowed in the XML the text ends up in.
+func textoImprimivel(v string) error {
+	if !utf8.ValidString(v) {
+		return errors.New("o texto tem bytes que nao sao UTF-8; confira a codificacao do terminal e digite de novo")
+	}
+	for _, r := range v {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return fmt.Errorf("o texto tem um caractere de controle (%U), talvez de uma seta ou de um atalho; digite de novo sem ele", r)
+		}
+	}
+	return nil
 }
 
 const digitadoNoTerminal = "digitado no terminal"
@@ -81,6 +103,7 @@ const digitadoNoTerminal = "digitado no terminal"
 // service code gets none either: the candidates are a word ranking, not an
 // answer (ADR 0009).
 func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio, serie *string, perguntarSerie bool) error {
+	busca.origem = digitadoNoTerminal
 	fmt.Fprintf(p.out, "\nFaltam alguns campos. Enter deixa o campo em branco, para preencher depois no arquivo.\n\n")
 
 	passos := []func() error{
@@ -88,7 +111,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			if data.nome != "" {
 				return nil
 			}
-			nome, err := p.perguntar("Razao social", "")
+			nome, err := p.ateValer("Razao social", "", textoImprimivel)
 			if nome != "" {
 				data.nome = nome
 				data.origem("prestador.nome", digitadoNoTerminal)
@@ -110,7 +133,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			})
 			if achado.codigo != "" {
 				data.municipio = achado.codigo
-				data.origem("prestador.municipio", achado.fonte+", "+digitadoNoTerminal)
+				data.origem("prestador.municipio", achado.fonte)
 				fmt.Fprintf(p.out, "  %s\n", achado)
 			}
 			return err
@@ -170,7 +193,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			return err
 		},
 		func() error {
-			descricao, err := p.perguntar("Descricao padrao do servico, a que vai na nota", "")
+			descricao, err := p.ateValer("Descricao padrao do servico, a que vai na nota", "", textoImprimivel)
 			if descricao != "" {
 				data.descricao = descricao
 				data.origem("padroes.servico.descricao", digitadoNoTerminal)

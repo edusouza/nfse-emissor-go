@@ -36,6 +36,17 @@ type buscaMunicipio struct {
 	errOut io.Writer
 	cache  *ibge.Cache
 	client *ibge.Client // nil under --sem-rede: the name resolves from the cache or not at all
+
+	// origem names where the value came from, in messages and in the file's
+	// header: "--municipio" for the flag, something else for a prompt.
+	origem string
+}
+
+func (b buscaMunicipio) rotulo() string {
+	if b.origem == "" {
+		return "--municipio"
+	}
+	return b.origem
 }
 
 // resolver turns --municipio into a checked IBGE code.
@@ -51,9 +62,9 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 
 	if valor != "" && strings.Trim(valor, "0123456789") == "" {
 		if err := codmun.Validar(valor); err != nil {
-			return municipioInformado{}, fmt.Errorf("--municipio: %w", err)
+			return municipioInformado{}, fmt.Errorf("%s: %w", b.rotulo(), err)
 		}
-		m := municipioInformado{codigo: valor, uf: codmun.UF(valor), fonte: "--municipio"}
+		m := municipioInformado{codigo: valor, uf: codmun.UF(valor), fonte: b.rotulo()}
 		if conhecido, ok := b.cache.Buscar(valor); ok {
 			m.nome = conhecido.Nome
 		}
@@ -62,29 +73,29 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 
 	nome, uf, ok := separarUF(valor)
 	if !ok {
-		return municipioInformado{}, fmt.Errorf("--municipio %q: nao encontrei a UF; escreva como \"Curitiba/PR\" — "+
-			"ha municipios com o mesmo nome em estados diferentes; ou use o codigo IBGE de 7 digitos", valor)
+		return municipioInformado{}, fmt.Errorf("%s %q: nao encontrei a UF; escreva como \"Curitiba/PR\" — "+
+			"ha municipios com o mesmo nome em estados diferentes; ou use o codigo IBGE de 7 digitos", b.rotulo(), valor)
 	}
 	chave := texto.Chave(nome)
 	if chave == "" {
-		return municipioInformado{}, fmt.Errorf("--municipio %q: falta o nome do municipio", valor)
+		return municipioInformado{}, fmt.Errorf("%s %q: falta o nome do municipio", b.rotulo(), valor)
 	}
 
 	if m, ok := b.cache.BuscarPorNome(nome, uf); ok {
-		return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: "--municipio"}, nil
+		return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.rotulo()}, nil
 	}
 
 	if b.client == nil {
-		return municipioInformado{}, fmt.Errorf("--municipio %q: sem rede, so da para achar um nome que ja esteja "+
+		return municipioInformado{}, fmt.Errorf("%s %q: sem rede, so da para achar um nome que ja esteja "+
 			"no cache de municipios, e este nao esta; informe o codigo IBGE de 7 digitos, "+
-			"ou rode uma vez sem --sem-rede", valor)
+			"ou rode uma vez sem --sem-rede", b.rotulo(), valor)
 	}
 
 	fmt.Fprintf(b.out, "Consultando os municipios de %s em %s para encontrar %q...\n", uf, b.client.Host(), nome)
 	lista, err := b.client.Municipios(b.ctx, uf)
 	if err != nil {
-		return municipioInformado{}, fmt.Errorf("--municipio %q: a consulta falhou (%w); informe o codigo IBGE de 7 digitos",
-			valor, err)
+		return municipioInformado{}, fmt.Errorf("%s %q: a consulta falhou (%w); informe o codigo IBGE de 7 digitos",
+			b.rotulo(), valor, err)
 	}
 
 	for _, m := range lista {
@@ -96,11 +107,11 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 
 	for _, m := range lista {
 		if texto.Chave(m.Nome) == chave {
-			return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: "--municipio, consultado em " + b.client.Host()}, nil
+			return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.rotulo() + ", consultado em " + b.client.Host()}, nil
 		}
 	}
 
-	msg := fmt.Sprintf("--municipio %q: %s nao tem municipio com esse nome", valor, uf)
+	msg := fmt.Sprintf("%s %q: %s nao tem municipio com esse nome", b.rotulo(), valor, uf)
 	if parecidos := parecidos(lista, chave, 5); len(parecidos) > 0 {
 		msg += "; voce quis dizer:\n  " + strings.Join(parecidos, "\n  ")
 	}
