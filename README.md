@@ -22,8 +22,7 @@ auxiliar que se entrega ao cliente, desenhado aqui conforme a NT 008.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
-- **Código IBGE offline**, para o `nfse onboard --sem-rede`, e um `onboard`
-  interativo.
+- Um `onboard` interativo.
 
 ## Instalação
 
@@ -133,8 +132,23 @@ quem roda a própria instância do
 é gravado assim mesmo com o que o certificado informou. Por quê:
 [ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
 
+Para informar o município — quando a consulta está desligada, falhou, ou o
+cadastro está desatualizado — use `--municipio`, com o código ou com o nome:
+
+```bash
+nfse onboard --certificado certificado.pfx --municipio "Curitiba/PR"
+nfse onboard --certificado certificado.pfx --sem-rede --municipio 4106902
+```
+
+O código é conferido pelo dígito verificador do IBGE, sem rede. O nome precisa
+da UF, porque há municípios com o mesmo nome em estados diferentes. Ele é
+procurado na lista do estado no IBGE, e a lista inteira fica em cache: da
+segunda vez em diante, qualquer município daquela UF funciona com
+`--sem-rede`. Por quê: [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md).
+
 Quem prefere preencher tudo à mão continua com `nfse config init`, que escreve
-o mesmo arquivo em branco e comentado.
+o mesmo arquivo em branco e comentado. O `nfse config check` confere o dígito
+verificador do código que você digitar.
 
 ### Achar o código do serviço
 
