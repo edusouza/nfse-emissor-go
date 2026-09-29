@@ -74,7 +74,8 @@ Todos aceitam `--help`.
 
 O `nfse onboard` monta a configuração a partir do que já se sabe sobre você. O
 CNPJ sai do próprio certificado — o ICP-Brasil grava o titular como
-`RAZÃO SOCIAL:CNPJ` no A1 — e o resto vem do cadastro público da Receita
+`RAZÃO SOCIAL:CNPJ` no A1 e, quando a AC não faz isso, o emissor procura na
+extensão onde a norma o coloca — e o resto vem do cadastro público da Receita
 Federal:
 
 ```bash
