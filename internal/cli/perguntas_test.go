@@ -87,7 +87,10 @@ func TestOnboardInterativoNaoRepeteOCadastro(t *testing.T) {
 	comoTerminal(t)
 	registro := registroFake(t, http.StatusOK, respostaMEI)
 
-	out, gerado, err := onboardRespondendo(t, "\n\n\n\n", "--fonte", registro.URL)
+	// A municipality lookup here would be a regression; it must not reach
+	// the real IBGE if it happens.
+	ibge, _ := ibgeFake(t, http.StatusInternalServerError)
+	out, gerado, err := onboardRespondendo(t, "\n\n\n\n", "--fonte", registro.URL, "--fonte-municipios", ibge.URL)
 	if err != nil {
 		t.Fatalf("onboard falhou: %v\n%s", err, out)
 	}
@@ -249,5 +252,73 @@ func TestOnboardInterativoPerguntaNoStderr(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "Municipio (codigo IBGE") {
 		t.Errorf("a pergunta foi para o stdout:\n%s", stdout.String())
+	}
+}
+
+// With --cnpj and no registry, nothing knows the name: it is asked, and every
+// typed field is recorded as typed.
+func TestOnboardInterativoPerguntaTudoSemCertificado(t *testing.T) {
+	comoTerminal(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	respostas := "Minha Empresa LTDA\n4106902\nme_epp\n12\n00003\n999999\n010101\nConsultoria\n"
+	var out bytes.Buffer
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+	root := NewRootCommand()
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetIn(strings.NewReader(respostas))
+	root.SetArgs([]string{"onboard", "--cnpj", "12345678000195", "--sem-rede", "--arquivo", path,
+		"--cache-municipios", filepath.Join(t.TempDir(), "m.json")})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out.String())
+	}
+	gerado, _ := os.ReadFile(path)
+
+	for _, want := range []string{
+		`nome: "Minha Empresa LTDA"`, `regime_tributario: "me_epp"`, `serie: "00003"`,
+		`codigo_tributacao_nacional: "010101"`, `descricao: "Consultoria"`,
+		"prestador.nome: digitado no terminal",
+		"prestador.municipio: digitado no terminal",
+		"padroes.servico.codigo_tributacao_nacional: digitado no terminal",
+		"padroes.servico.descricao: digitado no terminal",
+	} {
+		if !strings.Contains(string(gerado), want) {
+			t.Errorf("o arquivo nao traz %q:\n%s", want, gerado)
+		}
+	}
+	for _, want := range []string{"Razao social:", "IBGE 4106902", `"12" nao tem 5 digitos`, `"999999" nao esta na lista nacional`} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("a saida nao traz %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// Ctrl-D at the first question ends them all.
+func TestOnboardInterativoFimDaEntradaParaTudo(t *testing.T) {
+	comoTerminal(t)
+
+	out, _, err := onboardRespondendo(t, "", "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	for _, depois := range []string{"Regime (", "Serie da DPS", "Codigo do servico ("} {
+		if strings.Contains(out, depois) {
+			t.Errorf("continuou perguntando depois do fim da entrada (%q):\n%s", depois, out)
+		}
+	}
+}
+
+// A code given with --servico is not asked for.
+func TestOnboardInterativoRespeitaOServicoInformado(t *testing.T) {
+	comoTerminal(t)
+
+	out, _, err := onboardRespondendo(t, "4106902\nmei\n\nConsultoria\n", "--sem-rede", "--servico", "010101")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "Codigo do servico (") {
+		t.Errorf("perguntou o servico informado:\n%s", out)
 	}
 }
