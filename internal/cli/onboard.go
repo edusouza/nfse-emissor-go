@@ -304,11 +304,12 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 
 	// A municipality code that fails its own check digit is left pending rather
 	// than written: the field is the one mistake the Sefin does not catch.
-	if codigo, err := empresa.MunicipioIBGE(); err == nil {
-		data.municipio = codigo
+	codigoIBGE, errIBGE := empresa.MunicipioIBGE()
+	if errIBGE == nil {
+		data.municipio = codigoIBGE
 		data.origem("prestador.municipio", fonte)
 	} else if empresa.CodigoMunicipioIBGE != "" {
-		fmt.Fprintf(errOut, "aviso: o municipio do cadastro nao foi aproveitado: %v\n", err)
+		fmt.Fprintf(errOut, "aviso: o municipio do cadastro nao foi aproveitado: %v\n", errIBGE)
 	}
 
 	if regime, ok := config.TaxRegimeFromSimples(empresa.OpcaoPeloMEI, empresa.OpcaoPeloSimples); ok {
@@ -325,7 +326,12 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  Razao social\t%s\n", empresa.RazaoSocial)
 	if empresa.Municipio != "" {
-		fmt.Fprintf(tw, "  Municipio\t%s/%s (IBGE %s)\n", empresa.Municipio, empresa.UF, empresa.CodigoMunicipioIBGE)
+		// A code that was not written must not read as if it had been.
+		ibge := "IBGE " + codigoIBGE
+		if errIBGE != nil {
+			ibge = "IBGE nao conferido"
+		}
+		fmt.Fprintf(tw, "  Municipio\t%s/%s (%s)\n", empresa.Municipio, empresa.UF, ibge)
 	}
 	if data.regime != "" {
 		fmt.Fprintf(tw, "  Regime\t%s\n", data.regime)

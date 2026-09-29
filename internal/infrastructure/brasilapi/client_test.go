@@ -161,6 +161,7 @@ func TestMunicipioIBGE(t *testing.T) {
 		{nome: "codigo e UF conferem", codigo: "4106902", uf: "PR", quer: "4106902"},
 		{nome: "UF em minusculas", codigo: "4106902", uf: "pr", quer: "4106902"},
 		{nome: "sem UF na resposta", codigo: "4106902", quer: "4106902"},
+		{nome: "UF com espacos", codigo: "4106902", uf: " PR ", quer: "4106902"},
 		{nome: "codigo TOM de 4 digitos", codigo: "7535", uf: "PR", falha: true},
 		{nome: "digito verificador errado", codigo: "4106903", uf: "PR", falha: true},
 		{nome: "codigo de outra UF", codigo: "3550308", uf: "PR", falha: true},

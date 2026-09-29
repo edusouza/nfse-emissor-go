@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -131,11 +132,60 @@ func TestOnboardSemRede(t *testing.T) {
 	}
 }
 
-// The registry answering with the four-digit TOM code, or any code that fails
-// the IBGE check digit, must leave the field pending instead of writing a
-// municipality the Sefin would accept and the invoice would be wrong about.
+// municipioGravado matches prestador.municipio with a value in it.
+var municipioGravado = regexp.MustCompile(`(?m)^\s+municipio: "\d`)
+
+// A registry code that is not a usable IBGE code must leave the field pending
+// instead of writing a municipality the Sefin would accept and the invoice
+// would be wrong about.
 func TestOnboardMunicipioDoCadastroQueNaoConfere(t *testing.T) {
-	resposta := strings.Replace(respostaMEI, `"codigo_municipio_ibge": 3550308`, `"codigo_municipio_ibge": 7107`, 1)
+	cert := writeTestPFXSubject(t, onboardSubject, onboardPassword, time.Now().Add(300*24*time.Hour))
+
+	for _, c := range []struct {
+		nome, de, para string
+	}{
+		{"codigo TOM de 4 digitos", `"codigo_municipio_ibge": 3550308`, `"codigo_municipio_ibge": 7107`},
+		{"digito verificador errado", `"codigo_municipio_ibge": 3550308`, `"codigo_municipio_ibge": 3550309`},
+		{"codigo de outra UF", `"uf": "SP"`, `"uf": "RJ"`},
+	} {
+		t.Run(c.nome, func(t *testing.T) {
+			resposta := strings.Replace(respostaMEI, c.de, c.para, 1)
+			if resposta == respostaMEI {
+				t.Fatalf("a resposta de teste nao tem %s", c.de)
+			}
+			srv := registroFake(t, http.StatusOK, resposta)
+			path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+			out, err := runOnboard(t,
+				"--certificado", cert, "--senha", onboardPassword,
+				"--fonte", srv.URL, "--arquivo", path)
+			if err != nil {
+				t.Fatalf("onboard falhou: %v\n%s", err, out)
+			}
+
+			gerado, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("arquivo nao foi criado: %v", err)
+			}
+			if municipioGravado.Match(gerado) {
+				t.Errorf("um municipio que nao confere foi gravado:\n%s", gerado)
+			}
+			for _, want := range []string{"municipio do cadastro nao foi aproveitado", "nao conferido", "prestador.municipio"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("a saida nao traz %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+// A registry answer without a municipality is the ordinary "we do not know":
+// the field is pending, and there is nothing to warn about.
+func TestOnboardCadastroSemMunicipio(t *testing.T) {
+	resposta := strings.Replace(respostaMEI, `"codigo_municipio_ibge": 3550308`, `"codigo_municipio_ibge": null`, 1)
+	if resposta == respostaMEI {
+		t.Fatal("a resposta de teste nao tem codigo_municipio_ibge")
+	}
 	srv := registroFake(t, http.StatusOK, resposta)
 	cert := writeTestPFXSubject(t, onboardSubject, onboardPassword, time.Now().Add(300*24*time.Hour))
 	path := filepath.Join(t.TempDir(), "nfse.yaml")
@@ -146,18 +196,11 @@ func TestOnboardMunicipioDoCadastroQueNaoConfere(t *testing.T) {
 	if err != nil {
 		t.Fatalf("onboard falhou: %v\n%s", err, out)
 	}
-
-	gerado, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("arquivo nao foi criado: %v", err)
+	if strings.Contains(out, "nao foi aproveitado") {
+		t.Errorf("avisou sobre um municipio que nao veio:\n%s", out)
 	}
-	if strings.Contains(string(gerado), "7107") {
-		t.Errorf("o codigo TOM foi gravado como municipio:\n%s", gerado)
-	}
-	for _, want := range []string{"municipio do cadastro nao foi aproveitado", "prestador.municipio"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("a saida nao traz %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "prestador.municipio") {
+		t.Errorf("a saida nao lista o municipio como pendente:\n%s", out)
 	}
 }
 
