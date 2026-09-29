@@ -22,7 +22,6 @@ auxiliar que se entrega ao cliente, desenhado aqui conforme a NT 008.
 - **Validação XSD completa** e as regras que dependem do convênio do município
   com o Sistema Nacional — veja
   [o que a validação local cobre](#o-que-a-validação-local-cobre).
-- Um `onboard` interativo.
 
 ## Instalação
 
@@ -131,6 +130,21 @@ quem roda a própria instância do
 [minhareceita](https://docs.minhareceita.org). Se a consulta falhar, o arquivo
 é gravado assim mesmo com o que o certificado informou. Por quê:
 [ADR 0007](docs/decisoes/0007-preenchimento-da-configuracao.md).
+
+No terminal, o `onboard` pergunta o que a consulta não respondeu, e só isso:
+
+```
+Faltam alguns campos. Enter deixa o campo em branco, para preencher depois no arquivo.
+
+Serie da DPS [00001]:
+Codigo do servico (cTribNac, 6 digitos): 010701
+  Suporte tecnico em informatica, inclusive instalacao, configuracao e manutencao...
+Descricao padrao do servico, a que vai na nota: Suporte tecnico mensal
+```
+
+O regime tributário é explicado e nunca sugerido. Quando o cadastro não sabe,
+sugerir um valor seria adivinhar. `--nao-interativo` desliga as perguntas, e
+sem terminal (num script, por exemplo) elas nunca aparecem.
 
 Para informar o município — quando a consulta está desligada, falhou, ou o
 cadastro está desatualizado — use `--municipio`, com o código ou com o nome:

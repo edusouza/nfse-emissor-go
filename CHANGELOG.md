@@ -13,6 +13,26 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### `onboard` interativo ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14))
+
+- **No terminal, o `nfse onboard` pergunta o que a consulta não respondeu**, e
+  só isso: o que o certificado ou o cadastro público já disse não é perguntado
+  de novo. O arquivo sai completo, sem precisar abrir um editor.
+  - A série vem com a sugestão preenchida (`[00001]`).
+  - O **regime tributário** é explicado em duas linhas e **nunca sugerido**:
+    quando o cadastro diz que não sabe, sugerir seria adivinhar um campo que
+    vai em toda nota.
+  - O código do serviço é conferido na lista nacional e também não é
+    sugerido (ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md)).
+  - O município aceita o código ou "Cidade/UF", como o `--municipio`.
+  - Uma resposta inválida é perguntada de novo, no máximo três vezes. Enter
+    deixa o campo em branco e Ctrl-D encerra as perguntas; nos dois casos o
+    arquivo é gravado com o que se sabe.
+- **`--nao-interativo`** mantém o comportamento anterior, que continua sendo o
+  padrão quando não há terminal: o mesmo critério do prompt de senha.
+- `padroes.servico.descricao` passa a ser preenchida pelo `onboard`, quando
+  informada.
+
 ### Município informado à mão, sem tabela embutida ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11))
 
 O município era o único campo que o `onboard --sem-rede` deixava em branco
