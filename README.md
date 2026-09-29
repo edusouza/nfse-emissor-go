@@ -541,7 +541,6 @@ auxiliar. O portal também gera o seu, em
 
 | Versão | Entrega |
 |--------|---------|
-| v0.8.0 | DANFSe gerado aqui (NT 008) |
 | v0.9.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 

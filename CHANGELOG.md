@@ -13,6 +13,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.8.0] - 2026-09-29
+
+O DANFSe volta, agora gerado aqui. A NT 008 suspendeu a API do governo em
+03/08/2026 e passou a geração para quem emite; o `nfse danfse` desenha o
+documento inteiro a partir do XML da nota.
+Ver [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md) e
+[ADR 0012](docs/decisoes/0012-municipio-por-consulta.md).
+
 ### DANFSe gerado aqui ([#22](https://github.com/edusouza/nfse-emissor-go/issues/22))
 
 O leiaute inteiro da NT 008 sai em uma página A4.
