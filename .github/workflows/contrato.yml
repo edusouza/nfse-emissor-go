@@ -1,0 +1,40 @@
+name: Contrato dos servicos publicos
+
+# The onboard and danfse commands decode answers from two public services
+# whose contracts were written from documentation (issue #12, ADR 0012). The
+# unit tests use local fakes; this job holds the decoders to the real
+# services. It stays out of the main CI because a rate-limited public API is no
+# reason to fail an unrelated change — it runs when the clients change, weekly
+# to notice the services changing under us, and on demand.
+
+on:
+  pull_request:
+    paths:
+      - "internal/infrastructure/brasilapi/**"
+      - "internal/infrastructure/ibge/**"
+      - "pkg/codmun/**"
+      - ".github/workflows/contrato.yml"
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contrato:
+    name: BrasilAPI e IBGE
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Testes de contrato
+        env:
+          NFSE_TESTE_CONTRATO: "1"
+        run: go test -count=1 -run Contrato -v ./internal/infrastructure/brasilapi/ ./internal/infrastructure/ibge/
