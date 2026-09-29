@@ -131,6 +131,36 @@ func TestOnboardSemRede(t *testing.T) {
 	}
 }
 
+// The registry answering with the four-digit TOM code, or any code that fails
+// the IBGE check digit, must leave the field pending instead of writing a
+// municipality the Sefin would accept and the invoice would be wrong about.
+func TestOnboardMunicipioDoCadastroQueNaoConfere(t *testing.T) {
+	resposta := strings.Replace(respostaMEI, `"codigo_municipio_ibge": 3550308`, `"codigo_municipio_ibge": 7107`, 1)
+	srv := registroFake(t, http.StatusOK, resposta)
+	cert := writeTestPFXSubject(t, onboardSubject, onboardPassword, time.Now().Add(300*24*time.Hour))
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t,
+		"--certificado", cert, "--senha", onboardPassword,
+		"--fonte", srv.URL, "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+
+	gerado, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("arquivo nao foi criado: %v", err)
+	}
+	if strings.Contains(string(gerado), "7107") {
+		t.Errorf("o codigo TOM foi gravado como municipio:\n%s", gerado)
+	}
+	for _, want := range []string{"municipio do cadastro nao foi aproveitado", "prestador.municipio"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("a saida nao traz %q:\n%s", want, out)
+		}
+	}
+}
+
 // A registry outage is not a reason to send the user away empty-handed.
 func TestOnboardConsultaIndisponivelAindaGeraArquivo(t *testing.T) {
 	srv := registroFake(t, http.StatusBadGateway, "")

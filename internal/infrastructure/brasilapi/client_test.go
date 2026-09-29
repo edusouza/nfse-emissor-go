@@ -147,3 +147,39 @@ func TestHost(t *testing.T) {
 		}
 	}
 }
+
+// The two municipality codes in the response are easy to confuse, and taking
+// the wrong one would pass every check but the IBGE's own.
+func TestMunicipioIBGE(t *testing.T) {
+	casos := []struct {
+		nome   string
+		codigo digitos
+		uf     string
+		quer   string
+		falha  bool
+	}{
+		{nome: "codigo e UF conferem", codigo: "4106902", uf: "PR", quer: "4106902"},
+		{nome: "UF em minusculas", codigo: "4106902", uf: "pr", quer: "4106902"},
+		{nome: "sem UF na resposta", codigo: "4106902", quer: "4106902"},
+		{nome: "codigo TOM de 4 digitos", codigo: "7535", uf: "PR", falha: true},
+		{nome: "digito verificador errado", codigo: "4106903", uf: "PR", falha: true},
+		{nome: "codigo de outra UF", codigo: "3550308", uf: "PR", falha: true},
+		{nome: "campo ausente", codigo: "", uf: "PR", falha: true},
+	}
+
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			e := &Empresa{CodigoMunicipioIBGE: c.codigo, UF: c.uf}
+			codigo, err := e.MunicipioIBGE()
+			if c.falha {
+				if err == nil {
+					t.Errorf("MunicipioIBGE() = %q, esperava erro", codigo)
+				}
+				return
+			}
+			if err != nil || codigo != c.quer {
+				t.Errorf("MunicipioIBGE() = %q, %v; esperava %q", codigo, err, c.quer)
+			}
+		})
+	}
+}

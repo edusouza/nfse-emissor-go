@@ -302,9 +302,13 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 		data.origem("prestador.nome", fonte)
 	}
 
-	if codigo := empresa.CodigoMunicipioIBGE.String(); len(codigo) == 7 {
+	// A municipality code that fails its own check digit is left pending rather
+	// than written: the field is the one mistake the Sefin does not catch.
+	if codigo, err := empresa.MunicipioIBGE(); err == nil {
 		data.municipio = codigo
 		data.origem("prestador.municipio", fonte)
+	} else if empresa.CodigoMunicipioIBGE != "" {
+		fmt.Fprintf(errOut, "aviso: o municipio do cadastro nao foi aproveitado: %v\n", err)
 	}
 
 	if regime, ok := config.TaxRegimeFromSimples(empresa.OpcaoPeloMEI, empresa.OpcaoPeloSimples); ok {
