@@ -19,13 +19,19 @@ var (
 )
 
 // subjectAltNameCNPJ reads the CNPJ from the ICP-Brasil otherName in the
-// subjectAltName extension, or returns an empty string.
+// subjectAltName extension.
+//
+// found reports whether the extension holds a CNPJ otherName at all. When it
+// does, its answer is final: an entry that fails to decode or to validate, or
+// two entries naming different companies, make the certificate ambiguous, and
+// an ambiguous certificate returns "" rather than letting the common name
+// speak for it. DOC-ICP-04 allows a single entry of exactly fourteen digits.
 //
 // crypto/x509 parses only the DNS, e-mail, IP and URI alternative names and
-// drops otherName, so the extension is walked here. Anything that does not
-// decode is treated as absent: this is a fallback, and a malformed extension
-// is reason to ask the user for the CNPJ, not to fail.
-func subjectAltNameCNPJ(cert *x509.Certificate) string {
+// drops otherName, so the extension is walked here. It parses no more than
+// once per certificate, and x509.ParseCertificate already refuses a
+// certificate with two subjectAltName extensions.
+func subjectAltNameCNPJ(cert *x509.Certificate) (cnpj string, found bool) {
 	for _, ext := range cert.Extensions {
 		if !ext.Id.Equal(oidSubjectAltName) {
 			continue
@@ -33,7 +39,7 @@ func subjectAltNameCNPJ(cert *x509.Certificate) string {
 
 		var names []asn1.RawValue
 		if rest, err := asn1.Unmarshal(ext.Value, &names); err != nil || len(rest) > 0 {
-			return ""
+			return "", false
 		}
 
 		for _, name := range names {
@@ -42,16 +48,19 @@ func subjectAltNameCNPJ(cert *x509.Certificate) string {
 				continue
 			}
 			typeID, value, ok := parseOtherName(name.Bytes)
-			if !ok || !typeID.Equal(oidICPBrasilCNPJ) {
+			if typeID == nil || !typeID.Equal(oidICPBrasilCNPJ) {
 				continue
 			}
-			candidate := cnpjcpf.CleanCNPJ(value)
-			if cnpjcpf.ValidateCNPJ(candidate) {
-				return candidate
+
+			found = true
+			if !ok || !cnpjcpf.ValidateCNPJ(value) || (cnpj != "" && cnpj != value) {
+				return "", true
 			}
+			cnpj = value
 		}
+		return cnpj, found
 	}
-	return ""
+	return "", false
 }
 
 // parseOtherName decodes the body of an OtherName:
@@ -60,30 +69,43 @@ func subjectAltNameCNPJ(cert *x509.Certificate) string {
 //	    type-id    OBJECT IDENTIFIER,
 //	    value      [0] EXPLICIT ANY DEFINED BY type-id }
 //
-// DOC-ICP-04 specifies OCTET STRING for the ICP-Brasil values, but authorities
-// have been seen writing PrintableString and UTF8String, so any of the string
-// types is accepted and read as text.
-func parseOtherName(body []byte) (asn1.ObjectIdentifier, string, bool) {
-	var typeID asn1.ObjectIdentifier
+// typeID is returned whenever it decodes, so that a malformed value under the
+// CNPJ identifier is told apart from an otherName that is not ours. value is
+// accepted only as fourteen ASCII digits: DOC-ICP-04 specifies OCTET STRING,
+// but authorities have been seen writing PrintableString and UTF8String, so
+// any primitive string type is read. Nothing may follow the value.
+func parseOtherName(body []byte) (typeID asn1.ObjectIdentifier, value string, ok bool) {
 	rest, err := asn1.Unmarshal(body, &typeID)
 	if err != nil {
 		return nil, "", false
 	}
 
 	var wrapper asn1.RawValue
-	if _, err := asn1.Unmarshal(rest, &wrapper); err != nil ||
+	rest, err = asn1.Unmarshal(rest, &wrapper)
+	if err != nil || len(rest) > 0 ||
 		wrapper.Class != asn1.ClassContextSpecific || wrapper.Tag != 0 || !wrapper.IsCompound {
-		return nil, "", false
+		return typeID, "", false
 	}
 
-	var value asn1.RawValue
-	if _, err := asn1.Unmarshal(wrapper.Bytes, &value); err != nil || value.Class != asn1.ClassUniversal {
-		return nil, "", false
+	var raw asn1.RawValue
+	rest, err = asn1.Unmarshal(wrapper.Bytes, &raw)
+	if err != nil || len(rest) > 0 || raw.Class != asn1.ClassUniversal || raw.IsCompound {
+		return typeID, "", false
 	}
 
-	switch value.Tag {
+	switch raw.Tag {
 	case asn1.TagOctetString, asn1.TagPrintableString, asn1.TagUTF8String, asn1.TagIA5String:
-		return typeID, string(value.Bytes), true
+	default:
+		return typeID, "", false
 	}
-	return nil, "", false
+	// Checked before the digits, so that an oversized value costs nothing.
+	if len(raw.Bytes) != cnpjcpf.CNPJLength {
+		return typeID, "", false
+	}
+	for _, b := range raw.Bytes {
+		if b < '0' || b > '9' {
+			return typeID, "", false
+		}
+	}
+	return typeID, string(raw.Bytes), true
 }

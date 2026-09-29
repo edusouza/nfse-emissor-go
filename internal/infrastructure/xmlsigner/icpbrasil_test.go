@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
 )
 
 // Other ICP-Brasil identifiers that sit next to the CNPJ in the same
@@ -86,7 +88,14 @@ func certificateWithExtension(t *testing.T, cn string, sanValue []byte) *Certifi
 }
 
 func TestSubjectCNPJPeloSubjectAltName(t *testing.T) {
-	const cnpj = "12345678000195"
+	const (
+		cnpj       = "12345678000195"
+		outroCNPJ  = "11222333000181"
+		semDigitos = "12345678000100"
+	)
+	cnpjSAN := func(t *testing.T, tag int, valor string) asn1.RawValue {
+		return otherName(t, oidICPBrasilCNPJ, tag, valor)
+	}
 
 	tests := []struct {
 		name     string
@@ -96,20 +105,30 @@ func TestSubjectCNPJPeloSubjectAltName(t *testing.T) {
 		wantNome string
 	}{
 		{
-			name: "OCTET STRING, como o DOC-ICP-04 especifica",
-			cn:   "EMPRESA TESTE LTDA",
-			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilCNPJ, asn1.TagOctetString, cnpj)}
-			},
+			name:     "OCTET STRING, como o DOC-ICP-04 especifica",
+			cn:       "EMPRESA TESTE LTDA",
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, cnpj)} },
 			wantCNPJ: cnpj,
 			wantNome: "EMPRESA TESTE LTDA",
 		},
 		{
-			name: "PrintableString",
-			cn:   "EMPRESA TESTE LTDA",
-			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilCNPJ, asn1.TagPrintableString, cnpj)}
-			},
+			name:     "PrintableString",
+			cn:       "EMPRESA TESTE LTDA",
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagPrintableString, cnpj)} },
+			wantCNPJ: cnpj,
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name:     "UTF8String",
+			cn:       "EMPRESA TESTE LTDA",
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagUTF8String, cnpj)} },
+			wantCNPJ: cnpj,
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name:     "IA5String",
+			cn:       "EMPRESA TESTE LTDA",
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagIA5String, cnpj)} },
 			wantCNPJ: cnpj,
 			wantNome: "EMPRESA TESTE LTDA",
 		},
@@ -119,29 +138,20 @@ func TestSubjectCNPJPeloSubjectAltName(t *testing.T) {
 			names: func(t *testing.T) []asn1.RawValue {
 				return []asn1.RawValue{
 					dnsName("empresa.example"),
-					otherName(t, oidICPBrasilResponsavel, asn1.TagOctetString, "0101198012345678909000000000000000000000000000"),
-					otherName(t, oidICPBrasilCNPJ, asn1.TagOctetString, cnpj),
+					otherName(t, oidICPBrasilResponsavel, asn1.TagOctetString, outroCNPJ),
+					cnpjSAN(t, asn1.TagOctetString, cnpj),
 				}
 			},
 			wantCNPJ: cnpj,
 			wantNome: "EMPRESA TESTE LTDA",
 		},
 		{
-			name: "digitos verificadores errados",
+			// A valid CNPJ under a sibling identifier must never be taken for
+			// the holder's: those carry the responsible person's data.
+			name: "CNPJ valido sob outro OID",
 			cn:   "EMPRESA TESTE LTDA",
 			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilCNPJ, asn1.TagOctetString, "12345678000100")}
-			},
-			wantCNPJ: "",
-			wantNome: "EMPRESA TESTE LTDA",
-		},
-		{
-			// The responsible person's CPF must never be mistaken for the
-			// holder's CNPJ, even when it is the only number around.
-			name: "so os dados do responsavel",
-			cn:   "EMPRESA TESTE LTDA",
-			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilResponsavel, asn1.TagOctetString, "01011980"+cnpj)}
+				return []asn1.RawValue{otherName(t, oidICPBrasilResponsavel, asn1.TagOctetString, cnpj)}
 			},
 			wantCNPJ: "",
 			wantNome: "EMPRESA TESTE LTDA",
@@ -156,22 +166,90 @@ func TestSubjectCNPJPeloSubjectAltName(t *testing.T) {
 			wantNome: "FULANO DE TAL:12345678909",
 		},
 		{
-			// The common name is what every A1 in practice carries, so it
-			// is read first and wins a disagreement.
-			name: "common name tem precedencia",
-			cn:   "EMPRESA TESTE LTDA:11222333000181",
+			name: "digitos verificadores errados",
+			cn:   "EMPRESA TESTE LTDA",
 			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilCNPJ, asn1.TagOctetString, cnpj)}
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, semDigitos)}
 			},
-			wantCNPJ: "11222333000181",
+			wantCNPJ: "",
 			wantNome: "EMPRESA TESTE LTDA",
 		},
 		{
-			name: "valor de tipo inesperado",
+			// The Sefin identifies the signer by the subjectAltName, so a
+			// common name that disagrees with it does not get a say.
+			name:     "subjectAltName tem precedencia sobre o common name",
+			cn:       "EMPRESA TESTE LTDA:" + outroCNPJ,
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, cnpj)} },
+			wantCNPJ: cnpj,
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name:     "common name com digitos invalidos",
+			cn:       "EMPRESA TESTE LTDA:" + semDigitos,
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, cnpj)} },
+			wantCNPJ: cnpj,
+			wantNome: "EMPRESA TESTE LTDA:" + semDigitos,
+		},
+		{
+			// A CNPJ entry that is there but unreadable makes the certificate
+			// ambiguous; the common name does not get to fill the gap.
+			name: "entrada ilegivel nao cede ao common name",
+			cn:   "EMPRESA TESTE LTDA:" + outroCNPJ,
+			names: func(t *testing.T) []asn1.RawValue {
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, semDigitos)}
+			},
+			wantCNPJ: "",
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name:     "sem a entrada do CNPJ, vale o common name",
+			cn:       "EMPRESA TESTE LTDA:" + outroCNPJ,
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{dnsName("empresa.example")} },
+			wantCNPJ: outroCNPJ,
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name: "duas entradas com o mesmo CNPJ",
 			cn:   "EMPRESA TESTE LTDA",
 			names: func(t *testing.T) []asn1.RawValue {
-				return []asn1.RawValue{otherName(t, oidICPBrasilCNPJ, asn1.TagInteger, cnpj)}
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, cnpj), cnpjSAN(t, asn1.TagPrintableString, cnpj)}
 			},
+			wantCNPJ: cnpj,
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name: "duas entradas com CNPJs diferentes",
+			cn:   "EMPRESA TESTE LTDA",
+			names: func(t *testing.T) []asn1.RawValue {
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, cnpj), cnpjSAN(t, asn1.TagOctetString, outroCNPJ)}
+			},
+			wantCNPJ: "",
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name: "entrada invalida seguida de valida",
+			cn:   "EMPRESA TESTE LTDA",
+			names: func(t *testing.T) []asn1.RawValue {
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, semDigitos), cnpjSAN(t, asn1.TagOctetString, cnpj)}
+			},
+			wantCNPJ: "",
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			// Only fourteen digits are a CNPJ; stripping the rest would
+			// assemble one out of whatever text happens to hold digits.
+			name: "CNPJ formatado",
+			cn:   "EMPRESA TESTE LTDA",
+			names: func(t *testing.T) []asn1.RawValue {
+				return []asn1.RawValue{cnpjSAN(t, asn1.TagOctetString, "12.345.678/0001-95")}
+			},
+			wantCNPJ: "",
+			wantNome: "EMPRESA TESTE LTDA",
+		},
+		{
+			name:     "valor de tipo inesperado",
+			cn:       "EMPRESA TESTE LTDA",
+			names:    func(t *testing.T) []asn1.RawValue { return []asn1.RawValue{cnpjSAN(t, asn1.TagInteger, cnpj)} },
 			wantCNPJ: "",
 			wantNome: "EMPRESA TESTE LTDA",
 		},
@@ -191,36 +269,88 @@ func TestSubjectCNPJPeloSubjectAltName(t *testing.T) {
 	}
 }
 
+// cnpjOtherNameBytes builds the DER of an otherName by hand, for the layouts
+// asn1.Marshal refuses to produce.
+func cnpjOtherNameBytes(t *testing.T, wrapper []byte) []byte {
+	t.Helper()
+
+	typeID, err := asn1.Marshal(oidICPBrasilCNPJ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := append(typeID, wrapper...)
+	return append([]byte{0xa0, byte(len(body))}, body...)
+}
+
+func sanDe(itens ...[]byte) []byte {
+	var body []byte
+	for _, item := range itens {
+		body = append(body, item...)
+	}
+	return append([]byte{0x30, byte(len(body))}, body...)
+}
+
 // A certificate whose extension does not decode is a certificate without a
-// CNPJ in it, not a reason to fail.
+// CNPJ in it, not a reason to fail. Each case breaks exactly one layer, under
+// the right identifier, so it is that layer's check that has to refuse it.
 func TestSubjectCNPJComExtensaoMalformada(t *testing.T) {
-	for name, value := range map[string][]byte{
-		"vazia":             {0x30, 0x00},
-		"otherName sem OID": {0x30, 0x04, 0xa0, 0x02, 0x05, 0x00},
-		"otherName sem [0]": {0x30, 0x07, 0xa0, 0x05, 0x06, 0x03, 0x60, 0x4c, 0x01},
-	} {
-		t.Run(name, func(t *testing.T) {
+	const cnpj = "12345678000195"
+	octet := append([]byte{0x04, 14}, cnpj...)
+
+	valido := cnpjOtherNameBytes(t, append([]byte{0xa0, byte(len(octet))}, octet...))
+
+	casos := map[string][]byte{
+		"vazia":              {0x30, 0x00},
+		"sem OID":            sanDe([]byte{0xa0, 0x02, 0x05, 0x00}),
+		"sem o [0] do valor": sanDe(cnpjOtherNameBytes(t, nil)),
+		"valor sob [1]":      sanDe(cnpjOtherNameBytes(t, append([]byte{0xa1, byte(len(octet))}, octet...))),
+		// Context-specific [4] carries the same number as an OCTET STRING would.
+		"valor de contexto":     sanDe(cnpjOtherNameBytes(t, append([]byte{0xa0, byte(len(octet))}, append([]byte{0x84, 14}, cnpj...)...))),
+		"bytes depois do valor": sanDe(cnpjOtherNameBytes(t, append([]byte{0xa0, byte(len(octet) + 2)}, append(octet, 0x05, 0x00)...))),
+		"bytes depois do [0]":   sanDe(cnpjOtherNameBytes(t, append(append([]byte{0xa0, byte(len(octet))}, octet...), 0x05, 0x00))),
+		"bytes depois da lista": append(sanDe(valido), 0x00),
+		"GeneralName primitivo": sanDe(append([]byte{0x80, byte(len(valido) - 2)}, valido[2:]...)),
+		"OCTET STRING composta": sanDe(cnpjOtherNameBytes(t, append([]byte{0xa0, byte(len(octet))}, append([]byte{0x24, 14}, cnpj...)...))),
+		"mais de 14 digitos":    sanDe(cnpjOtherNameBytes(t, append([]byte{0xa0, 17}, append([]byte{0x04, 15}, cnpj+"0"...)...))),
+	}
+
+	// The valid layout must pass, or every refusal above proves nothing.
+	casos["controle"] = sanDe(valido)
+
+	for nome, value := range casos {
+		t.Run(nome, func(t *testing.T) {
 			info := &CertificateInfo{Certificate: &x509.Certificate{
 				Subject:    pkix.Name{CommonName: "EMPRESA TESTE LTDA"},
 				Extensions: []pkix.Extension{{Id: oidSubjectAltName, Value: value}},
 			}}
-			if got := info.SubjectCNPJ(); got != "" {
-				t.Errorf("SubjectCNPJ() = %q, esperava vazio", got)
+			want := ""
+			if nome == "controle" {
+				want = cnpj
+			}
+			if got := info.SubjectCNPJ(); got != want {
+				t.Errorf("SubjectCNPJ() = %q, esperava %q", got, want)
 			}
 		})
 	}
 }
 
 // The extension comes from a file the user hands over; no byte sequence in
-// it may panic the parser.
+// it may panic the parser, and whatever comes out must be a valid CNPJ.
 func FuzzSubjectAltNameCNPJ(f *testing.F) {
+	octet := append([]byte{0x04, 14}, "12345678000195"...)
+	typeID, _ := asn1.Marshal(oidICPBrasilCNPJ)
+	body := append(typeID, append([]byte{0xa0, byte(len(octet))}, octet...)...)
+	name := append([]byte{0xa0, byte(len(body))}, body...)
+
+	f.Add(append([]byte{0x30, byte(len(name))}, name...))
 	f.Add([]byte{0x30, 0x00})
 	f.Add([]byte{0x30, 0x04, 0xa0, 0x02, 0x05, 0x00})
 
 	f.Fuzz(func(t *testing.T, value []byte) {
 		cert := &x509.Certificate{Extensions: []pkix.Extension{{Id: oidSubjectAltName, Value: value}}}
-		if got := subjectAltNameCNPJ(cert); got != "" && len(got) != 14 {
-			t.Errorf("subjectAltNameCNPJ() = %q", got)
+		got, found := subjectAltNameCNPJ(cert)
+		if got != "" && (!found || !cnpjcpf.ValidateCNPJ(got) || len(got) != cnpjcpf.CNPJLength) {
+			t.Errorf("subjectAltNameCNPJ() = %q, %v", got, found)
 		}
 	})
 }
