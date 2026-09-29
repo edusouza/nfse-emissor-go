@@ -170,3 +170,84 @@ func TestOnboardInterativoRespeitaASerieInformada(t *testing.T) {
 		t.Errorf("perguntou a serie informada, ou nao a gravou:\n%s\n%s", out, gerado)
 	}
 }
+
+// An arrow key pressed to fix a typo arrives as ESC [ D; a Latin-1 terminal
+// sends bytes that are not UTF-8. Either would make a file config check
+// cannot read, so the answer is asked again.
+func TestOnboardInterativoRecusaCaracteresDeControle(t *testing.T) {
+	comoTerminal(t)
+
+	respostas := "4106902\nmei\n\n010101\n" +
+		"Consultoria\x1b[D TI\n" + // seta para a esquerda
+		"Consultoria \xe7\xe3o\n" + // Latin-1, nao UTF-8
+		"Consultoria em TI\n"
+
+	out, gerado, err := onboardRespondendo(t, respostas, "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(gerado, `descricao: "Consultoria em TI"`) {
+		t.Errorf("a descricao valida nao foi gravada:\n%s", gerado)
+	}
+	for _, want := range []string{"caractere de controle", "nao sao UTF-8"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("a saida nao explica %q:\n%s", want, out)
+		}
+	}
+}
+
+// A municipality typed at the prompt is recorded as typed, not as the flag.
+func TestOnboardInterativoOrigemDoMunicipio(t *testing.T) {
+	comoTerminal(t)
+
+	out, gerado, err := onboardRespondendo(t, "4106902\n\n\n\n\n", "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(gerado, "prestador.municipio: digitado no terminal") {
+		t.Errorf("a origem do municipio ficou errada:\n%s", gerado)
+	}
+	if strings.Contains(gerado, "prestador.municipio: --municipio") {
+		t.Errorf("registrou uma flag que nao foi usada:\n%s", gerado)
+	}
+}
+
+// Three wrong series keep the suggested one, and the message says so.
+func TestOnboardInterativoSerieInvalidaFicaASugerida(t *testing.T) {
+	comoTerminal(t)
+
+	out, gerado, err := onboardRespondendo(t, "4106902\nmei\n1\n2\n3\n", "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Fica o valor sugerido, 00001") || !strings.Contains(gerado, `serie: "00001"`) {
+		t.Errorf("a serie sugerida nao ficou, ou a mensagem nao diz:\n%s\n%s", out, gerado)
+	}
+}
+
+// The questions go to stderr, like the password prompt, so that redirecting
+// stdout does not leave the user answering an invisible prompt.
+func TestOnboardInterativoPerguntaNoStderr(t *testing.T) {
+	comoTerminal(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand()
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetIn(strings.NewReader("4106902\n"))
+	root.SetArgs([]string{"onboard", "--certificado", certificadoDeTeste(t), "--senha", onboardPassword,
+		"--arquivo", filepath.Join(t.TempDir(), "nfse.yaml"), "--sem-rede",
+		"--cache-municipios", filepath.Join(t.TempDir(), "municipios.json")})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("onboard falhou: %v\n%s%s", err, stdout.String(), stderr.String())
+	}
+
+	if !strings.Contains(stderr.String(), "Municipio (codigo IBGE ou Cidade/UF):") {
+		t.Errorf("a pergunta nao foi para o stderr:\n%s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "Municipio (codigo IBGE") {
+		t.Errorf("a pergunta foi para o stdout:\n%s", stdout.String())
+	}
+}
