@@ -235,3 +235,35 @@ func TestDocumentosQueNaoSaoDPS(t *testing.T) {
 		})
 	}
 }
+
+// Carried over from the hand-written validator's tests: a cancellation code
+// ("1") is a non-empty string and would pass a presence check; only the
+// TSCodJustSubst enumeration refuses it. The key must be 50 digits.
+func TestSubstForaDoSchema(t *testing.T) {
+	base := dpsDoEmissor(t, func(c *xmlbuilder.DPSConfig) {
+		c.Substitution = &xmlbuilder.DPSSubstitution{
+			AccessKey:  "41069022212345678000195000000000000126081234567890",
+			ReasonCode: xmlbuilder.SubstReasonOther,
+			ReasonText: "Valor do servico informado errado na nota original",
+		}
+	})
+
+	casos := map[string]struct{ de, para, caminho string }{
+		"codigo de cancelamento": {"<cMotivo>99</cMotivo>", "<cMotivo>1</cMotivo>", "/DPS/infDPS/subst/cMotivo"},
+		"chave curta":            {"41069022212345678000195000000000000126081234567890", "123", "/DPS/infDPS/subst/chSubstda"},
+		"chave com prefixo":      {"<chSubstda>", "<chSubstda>NFS", "/DPS/infDPS/subst/chSubstda"},
+		"chave longa":            {"</chSubstda>", "9</chSubstda>", "/DPS/infDPS/subst/chSubstda"},
+		"motivo curto":           {"Valor do servico informado errado na nota original", "curto", "/DPS/infDPS/subst/xMotivo"},
+	}
+	for nome, c := range casos {
+		t.Run(nome, func(t *testing.T) {
+			if !strings.Contains(base, c.de) {
+				t.Fatalf("a DPS de base nao contem %q", c.de)
+			}
+			erros := validarDPS(t, strings.Replace(base, c.de, c.para, 1))
+			if len(erros) == 0 || erros[0].Caminho != c.caminho {
+				t.Errorf("esperava erro em %s; veio %v", c.caminho, erros)
+			}
+		})
+	}
+}
