@@ -28,6 +28,7 @@ go build -o nfse ./cmd/nfse   # compilar
 go test -short ./...          # testes rápidos (~2s) — use durante o desenvolvimento
 go test ./...                 # suíte completa (~75s, inclui testes de backoff)
 go test -race ./...           # o que a CI roda
+NFSE_TESTE_CONTRATO=1 go test -run Contrato ./internal/infrastructure/...  # serviços reais
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
 ```
@@ -53,6 +54,7 @@ pkg/                       utilidades reutilizáveis fora do projeto
   xmlbuilder/              montagem do XML da DPS
   cnpjcpf/                 validação de CNPJ/CPF
   dpsid/                   identificador da DPS (42 caracteres)
+  codmun/                  código de município do IBGE: UF e dígito verificador
 ```
 
 **Fluxo de uma emissão:** dados do usuário → montar XML da DPS → validar →

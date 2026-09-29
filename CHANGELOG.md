@@ -13,6 +13,28 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### Município do cadastro conferido antes de ir para o arquivo ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12))
+
+O `onboard` confiava no campo `codigo_municipio_ibge` da BrasilAPI sem
+conferir nada além do tamanho. A resposta traz também `codigo_municipio`, o
+código TOM de quatro dígitos da Receita, e um campo trocado mandaria toda nota
+para o município errado — com a Sefin aceitando, porque qualquer código válido
+passa.
+
+- **O código do município vem conferido pelo dígito verificador do IBGE** e
+  pela UF que a mesma resposta informa. Um código que não confere fica
+  pendente, com aviso, em vez de ir para o `nfse.yaml`.
+- **`pkg/codmun`** traz essa conferência sem carregar a tabela de municípios
+  no binário ([ADR 0012](docs/decisoes/0012-municipio-por-consulta.md)): o
+  código tem o prefixo da UF e um dígito verificador, e isso basta para pegar
+  um dígito trocado. Os nove municípios que o IBGE numerou sem dígito válido
+  estão listados, e um teste confere o algoritmo contra os 5570 códigos do
+  `ANEXO_A` oficial.
+- **Testes de contrato** contra a BrasilAPI e o serviço de localidades do
+  IBGE, desligados por padrão (`NFSE_TESTE_CONTRATO=1`). Um workflow novo os
+  roda quando os clientes mudam, toda segunda-feira e sob demanda — é a
+  verificação que o ambiente onde o código foi escrito nunca conseguiu fazer.
+
 ### IBS/CBS: a pergunta respondida, e um aviso ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21))
 
 - **Quando um MEI ou ME/EPP precisa declarar IBS/CBS:** pelo ANEXO I v1.01, o
