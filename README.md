@@ -568,7 +568,6 @@ auxiliar. O portal também gera o seu, em
 
 | Versão | Entrega |
 |--------|---------|
-| v0.9.0 | `onboard` interativo e código IBGE offline |
 | v1.0.0 | Depois de uma emissão confirmada em produção, com valor fiscal |
 
 O que já foi entregue está no [CHANGELOG](CHANGELOG.md); o plano, na
