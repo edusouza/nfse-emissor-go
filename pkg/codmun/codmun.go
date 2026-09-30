@@ -46,6 +46,17 @@ func UF(codigo string) string {
 	return ufPorPrefixo[codigo[:2]]
 }
 
+// UFExiste reports whether sigla is the abbreviation of one of the 27
+// federative units, in upper case.
+func UFExiste(sigla string) bool {
+	for _, uf := range ufPorPrefixo {
+		if uf == sigla {
+			return true
+		}
+	}
+	return false
+}
+
 // Validar reports why codigo cannot be an IBGE municipality code, or nil.
 //
 // A code that passes may still be the wrong municipality — only a lookup can

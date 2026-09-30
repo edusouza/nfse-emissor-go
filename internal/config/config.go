@@ -22,6 +22,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
+	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
 
 // Environment names accepted in the "ambiente" field.
@@ -333,8 +334,10 @@ func (c *Config) Validate() error {
 	}
 	if c.Prestador.Municipio == "" {
 		problems = append(problems, "prestador.municipio: obrigatorio (codigo IBGE de 7 digitos)")
-	} else if len(c.Prestador.Municipio) != 7 {
-		problems = append(problems, fmt.Sprintf("prestador.municipio: %q nao tem 7 digitos", c.Prestador.Municipio))
+	} else if err := codmun.Validar(c.Prestador.Municipio); err != nil {
+		// The Sefin accepts any valid code, so a mistyped digit would put
+		// every invoice in the wrong municipality without a rejection.
+		problems = append(problems, "prestador.municipio: "+err.Error())
 	}
 
 	switch c.Prestador.RegimeTributario {

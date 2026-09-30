@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/edusouza/nfse-emissor-go/pkg/cnpjcpf"
+	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
 
 // CompetenciaLayout is the date format accepted in the "competencia" field.
@@ -117,6 +118,12 @@ func (n Nota) Validate() error {
 	} else if len(n.Servico.CodigoTributacaoNacional) != 6 {
 		problems = append(problems, fmt.Sprintf("servico.codigo_tributacao_nacional: %q deve ter 6 digitos",
 			n.Servico.CodigoTributacaoNacional))
+	}
+
+	if m := n.Servico.MunicipioPrestacao; m != "" {
+		if err := codmun.Validar(m); err != nil {
+			problems = append(problems, "servico.municipio_prestacao: "+err.Error())
+		}
 	}
 
 	if n.Servico.Descricao == "" {
