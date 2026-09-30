@@ -16,6 +16,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Adicionado
 
 - Especificação OpenAPI oficial da API de Parâmetros Municipais do ADN em `docs/api/adn-parametrizacao-swagger.json` ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+- `docs/convenio-municipal.md` documenta o que o swagger não diz, conferido no serviço real: o código completo do serviço (`01.07.01.000`), a competência em `AAAA-MM-DD`, a alíquota em percentual e os dois formatos de erro ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 
 ### Corrigido
 
