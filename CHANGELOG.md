@@ -2,7 +2,7 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
-O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
+O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 > **Sobre a numeração:** a `1.0.0` no fim deste arquivo é a API REST anterior,
@@ -28,10 +28,18 @@ Ver [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md), [ADR 0014](
 - Opções `--fonte-municipios` e `--cache-municipios` no `onboard` ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
 - `pkg/codmun` confere um código de município pelo prefixo da UF e pelo dígito verificador, sem embutir a tabela ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12)).
 - Testes de contrato contra a BrasilAPI e o IBGE (`NFSE_TESTE_CONTRATO=1`), rodados por um workflow semanal ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12)).
-- O CNPJ do certificado é lido do `subjectAltName` (OID 2.16.76.1.3.3), com o *common name* como reserva ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
-- Um certificado com CNPJs divergentes ou ilegíveis na extensão é recusado como ambíguo, sem escolher um lado ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
-- A DPS é validada contra os XSDs oficiais do pacote v1.01, por um validador em Go puro, com todos os problemas de uma vez ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
 - O `emitir` avisa quando a competência é de 2027 em diante, quando o grupo IBS/CBS passa a ser obrigatório no Simples ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21)).
+
+### Modificado
+
+- O CNPJ do certificado passa a ser lido do `subjectAltName` (OID 2.16.76.1.3.3), onde a Sefin o lê; o *common name* vira reserva ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
+- Um certificado com CNPJs divergentes ou ilegíveis na extensão é recusado como ambíguo, sem escolher um lado ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
+- A DPS passa a ser validada contra os XSDs oficiais do pacote v1.01, por um validador em Go puro, com todos os problemas de uma vez ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+
+### Removido
+
+- O validador estrutural escrito à mão (`validation.StructuralValidator`), substituído pela validação pelo XSD ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+- Os montadores de endereço sem uso de `pkg/xmlbuilder` (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`, `AddressFromDomain`) ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
 
 ### Corrigido
 
@@ -42,11 +50,6 @@ Ver [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md), [ADR 0014](
 - O cache de municípios, também usado pelo `nfse danfse`, aceitava entradas adulteradas sem conferir código e UF ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
 - A conferência do `emitir` e do `enviar` comparava o CNPJ do *common name*, e não o da extensão, que é o que a Sefin compara ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
 - O `nfse.yaml` gerado pelo `onboard` podia sair ilegível com um caractere que o YAML não aceita, vindo do cadastro ou do certificado ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
-
-### Removido
-
-- O validador estrutural escrito à mão (`validation.StructuralValidator`), substituído pela validação pelo XSD ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
-- Os montadores de endereço sem uso de `pkg/xmlbuilder` (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`, `AddressFromDomain`) ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
 
 ## [0.8.0] - 2026-09-29
 
@@ -799,3 +802,12 @@ histórico; o código correspondente está no histórico do git.
 - Assinatura XMLDSig (RSA-SHA256, canonicalização exc-c14n) e leitura de
   certificados A1.
 - Montagem do XML da DPS, cálculo de valores e tradução de códigos de rejeição.
+
+[Não lançado]: https://github.com/edusouza/nfse-emissor-go/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/edusouza/nfse-emissor-go/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/edusouza/nfse-emissor-go/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/edusouza/nfse-emissor-go/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/edusouza/nfse-emissor-go/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/edusouza/nfse-emissor-go/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/edusouza/nfse-emissor-go/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/edusouza/nfse-emissor-go/releases/tag/v0.5.0
