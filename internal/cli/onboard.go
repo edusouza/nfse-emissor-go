@@ -368,8 +368,11 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	if empresa.Municipio != "" {
 		// A code that was not written must not read as if it had been.
 		ibge := "IBGE " + codigoIBGE
-		if errIBGE != nil {
+		switch {
+		case errIBGE != nil:
 			ibge = "IBGE nao conferido"
+		case data.municipio != codigoIBGE:
+			ibge += ", nao usado"
 		}
 		fmt.Fprintf(tw, "  Municipio\t%s/%s (%s)\n", empresa.Municipio, empresa.UF, ibge)
 	}
