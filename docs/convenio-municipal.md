@@ -8,9 +8,11 @@ mudam o que a sua DPS pode declarar.
 
 Duas regras de alíquota do ISS dependem disso: E0635 e E0640, que valem para um
 ME/EPP do Simples que apura o ISSQN fora do Simples (`regime_apuracao`
-`iss-municipio` ou `fora-do-sn`). O `nfse emitir` não opina nesses dois casos
-justamente porque a resposta não está na máquina — está no convênio. Veja
-[ADR 0006](decisoes/0006-validacao-de-aliquota-do-iss.md).
+`iss-municipio` ou `fora-do-sn`). A resposta não está na máquina, está no
+convênio, então o `nfse emitir` consulta o ADN antes de assinar, nesse regime e
+só nele, e recusa a DPS que a Sefin rejeitaria. Se a consulta falhar, ele avisa
+e deixa as regras para a Sefin. Veja a
+[ADR 0018](decisoes/0018-emitir-confere-o-convenio.md).
 
 ## 1. A consulta oficial (API de Parâmetros Municipais)
 

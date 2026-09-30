@@ -1,6 +1,7 @@
 # 0006 — Validar a alíquota do ISS antes de enviar
 
-**Status:** Aceita
+**Status:** Aceita. E0635 e E0640 passaram a ser conferidas pela
+[ADR 0018](0018-emitir-confere-o-convenio.md), que consulta o convênio no ADN.
 **Data:** 2026-09-18
 
 ## Contexto
