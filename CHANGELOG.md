@@ -13,6 +13,17 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+## [0.9.0] - 2026-09-30
+
+O `onboard` completa o `nfse.yaml` no terminal, aceita o município pelo nome e
+confere o que vem do cadastro público antes de gravar. O CNPJ do certificado
+passa a ser lido de onde a Sefin o lê. E a DPS passa a ser validada contra os
+XSDs oficiais, o que achou no primeiro dia uma DPS recusável em toda emissão
+com `--deducoes`.
+Ver [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md),
+[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md) e
+[ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md).
+
 ### `onboard` interativo ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14))
 
 - **No terminal, o `nfse onboard` pergunta o que a consulta não respondeu**, e
@@ -140,7 +151,7 @@ XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
   travessão que editores de texto inserem sozinhos, por exemplo) ou um espaço
   no começo ou no fim.
 
-### Corrigido
+#### Corrigido pelo validador novo
 
 - **`--deducoes` gerava uma DPS que a Sefin recusa.** O grupo `vDedRed` aceita
   o valor (`vDR`) **ou** o percentual (`pDR`), e o emissor escrevia os dois. O
@@ -151,7 +162,7 @@ XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
   `UF`, `CEP` e `cPais` soltos depois da rua. Nenhum caminho do CLI monta
   endereço hoje. Também achado pelo validador.
 
-### Removido
+#### Removido
 
 - O validador estrutural escrito à mão (`validation.StructuralValidator`). A
   fixture "válida" dele falhava no schema real de três jeitos.
