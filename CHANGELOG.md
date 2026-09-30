@@ -15,11 +15,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Adicionado
 
+- `nfse parametros <municipio> <servico>` consulta no ADN se o convênio do município está ativo e qual alíquota do ISSQN ele parametrizou para o serviço: a vigente com `--competencia`, o histórico sem ela. Aceita o `cTribNac` e monta o código completo, com `--complemento` quando o município criou código próprio ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - Especificação OpenAPI oficial da API de Parâmetros Municipais do ADN em `docs/api/adn-parametrizacao-swagger.json` ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - `docs/convenio-municipal.md` documenta o que o swagger não diz, conferido no serviço real: o código completo do serviço (`01.07.01.000`), a competência em `AAAA-MM-DD`, a alíquota em percentual e os dois formatos de erro ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 
 ### Corrigido
 
+- `docs/convenio-municipal.md` mandava um ME/EPP que apura o ISSQN pelo município copiar a alíquota do ADN para `iss_aliquota` quando o convênio está ativo, justamente o caso em que a Sefin rejeita a alíquota informada (E0635). Agora diz para não informar com o convênio ativo e para informar com ele inativo (E0640) ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 
 ## [0.9.0] - 2026-09-30
