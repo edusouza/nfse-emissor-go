@@ -41,6 +41,12 @@ valor ser usado: um *common name* que termina em quatorze dígitos não é
 evidência suficiente para preencher um documento fiscal. Quem ainda não tem o
 A1 em mãos passa `--cnpj`.
 
+> **Revisto em [#13](https://github.com/edusouza/nfse-emissor-go/issues/13):**
+> o CNPJ é lido primeiro do `otherName` de OID 2.16.76.1.3.3 da extensão
+> `subjectAltName`, o lugar que o DOC-ICP-04 define e por onde a Sefin
+> identifica quem assina (o ANEXO I recusa um certificado sem ele). O *common
+> name* ficou como reserva.
+
 **O resto vem de uma consulta ao cadastro público**, pela
 [BrasilAPI](https://brasilapi.com.br) (`/api/cnpj/v1/{cnpj}`), que serve os
 dados abertos da Receita Federal. De lá vêm razão social, `codigo_municipio_ibge`

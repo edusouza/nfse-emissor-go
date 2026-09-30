@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -129,6 +131,55 @@ func TestOnboardSemRede(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("a saida nao lista %q como pendente:\n%s", want, out)
 		}
+	}
+}
+
+// An authority that leaves the CNPJ out of the common name still writes it
+// where DOC-ICP-04 puts it, in the subjectAltName, and onboard reads it there.
+func TestOnboardCNPJPeloSubjectAltName(t *testing.T) {
+	cert := writeTestPFXExtensions(t, "EMPRESA TESTE LTDA", onboardPassword,
+		time.Now().Add(300*24*time.Hour), icpBrasilCNPJExtension(t, onboardCNPJ))
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+
+	out, err := runOnboard(t,
+		"--certificado", cert, "--senha", onboardPassword,
+		"--sem-rede", "--arquivo", path)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+
+	gerado, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("arquivo nao foi criado: %v", err)
+	}
+	for _, want := range []string{`cnpj: "12345678000195"`, "EMPRESA TESTE LTDA"} {
+		if !strings.Contains(string(gerado), want) {
+			t.Errorf("o arquivo nao traz %q:\n%s", want, gerado)
+		}
+	}
+}
+
+// icpBrasilCNPJExtension builds a subjectAltName holding only the ICP-Brasil
+// otherName for the CNPJ, OID 2.16.76.1.3.3, with an OCTET STRING value.
+func icpBrasilCNPJExtension(t *testing.T, cnpj string) pkix.Extension {
+	t.Helper()
+
+	mustMarshal := func(v any) []byte {
+		b, err := asn1.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	value := mustMarshal(asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagOctetString, Bytes: []byte(cnpj)})
+	explicit := mustMarshal(asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: value})
+	typeID := mustMarshal(asn1.ObjectIdentifier{2, 16, 76, 1, 3, 3})
+	otherName := asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: append(typeID, explicit...)}
+
+	return pkix.Extension{
+		Id:    asn1.ObjectIdentifier{2, 5, 29, 17},
+		Value: mustMarshal([]asn1.RawValue{otherName}),
 	}
 }
 

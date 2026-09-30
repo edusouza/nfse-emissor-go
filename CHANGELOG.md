@@ -35,6 +35,30 @@ passa.
   roda quando os clientes mudam, toda segunda-feira e sob demanda — é a
   verificação que o ambiente onde o código foi escrito nunca conseguiu fazer.
 
+### CNPJ do certificado lido da extensão `subjectAltName` ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13))
+
+O emissor lia só o *common name* no formato `RAZÃO SOCIAL:CNPJ`, e uma AC que
+gravasse o titular de outro jeito deixava o `nfse onboard --certificado` sem
+CNPJ. O lugar normativo é o `otherName` de OID 2.16.76.1.3.3, definido no
+DOC-ICP-04 — e é por ele que a Sefin identifica quem assina: o ANEXO I recusa
+a assinatura de um certificado que não o traga. Por isso ele passa a ser lido
+**primeiro**, e o *common name* fica como reserva para certificados fora do
+ICP-Brasil, como o de teste em `exemplos/`.
+
+- **A conferência do `emitir` e do `enviar`**, que recusa assinar com o
+  certificado de outro prestador, compara agora o mesmo número que a Sefin
+  vai comparar. Um *common name* que discorde da extensão não passa mais por
+  ela.
+- **Só esse identificador é lido:** os vizinhos dele trazem o CPF do
+  responsável, que nunca pode passar pelo CNPJ da empresa.
+- **A leitura é estrita.** O valor precisa ter exatamente 14 dígitos, sem nada
+  antes ou depois; duas entradas com CNPJs diferentes, ou uma entrada
+  ilegível, tornam o certificado ambíguo. O emissor não escolhe um lado: o
+  `onboard` pede `--cnpj`, e o `emitir` e o `enviar` recusam assinar com esse
+  certificado.
+- **Sem dependência nova:** a extensão é decodificada com `encoding/asn1`, e um
+  alvo de *fuzzing* garante que nenhum certificado derruba o parser.
+
 ### IBS/CBS: a pergunta respondida, e um aviso ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21))
 
 - **Quando um MEI ou ME/EPP precisa declarar IBS/CBS:** pelo ANEXO I v1.01, o
