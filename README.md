@@ -61,6 +61,7 @@ funcionando sem ter um A1 em mãos. Em duas versões:
 | `nfse emitir` | monta, valida, assina e — com `--enviar` — transmite |
 | `nfse enviar <arquivo.xml>` | transmite uma DPS que já foi gerada e assinada |
 | `nfse consultar <chave>` | busca a NFS-e, ou a chave a partir do identificador da DPS |
+| `nfse parametros <municipio> <servico>` | consulta o convênio do município e a alíquota de ISS que ele parametrizou |
 | `nfse danfse <arquivo.xml>` | gera o DANFSe em PDF a partir do XML da nota |
 | `nfse cancelar <chave>` | registra o evento de cancelamento |
 | `nfse numero ver` / `definir` | consulta e ajusta o contador da série |
@@ -312,7 +313,41 @@ Os valores são `nao` (padrão), `tomador` e `intermediario`.
 Um ME/EPP que apura o ISSQN fora do Simples declara isso em
 `prestador.regime_apuracao` (`sn`, `iss-municipio` ou `fora-do-sn`). Nesses dois
 últimos casos a regra depende do convênio do município com o Sistema Nacional,
-que não dá para saber sem consultar a Sefin, então o comando não opina — veja
+e o `emitir` ainda não o consulta. Consulte você mesmo com o `nfse parametros`:
+
+| Convênio do município | Alíquota |
+|---|---|
+| ativo | não pode informar (E0635) — a Sefin aplica a parametrizada |
+| inativo | **precisa** informar (E0640) |
+
+### Consultar o convênio e a alíquota do município
+
+O `nfse parametros` pergunta ao ADN, a parte do Sistema Nacional que guarda as
+parametrizações de cada município, se o convênio está ativo e qual alíquota do
+ISSQN o município definiu para o serviço:
+
+```bash
+nfse parametros 4106902 010701 --competencia 2026-09-01
+nfse parametros Curitiba/PR 01.07.01          # sem competência: o histórico inteiro
+```
+
+```
+  Municipio    Curitiba/PR (IBGE 4106902)
+  Convenio     ativo (emissor nacional: sim, ambiente nacional: sim)
+  Servico      01.07.01.000  Suporte técnico em informática, ...
+  Competencia  01/09/2026
+
+Aliquota do ISSQN na competencia
+  5,00%     de 02/01/2023 em diante     incidencia SIM
+```
+
+O serviço é o `cTribNac`. O ADN o identifica com mais três dígitos, o
+complemento municipal, que é `000` a menos que o município tenha criado um
+código próprio abaixo do serviço: nesse caso, informe-o com `--complemento`.
+
+A consulta usa o certificado A1 da configuração, como as da Sefin, e o ambiente
+dela. **Em `producao-restrita` os dados são de teste**; a alíquota que vale é a
+de produção. Os detalhes da API estão em
 [docs/convenio-municipal.md](docs/convenio-municipal.md).
 
 ### Enviar para a Sefin Nacional
@@ -583,7 +618,9 @@ internal/
     esquema/       validação contra os XSDs oficiais, embutidos
   infrastructure/
     xmlsigner/     assinatura XMLDSig e leitura do certificado A1
+    mtls/          cliente HTTP com TLS mútuo, comum à Sefin e ao ADN
     sefin/         cliente da API do governo
+    parametrizacao/ parâmetros municipais do ADN (convênio e alíquotas)
     brasilapi/     consulta do cadastro publico de CNPJ (so no `onboard`)
     ibge/          municipios do IBGE, com cache (`danfse` e `onboard --municipio`)
 pkg/
@@ -620,6 +657,14 @@ NFSE_TESTE_CONTRATO=1 go test -run Contrato -v ./internal/infrastructure/brasila
 NFSE_TESTE_CONTRATO=1 NFSE_TESTE_CNPJ_MEI=<cnpj> go test -run Contrato -v ./internal/infrastructure/brasilapi/
 ```
 
+O ADN só responde a quem apresenta um A1 da ICP-Brasil, então o contrato da
+parametrização precisa de um certificado e não roda na CI:
+
+```bash
+NFSE_TESTE_CONTRATO=1 NFSE_TESTE_CERT=certificado.pfx NFSE_CERT_SENHA=... \
+  go test -run Contrato -v ./internal/infrastructure/parametrizacao/
+```
+
 ## O que a validação local cobre
 
 O CLI valida a DPS antes de assinar, em duas camadas.
@@ -646,10 +691,10 @@ regras de alíquota do ISS que dependem só do regime do prestador (E0595,
 E0600, E0621, E0625) e o dígito verificador de CNPJ, CPF e código de
 município.
 
-O que fica de fora de propósito são as parametrizações municipais: as regras
-que dependem do convênio do município (E0635, E0640) só a Sefin conhece. A
-palavra final é sempre do governo. Veja a issue
-[#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
+O que fica de fora, por enquanto, são as regras que dependem do convênio do
+município (E0635, E0640). O `nfse parametros` responde a pergunta, mas o
+`emitir` ainda não a faz sozinho. A palavra final é sempre do governo. Veja a
+issue [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
 
 ## Glossário
 
