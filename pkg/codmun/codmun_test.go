@@ -1,12 +1,10 @@
 package codmun
 
 import (
-	"archive/zip"
-	"encoding/xml"
-	"io"
-	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/edusouza/nfse-emissor-go/internal/anexoa"
 )
 
 func TestValidar(t *testing.T) {
@@ -69,9 +67,18 @@ func TestUF(t *testing.T) {
 	}
 }
 
-// anexoA is the official municipality table of the Sistema Nacional, versioned
-// in docs/anexos. It is read by the test only; the binary does not carry it.
-const anexoA = "../../docs/anexos/ANEXO_A-MUNICIPIO_IBGE-PAISES_ISO2-v1.00-SNNFSe-20251210.xlsx"
+func TestUFExiste(t *testing.T) {
+	for _, uf := range ufPorPrefixo {
+		if !UFExiste(uf) {
+			t.Errorf("UFExiste(%q) = false", uf)
+		}
+	}
+	for _, uf := range []string{"pr", "XX", "", "P", "PRR"} {
+		if UFExiste(uf) {
+			t.Errorf("UFExiste(%q) = true", uf)
+		}
+	}
+}
 
 // Every code in the official table must pass, and the check-digit exceptions
 // must be exactly the codes the table has that fail the algorithm — a code
@@ -126,15 +133,12 @@ var siglaPorNome = map[string]string{
 	"Goiás": "GO", "Distrito Federal": "DF",
 }
 
-type linhaAnexoA struct {
-	nomeUF string
-	codigo string
-}
-
 func codigosDoAnexoA(t *testing.T) []string {
+	t.Helper()
+
 	var codigos []string
-	for _, l := range linhasDoAnexoA(t) {
-		codigos = append(codigos, l.codigo)
+	for _, m := range lerAnexoA(t) {
+		codigos = append(codigos, m.Codigo)
 	}
 	return codigos
 }
@@ -142,104 +146,27 @@ func codigosDoAnexoA(t *testing.T) []string {
 // ufsDoAnexoA maps each code prefix to the state name the annex gives it, and
 // fails if one prefix appears under two names.
 func ufsDoAnexoA(t *testing.T) map[string]string {
+	t.Helper()
+
 	ufs := map[string]string{}
-	for _, l := range linhasDoAnexoA(t) {
-		prefixo := l.codigo[:2]
-		if nome, ok := ufs[prefixo]; ok && nome != l.nomeUF {
-			t.Fatalf("prefixo %s aparece como %q e %q no ANEXO_A", prefixo, nome, l.nomeUF)
+	for _, m := range lerAnexoA(t) {
+		prefixo := m.Codigo[:2]
+		if nome, ok := ufs[prefixo]; ok && nome != m.NomeUF {
+			t.Fatalf("prefixo %s aparece como %q e %q no ANEXO_A", prefixo, nome, m.NomeUF)
 		}
-		ufs[prefixo] = l.nomeUF
+		ufs[prefixo] = m.NomeUF
 	}
 	return ufs
 }
 
-// linhasDoAnexoA reads the state name (column A) and the seven-digit code
-// (column D) of the first sheet, with archive/zip and encoding/xml like the
-// generators in this repository do.
-func linhasDoAnexoA(t *testing.T) []linhaAnexoA {
+func lerAnexoA(t *testing.T) []anexoa.Municipio {
 	t.Helper()
 
-	zr, err := zip.OpenReader(anexoA)
+	municipios, err := anexoa.Ler()
 	if err != nil {
-		t.Fatalf("abrir o ANEXO_A: %v", err)
+		t.Fatal(err)
 	}
-	defer zr.Close()
-
-	shared := lerXML[struct {
-		Items []struct {
-			Text []string `xml:"t"`
-			Runs []struct {
-				Text string `xml:"t"`
-			} `xml:"r"`
-		} `xml:"si"`
-	}](t, &zr.Reader, "xl/sharedStrings.xml")
-
-	strs := make([]string, len(shared.Items))
-	for i, item := range shared.Items {
-		var sb strings.Builder
-		for _, s := range item.Text {
-			sb.WriteString(s)
-		}
-		for _, r := range item.Runs {
-			sb.WriteString(r.Text)
-		}
-		strs[i] = sb.String()
-	}
-
-	sheet := lerXML[struct {
-		Rows []struct {
-			Cells []struct {
-				Ref   string `xml:"r,attr"`
-				Type  string `xml:"t,attr"`
-				Value string `xml:"v"`
-			} `xml:"c"`
-		} `xml:"sheetData>row"`
-	}](t, &zr.Reader, "xl/worksheets/sheet1.xml")
-
-	var linhas []linhaAnexoA
-	for _, row := range sheet.Rows {
-		var l linhaAnexoA
-		for _, c := range row.Cells {
-			valor := c.Value
-			if c.Type == "s" {
-				i, err := strconv.Atoi(valor)
-				if err != nil || i < 0 || i >= len(strs) {
-					t.Fatalf("celula %s aponta para a string %q, que nao existe", c.Ref, valor)
-				}
-				valor = strs[i]
-			}
-			switch {
-			case strings.HasPrefix(c.Ref, "A"):
-				l.nomeUF = strings.TrimSpace(valor)
-			case strings.HasPrefix(c.Ref, "D"):
-				l.codigo = strings.TrimSpace(valor)
-			}
-		}
-		// The header row fails the digit check.
-		if digitos(l.codigo) {
-			linhas = append(linhas, l)
-		}
-	}
-	return linhas
-}
-
-func lerXML[T any](t *testing.T, zr *zip.Reader, nome string) T {
-	t.Helper()
-
-	var v T
-	f, err := zr.Open(nome)
-	if err != nil {
-		t.Fatalf("%s: %v", nome, err)
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		t.Fatalf("%s: %v", nome, err)
-	}
-	if err := xml.Unmarshal(data, &v); err != nil {
-		t.Fatalf("%s: %v", nome, err)
-	}
-	return v
+	return municipios
 }
 
 func BenchmarkValidar(b *testing.B) {
