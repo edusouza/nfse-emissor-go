@@ -164,9 +164,38 @@ func TestCuringas(t *testing.T) {
 	}
 }
 
+// A structural error and a value error below it come out together, and an
+// element the type does not know is reported once.
+func TestErrosAbaixoDeUmaEstruturaErrada(t *testing.T) {
+	e := schemaCompleto(t, `
+  <xs:simpleType name="D"><xs:restriction base="xs:string"><xs:pattern value="[0-9]{2}"/></xs:restriction></xs:simpleType>
+  <xs:element name="r"><xs:complexType><xs:sequence>
+    <xs:element name="a" type="D"/><xs:element name="b" type="D"/>
+  </xs:sequence></xs:complexType></xs:element>`)
+
+	erros := e.Validar([]byte(`<r xmlns="urn:t"><a>x</a></r>`))
+	if len(erros) != 2 {
+		t.Fatalf("esperava a falta de b e o valor de a; veio %v", erros)
+	}
+	var valor bool
+	for _, err := range erros {
+		valor = valor || err.Caminho == "/r/a"
+	}
+	if !valor {
+		t.Errorf("o valor de a nao foi conferido: %v", erros)
+	}
+
+	if erros := e.Validar([]byte(`<r xmlns="urn:t"><a>12</a><b>34</b><z/></r>`)); len(erros) != 1 {
+		t.Errorf("o elemento desconhecido deveria ser um erro so; veio %v", erros)
+	}
+}
+
 // Nested unbounded groups used to make the matcher revisit the same
 // positions over and over.
 func TestCasamentoNaoExplode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("mede tempo de relogio")
+	}
 	e := schemaCompleto(t, `
   <xs:simpleType name="V"><xs:restriction base="xs:string"/></xs:simpleType>
   <xs:element name="r"><xs:complexType><xs:sequence maxOccurs="unbounded"><xs:choice>

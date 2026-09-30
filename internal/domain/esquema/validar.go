@@ -123,10 +123,13 @@ func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) 
 		return
 	}
 
+	// A structural error does not stop the descent: the children the type
+	// declares still have their values checked, so that a missing element and
+	// a malformed sibling come out in the same run.
 	c := &casamento{filhos: filhos, longe: -1}
-	if !contemPosicao(c.ocorrencias(t.conteudo, 0), len(filhos)) {
+	casou := contemPosicao(c.ocorrencias(t.conteudo, 0), len(filhos))
+	if !casou {
 		v.erro(c.onde(caminho), "%s", c.explicar())
-		return
 	}
 
 	declaracoes := t.declaracoes
@@ -144,6 +147,11 @@ func (v *validador) elemento(el *etree.Element, decl *elemento, caminho string) 
 
 		if d, ok := declaracoes[nomeDe(filho)]; ok {
 			v.elemento(filho, d, caminhoFilho)
+			continue
+		}
+		if !casou {
+			// An element the type does not declare is already part of the
+			// structural error; reporting it again would only repeat it.
 			continue
 		}
 		// Matched a wildcard. Whether to look inside depends on how the
