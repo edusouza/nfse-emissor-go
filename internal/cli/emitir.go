@@ -151,6 +151,9 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 	if err := nota.Validate(); err != nil {
 		return err
 	}
+	if competencia, err := nota.CompetenciaDate(); err == nil {
+		avisarIBSCBS(cmd.ErrOrStderr(), competencia)
+	}
 
 	// Check the ISS rate against the government's own rules before building
 	// anything: a rate that is forbidden or missing is a certain rejection, and

@@ -160,6 +160,21 @@ XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
   `AddressFromDomain`). Nada os chamava, e eles tinham o mesmo defeito de
   leiaute. `AddressConfig` ganhou `City`, para o endereço no exterior.
 
+### IBS/CBS: a pergunta respondida, e um aviso ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21))
+
+- **Quando um MEI ou ME/EPP precisa declarar IBS/CBS:** pelo ANEXO I v1.01, o
+  grupo `IBSCBS` só é obrigatório para optantes do Simples Nacional **a partir
+  de 2027**. Até lá ele é opcional, exige a DPS 1.01 e o `cNBS` do serviço, e
+  a DPS 1.00 que o emissor gera continua válida. A análise completa, com a
+  fonte de cada afirmação e o que os documentos não dizem, está na
+  [ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md).
+- **`emitir` avisa quando a competência é de 2027 em diante**: a nota sai
+  sem o grupo que o ANEXO I torna obrigatório. É um aviso, não uma recusa,
+  porque nenhuma regra recusa a DPS ainda.
+- O grupo em si fica para quando houver a tabela oficial de
+  `CST`/`cClassTrib`, que não está no repositório. Preenchê-lo antes disso
+  seria adivinhar o imposto.
+
 ## [0.8.0] - 2026-09-29
 
 O DANFSe volta, agora gerado aqui. A NT 008 suspendeu a API do governo em

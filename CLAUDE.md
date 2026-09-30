@@ -102,7 +102,8 @@ Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
 
 **Versão do leiaute:** o emissor gera `versao="1.00"`. O schema v1.01 aceita
 `1.00|1.01`, e a única diferença no `infDPS` é o grupo opcional `IBSCBS`. Não
-mude isso sem um ADR — suportar IBS/CBS é trabalho de uma versão inteira.
+mude isso sem um ADR — suportar IBS/CBS é trabalho de uma versão inteira, e a
+[ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md) diz quando e com o quê.
 
 ## Glossário
 
