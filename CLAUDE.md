@@ -51,6 +51,7 @@ internal/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     mtls/                  cliente HTTP com TLS mútuo, comum à Sefin e ao ADN
     sefin/                 cliente HTTP da API do governo
+    parametrizacao/        parâmetros municipais do ADN: convênio e alíquotas
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
     ibge/                  municípios do IBGE, com cache (`danfse` e `onboard --municipio`)
     danfsepdf/             desenho do DANFSe em PDF, nas coordenadas da NT 008
