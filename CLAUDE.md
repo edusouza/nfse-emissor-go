@@ -29,6 +29,7 @@ go test -short ./...          # testes rápidos (~2s) — use durante o desenvol
 go test ./...                 # suíte completa (~75s, inclui testes de backoff)
 go test -race ./...           # o que a CI roda
 NFSE_TESTE_CONTRATO=1 go test -run Contrato ./internal/infrastructure/...  # serviços reais
+# o ADN exige certificado: NFSE_TESTE_CERT=a1.pfx NFSE_CERT_SENHA=... (sem eles, pula)
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
 ```
