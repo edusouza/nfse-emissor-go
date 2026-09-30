@@ -42,11 +42,21 @@ type buscaMunicipio struct {
 	origem string
 }
 
-func (b buscaMunicipio) rotulo() string {
+// fonte is the provenance written to the file's header.
+func (b buscaMunicipio) fonte() string {
 	if b.origem == "" {
 		return "--municipio"
 	}
 	return b.origem
+}
+
+// rotulo names what an error is about. A provenance such as "digitado no
+// terminal" reads as nonsense there; the answer is what was wrong.
+func (b buscaMunicipio) rotulo() string {
+	if b.origem == "" {
+		return "--municipio"
+	}
+	return "resposta"
 }
 
 // resolver turns --municipio into a checked IBGE code.
@@ -64,7 +74,7 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 		if err := codmun.Validar(valor); err != nil {
 			return municipioInformado{}, fmt.Errorf("%s: %w", b.rotulo(), err)
 		}
-		m := municipioInformado{codigo: valor, uf: codmun.UF(valor), fonte: b.rotulo()}
+		m := municipioInformado{codigo: valor, uf: codmun.UF(valor), fonte: b.fonte()}
 		if conhecido, ok := b.cache.Buscar(valor); ok {
 			m.nome = conhecido.Nome
 		}
@@ -82,7 +92,7 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 	}
 
 	if m, ok := b.cache.BuscarPorNome(nome, uf); ok {
-		return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.rotulo()}, nil
+		return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.fonte()}, nil
 	}
 
 	if b.client == nil {
@@ -107,7 +117,7 @@ func (b buscaMunicipio) resolver(valor string) (municipioInformado, error) {
 
 	for _, m := range lista {
 		if texto.Chave(m.Nome) == chave {
-			return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.rotulo() + ", consultado em " + b.client.Host()}, nil
+			return municipioInformado{codigo: m.Codigo, nome: m.Nome, uf: m.UF, fonte: b.fonte() + ", consultado em " + b.client.Host()}, nil
 		}
 	}
 

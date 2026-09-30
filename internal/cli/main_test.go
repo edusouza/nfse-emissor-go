@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"testing"
 )
@@ -9,6 +10,6 @@ import (
 // compiled binary from a shell, or under a debugger, stdin is a terminal and
 // onboard would wait for answers. Tests that want questions stub it back.
 func TestMain(m *testing.M) {
-	stdinEhTerminal = func() bool { return false }
+	stdinEhTerminal = func(io.Reader) bool { return false }
 	os.Exit(m.Run())
 }

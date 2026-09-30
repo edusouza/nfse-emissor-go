@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -79,5 +80,45 @@ func TestOnboardInterativoErroDeLeitura(t *testing.T) {
 	if !strings.Contains(out.String(), "falha ao ler a resposta (terminal fechado)") ||
 		!strings.Contains(out.String(), "nfse.yaml criado") {
 		t.Errorf("esperava o aviso e o arquivo:\n%s", out.String())
+	}
+}
+
+// The field lengths are the XSD's, counted in characters: accents do not
+// make a name that fits look too long.
+func TestTextoAte(t *testing.T) {
+	casos := []struct {
+		nome, texto string
+		ok          bool
+	}{
+		{"cabe", strings.Repeat("ç", 300), true},
+		{"passa do limite", strings.Repeat("a", 301), false},
+		{"tab vira espaco no arquivo", "Consultoria\tmensal", true},
+		{"seta", "Consultoria\x1b[D", false},
+		{"nao-caractere que o XML recusa", "Consultoria\ufffe", false},
+		{"bytes que nao sao UTF-8", "Consultoria \xe7", false},
+	}
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			if err := textoAte(300)(c.texto); (err == nil) != c.ok {
+				t.Errorf("textoAte(300) = %v; esperava ok=%v", err, c.ok)
+			}
+		})
+	}
+}
+
+// Whether to ask depends on the reader the answers come from, not on
+// os.Stdin: a command handed a buffer never waits on the terminal.
+func TestEntradaEhTerminal(t *testing.T) {
+	if entradaEhTerminal(strings.NewReader("mei\n")) {
+		t.Error("um buffer foi tomado por terminal")
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	if entradaEhTerminal(r) {
+		t.Error("um pipe foi tomado por terminal")
 	}
 }

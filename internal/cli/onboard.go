@@ -32,6 +32,11 @@ type onboardData struct {
 	regime    string
 	origens   []string
 
+	// foraDoSimples is the registry saying outright that the provider is
+	// neither an MEI nor a Simples opter — not the same as not knowing, and
+	// not something a prompt should paper over with mei or me_epp.
+	foraDoSimples bool
+
 	// descricao is padroes.servico.descricao, which only the user can say.
 	descricao string
 
@@ -212,11 +217,17 @@ escrito a mao no nfse.yaml.`,
 				lookupRegistry(cmd.Context(), out, cmd.ErrOrStderr(), data, fonte)
 			}
 
-			sugerirServico(out, data)
+			// Questions go where the password prompt goes: stderr, so that
+			// `nfse onboard > log` still shows them — and with them the
+			// service candidates they are answered from.
+			interativo := !naoInterativo && stdinEhTerminal(cmd.InOrStdin())
+			if interativo {
+				sugerirServico(cmd.ErrOrStderr(), data)
+			} else {
+				sugerirServico(out, data)
+			}
 
-			if !naoInterativo && stdinEhTerminal() {
-				// Questions go where the password prompt goes: stderr, so
-				// that `nfse onboard > log` still shows them.
+			if interativo {
 				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
 				completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie"))
 			}
@@ -382,6 +393,8 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 		data.regime = regime
 		data.origem("prestador.regime_tributario", fonte)
 	}
+	data.foraDoSimples = empresa.OpcaoPeloMEI != nil && !*empresa.OpcaoPeloMEI &&
+		empresa.OpcaoPeloSimples != nil && !*empresa.OpcaoPeloSimples
 
 	// The CNAE does not go into the file — it is not a field of the DPS. It is
 	// kept because it is the only thing the registry knows about what the
@@ -416,7 +429,12 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	if !empresa.Ativa() {
 		fmt.Fprintf(errOut, "aviso: a situacao cadastral nao esta ATIVA; a Sefin recusa a emissao nesse estado\n")
 	}
-	if data.regime == "" {
+	switch {
+	case data.foraDoSimples:
+		fmt.Fprintf(errOut, "aviso: o cadastro informa que a empresa nao e MEI nem optante pelo Simples Nacional, "+
+			"e este emissor so atende o Simples; se a opcao for recente, confira no Portal do Simples "+
+			"antes de preencher prestador.regime_tributario\n")
+	case data.regime == "":
 		fmt.Fprintf(errOut, "aviso: a consulta nao informou a opcao pelo Simples Nacional; "+
 			"preencha prestador.regime_tributario a mao\n")
 	}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 func comoTerminal(t *testing.T) {
 	t.Helper()
 	anterior := stdinEhTerminal
-	stdinEhTerminal = func() bool { return true }
+	stdinEhTerminal = func(io.Reader) bool { return true }
 	t.Cleanup(func() { stdinEhTerminal = anterior })
 }
 
@@ -320,5 +321,119 @@ func TestOnboardInterativoRespeitaOServicoInformado(t *testing.T) {
 	}
 	if strings.Contains(out, "Codigo do servico (") {
 		t.Errorf("perguntou o servico informado:\n%s", out)
+	}
+}
+
+// The regime is accepted however it is capitalized: MEI is how the
+// explanation above the question spells it.
+func TestOnboardInterativoRegimeEmMaiusculas(t *testing.T) {
+	comoTerminal(t)
+
+	out, gerado, err := onboardRespondendo(t, "4106902\nMEI\n\n010101\nConsultoria\n", "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(gerado, `regime_tributario: "mei"`) {
+		t.Errorf("MEI nao foi aceito como mei:\n%s\n%s", out, gerado)
+	}
+}
+
+// A registry that says outright the company is outside the Simples is not
+// the same as one that does not know: there is nothing right to pick from
+// mei and me_epp, so the question is not asked and the reason is said.
+func TestOnboardInterativoForaDoSimples(t *testing.T) {
+	comoTerminal(t)
+	resposta := strings.NewReplacer(`"opcao_pelo_mei": true`, `"opcao_pelo_mei": false`,
+		`"opcao_pelo_simples": true`, `"opcao_pelo_simples": false`).Replace(respostaMEI)
+	if resposta == respostaMEI {
+		t.Fatal("a resposta de teste nao tem as opcoes")
+	}
+	registro := registroFake(t, http.StatusOK, resposta)
+	ibge, _ := ibgeFake(t, http.StatusInternalServerError)
+
+	out, gerado, err := onboardRespondendo(t, "\n\n\n", "--fonte", registro.URL, "--fonte-municipios", ibge.URL)
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "Regime (") {
+		t.Errorf("perguntou o regime de uma empresa fora do Simples:\n%s", out)
+	}
+	if !strings.Contains(out, "nao e MEI nem optante pelo Simples Nacional") {
+		t.Errorf("a saida nao diz por que o regime ficou em branco:\n%s", out)
+	}
+	if !strings.Contains(gerado, `regime_tributario: ""`) {
+		t.Errorf("o regime deveria ficar em branco:\n%s", gerado)
+	}
+}
+
+// A refused municipality answer names the answer, not where it came from.
+func TestOnboardInterativoMunicipioSemUF(t *testing.T) {
+	comoTerminal(t)
+
+	out, _, err := onboardRespondendo(t, "Curitiba\n", "--sem-rede")
+	if err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, `resposta "Curitiba": nao encontrei a UF`) {
+		t.Errorf("a mensagem nao aponta a resposta:\n%s", out)
+	}
+	if strings.Contains(out, `digitado no terminal "Curitiba"`) {
+		t.Errorf("a origem apareceu no lugar do campo:\n%s", out)
+	}
+}
+
+// With stdout redirected, the service candidates still reach the person
+// answering: they go to stderr with the question they are answered from.
+func TestOnboardInterativoSugestoesNoStderr(t *testing.T) {
+	comoTerminal(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	registro := registroFake(t, http.StatusOK, respostaTI)
+
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand()
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetIn(strings.NewReader("\n\n\n"))
+	root.SetArgs([]string{"onboard", "--certificado", certificadoDeTeste(t), "--senha", onboardPassword,
+		"--fonte", registro.URL, "--arquivo", filepath.Join(t.TempDir(), "nfse.yaml"),
+		"--cache-municipios", filepath.Join(t.TempDir(), "m.json")})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("onboard falhou: %v\n%s%s", err, stdout.String(), stderr.String())
+	}
+	const lista = "Codigos de servico parecidos"
+	if !strings.Contains(stderr.String(), lista) || !strings.Contains(stderr.String(), "Codigo do servico") {
+		t.Errorf("as sugestoes nao acompanham a pergunta no stderr:\n%s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), lista) {
+		t.Errorf("as sugestoes foram para o stdout:\n%s", stdout.String())
+	}
+}
+
+// A name typed at the prompt that is too long for xNome is refused there,
+// not at the first emission.
+func TestOnboardInterativoNomeLongoDemais(t *testing.T) {
+	comoTerminal(t)
+
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	// Without a certificate nothing knows the name, so it is asked.
+	var out bytes.Buffer
+	path := filepath.Join(t.TempDir(), "nfse.yaml")
+	root := NewRootCommand()
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetIn(strings.NewReader(strings.Repeat("a", limiteNome+1) + "\n"))
+	root.SetArgs([]string{"onboard", "--cnpj", onboardCNPJ, "--sem-rede", "--arquivo", path,
+		"--cache-municipios", filepath.Join(t.TempDir(), "m.json")})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("onboard falhou: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "o campo aceita ate 300") {
+		t.Errorf("um nome longo demais foi aceito:\n%s", out.String())
+	}
+	if gerado, _ := os.ReadFile(path); strings.Contains(string(gerado), strings.Repeat("a", limiteNome+1)) {
+		t.Errorf("o nome longo foi gravado:\n%s", gerado)
 	}
 }

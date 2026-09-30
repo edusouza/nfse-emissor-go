@@ -16,10 +16,15 @@ import (
 	"github.com/edusouza/nfse-emissor-go/internal/domain/servico"
 )
 
-// stdinEhTerminal decides whether onboard may ask questions: the same test the
-// password prompt uses. A variable so that tests can stand in for a terminal.
-var stdinEhTerminal = func() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
+// stdinEhTerminal decides whether onboard may ask questions, looking at the
+// reader the answers will come from — the same test emitir uses before it
+// asks for a confirmation. A variable so that tests can stand in for a
+// terminal.
+var stdinEhTerminal = entradaEhTerminal
+
+func entradaEhTerminal(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // tentativas bounds how often one question is asked again after an invalid
@@ -78,21 +83,46 @@ func (p *perguntador) ateValer(pergunta, sugestao string, aceitar func(string) e
 
 // textoImprimivel refuses what a terminal can slip into a line: an arrow key
 // pressed to fix a typo arrives as ESC [ D, a Latin-1 terminal sends bytes
-// that are not UTF-8. Either would make nfse.yaml unreadable, and C0 control
-// characters are not even allowed in the XML the text ends up in.
+// that are not UTF-8. The text ends up in the DPS, and XML 1.0 has no place
+// for C0 control characters or for U+FFFE and U+FFFF. A tab is let through:
+// the file turns it into a space.
 func textoImprimivel(v string) error {
 	if !utf8.ValidString(v) {
 		return errors.New("o texto tem bytes que nao sao UTF-8; confira a codificacao do terminal e digite de novo")
 	}
 	for _, r := range v {
-		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+		if r == '\t' {
+			continue
+		}
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) || r == 0xFFFE || r == 0xFFFF {
 			return fmt.Errorf("o texto tem um caractere de controle (%U), talvez de uma seta ou de um atalho; digite de novo sem ele", r)
 		}
 	}
 	return nil
 }
 
+// textoAte is textoImprimivel with the length the DPS field takes, counted
+// in characters as the XSD counts them. Past it the Sefin refuses the note,
+// and it is better said here than at the first emission.
+func textoAte(limite int) func(string) error {
+	return func(v string) error {
+		if err := textoImprimivel(v); err != nil {
+			return err
+		}
+		if n := utf8.RuneCountInString(v); n > limite {
+			return fmt.Errorf("o texto tem %d caracteres, e o campo aceita ate %d", n, limite)
+		}
+		return nil
+	}
+}
+
 const digitadoNoTerminal = "digitado no terminal"
+
+// The lengths of xNome (TSNomeRazaoSocial) and xDescServ (TSDesc2000).
+const (
+	limiteNome      = 300
+	limiteDescricao = 2000
+)
 
 // completarNoTerminal asks for what discovery left blank, and only that: a
 // field the certificate or the registry answered is not asked again.
@@ -104,6 +134,7 @@ const digitadoNoTerminal = "digitado no terminal"
 // answer (ADR 0009).
 func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio, serie *string, perguntarSerie bool) {
 	busca.origem = digitadoNoTerminal
+	busca.out = p.out
 	fmt.Fprintf(p.out, "\nFaltam alguns campos. Enter deixa o campo em branco, para preencher depois no arquivo.\n\n")
 
 	passos := []func() error{
@@ -111,7 +142,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			if data.nome != "" {
 				return nil
 			}
-			nome, err := p.ateValer("Razao social", "", textoImprimivel)
+			nome, err := p.ateValer("Razao social", "", textoAte(limiteNome))
 			if nome != "" {
 				data.nome = nome
 				data.origem("prestador.nome", digitadoNoTerminal)
@@ -139,17 +170,17 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			return err
 		},
 		func() error {
-			if data.regime != "" {
+			if data.regime != "" || data.foraDoSimples {
 				return nil
 			}
 			fmt.Fprintf(p.out, "Regime tributario: mei e o Microempreendedor Individual; me_epp, a ME ou EPP do Simples Nacional.\n")
 			regime, err := p.ateValer("Regime (mei | me_epp)", "", func(v string) error {
-				if v != config.RegimeMEI && v != config.RegimeMEEPP {
+				if r := strings.ToLower(v); r != config.RegimeMEI && r != config.RegimeMEEPP {
 					return fmt.Errorf("%q nao e um regime; responda mei ou me_epp", v)
 				}
 				return nil
 			})
-			if regime != "" {
+			if regime = strings.ToLower(regime); regime != "" {
 				data.regime = regime
 				data.origem("prestador.regime_tributario", digitadoNoTerminal)
 			}
@@ -191,7 +222,7 @@ func completarNoTerminal(p *perguntador, data *onboardData, busca buscaMunicipio
 			return err
 		},
 		func() error {
-			descricao, err := p.ateValer("Descricao padrao do servico, a que vai na nota", "", textoImprimivel)
+			descricao, err := p.ateValer("Descricao padrao do servico, a que vai na nota", "", textoAte(limiteDescricao))
 			if descricao != "" {
 				data.descricao = descricao
 				data.origem("padroes.servico.descricao", digitadoNoTerminal)

@@ -21,10 +21,17 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   - A série vem com a sugestão preenchida (`[00001]`).
   - O **regime tributário** é explicado em duas linhas e **nunca sugerido**:
     quando o cadastro diz que não sabe, sugerir seria adivinhar um campo que
-    vai em toda nota.
+    vai em toda nota. Quando o cadastro diz que a empresa não é MEI nem
+    optante pelo Simples, ele nem é perguntado: o comando avisa, porque este
+    emissor só atende o Simples.
   - O código do serviço é conferido na lista nacional e também não é
     sugerido (ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md)).
   - O município aceita o código ou "Cidade/UF", como o `--municipio`.
+  - A razão social e a descrição são conferidas no tamanho que a DPS aceita
+    (300 e 2000 caracteres) e recusam caracteres de controle, como os de uma
+    seta digitada por engano.
+  - As perguntas, e os códigos de serviço sugeridos junto com elas, vão para
+    o stderr: com `nfse onboard > log`, continuam aparecendo no terminal.
   - Uma resposta inválida é perguntada de novo, no máximo três vezes. Enter
     deixa o campo em branco e Ctrl-D encerra as perguntas; nos dois casos o
     arquivo é gravado com o que se sabe.
@@ -32,6 +39,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   padrão quando não há terminal: o mesmo critério do prompt de senha.
 - `padroes.servico.descricao` passa a ser preenchida pelo `onboard`, quando
   informada.
+- O `nfse.yaml` gerado é sempre legível: um caractere que o YAML não aceita
+  cru, vindo do cadastro público ou do certificado, é escapado em vez de
+  deixar o arquivo quebrado.
 
 ### Município informado à mão, sem tabela embutida ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11))
 
