@@ -49,6 +49,7 @@ internal/
   anexoa/                  leitor do ANEXO_A oficial — só para testes
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
+    mtls/                  cliente HTTP com TLS mútuo, comum à Sefin e ao ADN
     sefin/                 cliente HTTP da API do governo
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
     ibge/                  municípios do IBGE, com cache (`danfse` e `onboard --municipio`)

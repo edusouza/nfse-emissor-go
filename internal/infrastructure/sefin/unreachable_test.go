@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/mtls"
 )
 
 // serveFlaky starts a stub Sefin that cannot be reached for the first failures
@@ -189,7 +191,7 @@ func TestLookupDPS_AnnouncesEachRetry(t *testing.T) {
 
 	var waits []time.Duration
 	client.onRetry = func(wait time.Duration, err error) {
-		if !isDialError(err) {
+		if !mtls.IsDialError(err) {
 			t.Errorf("OnRetry recebeu um erro que nao e de conexao: %v", err)
 		}
 		waits = append(waits, wait)
