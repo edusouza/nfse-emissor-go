@@ -21,6 +21,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ### Corrigido
 
+- `docs/convenio-municipal.md` mandava um ME/EPP que apura o ISSQN pelo município copiar a alíquota do ADN para `iss_aliquota` quando o convênio está ativo, justamente o caso em que a Sefin rejeita a alíquota informada (E0635). Agora diz para não informar com o convênio ativo e para informar com ele inativo (E0640) ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 
 ## [0.9.0] - 2026-09-30

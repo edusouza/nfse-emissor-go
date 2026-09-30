@@ -14,6 +14,16 @@ justamente porque a resposta não está na máquina — está no convênio. Veja
 
 ## 1. A consulta oficial (API de Parâmetros Municipais)
 
+O jeito mais curto é o próprio emissor, que usa o certificado e o ambiente do
+`nfse.yaml`:
+
+```bash
+nfse parametros 4106902 010701 --competencia 2026-09-01
+```
+
+O resto desta seção mostra a API por baixo dele, para quem quiser consultá-la
+à mão ou conferir o que o comando faz.
+
 O serviço saiu da Sefin e foi para o ADN. A rota antiga
 (`GET /ParametrosMunicipais` na Sefin) responde **501** com o endereço novo:
 
@@ -179,10 +189,21 @@ produção (`https://adn.nfse.gov.br/parametrizacao`).
 
 ## O que fazer com a resposta
 
-Se o convênio estiver ativo e você for ME/EPP apurando o ISSQN pelo município,
-consulte `.../aliquota` em produção, com o código completo do seu serviço e a
-competência da nota. Por exemplo, `01.07.01.000` para o `cTribNac` `010701`
-sem código municipal. O `Aliq` que voltar já está em percentual: coloque-o como
-está em `padroes.valores.iss_aliquota`. Se você apura tudo pelo Simples
-(`regime_apuracao: sn`, o padrão), nada disso muda a sua nota: a alíquota
-continua fora da DPS, porque o ISS sai no DAS.
+Para um ME/EPP do Simples que apura o ISSQN pela alíquota do município
+(`regime_apuracao` `iss-municipio` ou `fora-do-sn`), o convênio decide o que a
+DPS pode levar. As regras são E0635 e E0640 do ANEXO I, aba "RN DPS_NFS-e":
+
+| Convênio na competência da nota | `iss_aliquota` | Regra |
+|---|---|---|
+| ativo | **não informe** (`0`): a Sefin aplica a alíquota parametrizada | E0635 |
+| inativo | **informe**: sem ela a DPS é rejeitada | E0640 |
+
+Com o convênio ativo, a alíquota que o ADN devolve é a que a Sefin vai aplicar
+na nota. Consultá-la serve para saber quanto de ISS a nota vai ter, não para
+copiá-la para a configuração. Com o convênio inativo, o ADN não tem alíquota
+para o município, e quem diz qual vale é a prefeitura.
+
+Se você apura tudo pelo Simples (`regime_apuracao: sn`, o padrão), o convênio
+não muda a sua nota: sem retenção, a alíquota fica fora da DPS, porque o ISS
+sai no DAS. Com retenção, você informa a alíquota do seu anexo do Simples, no
+mínimo 1,8% (E0621 e E0628).
