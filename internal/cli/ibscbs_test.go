@@ -33,8 +33,8 @@ func TestAvisarIBSCBS(t *testing.T) {
 	}
 }
 
-// The warning goes to stderr with the other warnings, and the invoice is
-// still produced.
+// The warning goes to stderr, keeping stdout clean, and the invoice is still
+// produced.
 func TestEmitir_AvisoIBSCBSVaiParaOStderr(t *testing.T) {
 	dir := workspace(t)
 	t.Setenv(envCertPassword, testCertPassword)
