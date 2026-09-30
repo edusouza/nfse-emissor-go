@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/edusouza/nfse-emissor-go/internal/domain/texto"
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/arquivo"
 )
 
 // Cache remembers the municipalities already looked up, on disk.
@@ -39,15 +40,8 @@ type Cache struct {
 // directory.
 const NomeArquivo = "municipios.json"
 
-// DiretorioPadrao returns the directory the cache file belongs in, following
-// whatever convention the operating system has for caches.
-func DiretorioPadrao() (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "nfse"), nil
-}
+// DiretorioPadrao returns the directory the cache file belongs in.
+func DiretorioPadrao() (string, error) { return arquivo.DiretorioCache() }
 
 // NovoCache builds a cache backed by caminho. An empty caminho puts it in the
 // default directory; if even that cannot be determined, the cache still works
@@ -127,10 +121,6 @@ func (c *Cache) Gravar() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(c.caminho), 0o755); err != nil {
-		return err
-	}
-
 	// Sorted, so that a file a human opens reads in a sensible order and two
 	// runs that learned the same municipalities produce the same bytes.
 	codigos := make([]string, 0, len(c.dados))
@@ -148,48 +138,11 @@ func (c *Cache) Gravar() error {
 	if err != nil {
 		return err
 	}
-	if err := gravarAtomico(c.caminho, append(conteudo, '\n')); err != nil {
+	if err := arquivo.GravarAtomico(c.caminho, append(conteudo, '\n')); err != nil {
 		return err
 	}
 
 	c.alterado = false
-	return nil
-}
-
-// gravarAtomico writes through a temporary file in the same directory and
-// renames it over the destination.
-//
-// Writing in place truncates first: an interrupted run leaves half a JSON
-// document, which carregar then throws away whole, and two runs at once
-// interleave their bytes. A rename is atomic on the same filesystem, so a
-// reader sees the old file or the new one, never a mix. Two concurrent runs
-// still race — the last one wins — but each leaves a file that parses.
-func gravarAtomico(caminho string, conteudo []byte) error {
-	temporario, err := os.CreateTemp(filepath.Dir(caminho), filepath.Base(caminho)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	nome := temporario.Name()
-
-	if _, err := temporario.Write(conteudo); err != nil {
-		temporario.Close()
-		os.Remove(nome)
-		return err
-	}
-	if err := temporario.Close(); err != nil {
-		os.Remove(nome)
-		return err
-	}
-	// CreateTemp opens with 0600; the cache holds public data and used to be
-	// written 0644, which is kept.
-	if err := os.Chmod(nome, 0o644); err != nil {
-		os.Remove(nome)
-		return err
-	}
-	if err := os.Rename(nome, caminho); err != nil {
-		os.Remove(nome)
-		return err
-	}
 	return nil
 }
 

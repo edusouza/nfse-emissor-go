@@ -51,6 +51,7 @@ internal/
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     mtls/                  cliente HTTP com TLS mútuo, comum à Sefin e ao ADN
+    arquivo/               diretório e gravação atômica dos caches em disco
     sefin/                 cliente HTTP da API do governo
     parametrizacao/        parâmetros municipais do ADN: convênio e alíquotas
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
