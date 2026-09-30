@@ -22,6 +22,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/edusouza/nfse-emissor-go/pkg/codmun"
 )
 
 // DefaultBaseURL is the IBGE's public localities service.
@@ -44,6 +47,30 @@ type Municipio struct {
 	Codigo string `json:"codigo"`
 	Nome   string `json:"nome"`
 	UF     string `json:"uf"`
+}
+
+// coerente reports whether a municipality can be trusted as a translation:
+// a valid IBGE code, the state that code belongs to, and a printable name.
+//
+// Every entry that reaches the cache or leaves this package passes through
+// it. The cache is shared by the DANFSe and by onboard, and onboard writes
+// what it finds into nfse.yaml: an entry that pairs a name with another
+// state's code — from a lying server, a proxy, or a hand-edited file — would
+// otherwise put every invoice in the wrong municipality. A name with control
+// characters would reach the terminal as escape sequences.
+func (m Municipio) coerente() bool {
+	if codmun.Validar(m.Codigo) != nil || m.UF != codmun.UF(m.Codigo) {
+		return false
+	}
+	if strings.TrimSpace(m.Nome) == "" {
+		return false
+	}
+	for _, r := range m.Nome {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // Config configures a Client.
@@ -155,29 +182,9 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 		return nil, fmt.Errorf("codigo de municipio %q invalido: sao %d digitos", codigo, CodigoLength)
 	}
 
-	endereco := fmt.Sprintf("%s/municipios/%s", c.baseURL, codigo)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endereco, nil)
+	body, err := c.get(ctx, "/municipios/"+codigo, maxResponseSize, "o municipio "+codigo)
 	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel montar a consulta: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel consultar %s: %w: %w", c.Host(), ErrInacessivel, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
-	if err != nil {
-		return nil, fmt.Errorf("falha ao ler a resposta de %s: %w", c.Host(), err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s respondeu %d para o municipio %s", c.Host(), resp.StatusCode, codigo)
+		return nil, err
 	}
 
 	// The service answers an unknown code with an empty array instead of a
@@ -194,7 +201,93 @@ func (c *Client) Consultar(ctx context.Context, codigo string) (*Municipio, erro
 		return nil, fmt.Errorf("resposta de %s nao trouxe o nome do municipio %s", c.Host(), codigo)
 	}
 
-	return &Municipio{Codigo: codigo, Nome: strings.TrimSpace(dados.Nome), UF: dados.uf()}, nil
+	// The state comes from the code, which is checked; the answer's own UF
+	// only has to agree with it.
+	m := &Municipio{Codigo: codigo, Nome: strings.TrimSpace(dados.Nome), UF: codmun.UF(codigo)}
+	if uf := dados.uf(); uf != "" && !strings.EqualFold(uf, m.UF) {
+		return nil, fmt.Errorf("%s respondeu a UF %s para o municipio %s, que e de %s", c.Host(), uf, codigo, m.UF)
+	}
+	if !m.coerente() {
+		return nil, fmt.Errorf("%s respondeu um municipio %s que nao confere; a resposta foi descartada", c.Host(), codigo)
+	}
+	return m, nil
+}
+
+// maxListaSize caps the answer for a whole state. Minas Gerais has 853
+// municipalities, each a few hundred bytes in the service's nested format:
+// about 1 MB. A larger body is refused rather than decoded, because the
+// decoder would hold all of it, several times over, before any check ran.
+const maxListaSize = 2 << 20
+
+// Municipios fetches every municipality of a state, which is how a name typed
+// by a person is turned into a code without carrying the table in the binary.
+//
+// The answer is checked, not trusted: every code must be a valid IBGE code of
+// the state that was asked for. One that is not means the service is not
+// answering what this client thinks it is, and a list that might put a name on
+// the wrong code is refused whole.
+func (c *Client) Municipios(ctx context.Context, uf string) ([]Municipio, error) {
+	uf = strings.ToUpper(strings.TrimSpace(uf))
+	if !codmun.UFExiste(uf) {
+		return nil, fmt.Errorf("%q nao e a sigla de uma UF", uf)
+	}
+
+	body, err := c.get(ctx, "/estados/"+uf+"/municipios", maxListaSize+1, "os municipios de "+uf)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxListaSize {
+		return nil, fmt.Errorf("%s devolveu mais de %d MB para os municipios de %s; a resposta foi descartada",
+			c.Host(), maxListaSize>>20, uf)
+	}
+
+	var dados []resposta
+	if err := json.Unmarshal(body, &dados); err != nil {
+		return nil, fmt.Errorf("resposta de %s nao e o JSON esperado: %w", c.Host(), err)
+	}
+	if len(dados) == 0 {
+		return nil, fmt.Errorf("%s nao devolveu municipios para %s", c.Host(), uf)
+	}
+
+	municipios := make([]Municipio, 0, len(dados))
+	for _, d := range dados {
+		m := Municipio{Codigo: d.ID.String(), Nome: strings.TrimSpace(d.Nome), UF: uf}
+		if !m.coerente() {
+			return nil, fmt.Errorf("%s devolveu %q entre os municipios de %s, que nao confere; a resposta foi descartada",
+				c.Host(), m.Codigo, uf)
+		}
+		municipios = append(municipios, m)
+	}
+	return municipios, nil
+}
+
+// get performs one GET against the service and returns the body of a 200.
+// oQue names what was asked for, for the error messages.
+func (c *Client) get(ctx context.Context, caminho string, limite int64, oQue string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+caminho, nil)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel montar a consulta: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nao foi possivel consultar %s: %w: %w", c.Host(), ErrInacessivel, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limite))
+	if err != nil {
+		return nil, fmt.Errorf("falha ao ler a resposta de %s: %w", c.Host(), err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s respondeu %d para %s", c.Host(), resp.StatusCode, oQue)
+	}
+	return body, nil
 }
 
 // vazia reports whether the body is an empty JSON array, which is how the

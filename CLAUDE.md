@@ -45,11 +45,13 @@ internal/
     esquema/               validação contra os XSDs oficiais (v1.01, embutidos)
     query/                 chave de acesso e respostas de consulta
     danfse/                modelo do documento auxiliar, montado do XML da NFS-e
+    texto/                 normalização de texto das buscas (acentos, caixa)
+  anexoa/                  leitor do ANEXO_A oficial — só para testes
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
-    ibge/                  nome do município por código, com cache (só no `danfse`)
+    ibge/                  municípios do IBGE, com cache (`danfse` e `onboard --municipio`)
     danfsepdf/             desenho do DANFSe em PDF, nas coordenadas da NT 008
 pkg/                       utilidades reutilizáveis fora do projeto
   xmlbuilder/              montagem do XML da DPS
