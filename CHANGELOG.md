@@ -13,6 +13,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não lançado]
 
+### Adicionado
+
+- Especificação OpenAPI oficial da API de Parâmetros Municipais do ADN em `docs/api/adn-parametrizacao-swagger.json` ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+- `docs/convenio-municipal.md` documenta o que o swagger não diz, conferido no serviço real: o código completo do serviço (`01.07.01.000`), a competência em `AAAA-MM-DD`, a alíquota em percentual e os dois formatos de erro ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+
+### Corrigido
+
+- `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+
 ## [0.9.0] - 2026-09-30
 
 O `onboard` completa o `nfse.yaml` no terminal e aceita o município pelo nome, o CNPJ do certificado passa a ser lido de onde a Sefin o lê, e a DPS passa a ser validada contra os XSDs oficiais.
