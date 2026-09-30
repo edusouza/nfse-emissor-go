@@ -25,3 +25,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0014](0014-validacao-pelo-xsd.md) | Validar a DPS lendo os XSDs oficiais, com um validador próprio | Aceita |
 | [0015](0015-ibs-cbs-em-2027.md) | IBS/CBS: o grupo fica para quando for obrigatório e houver tabela | Aceita |
 | [0016](0016-parametros-municipais-com-cache.md) | Parâmetros municipais consultados no ADN, com cache de 24 horas | Aceita |
+| [0017](0017-emitir-confere-o-convenio.md) | O `emitir` consulta o convênio para aplicar E0635 e E0640 | Aceita |
