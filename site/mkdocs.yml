@@ -1,0 +1,96 @@
+# Site de documentação, publicado no GitHub Pages pelo workflow pages.yml.
+#
+# Construído com o Zensical, que lê este arquivo no formato do MkDocs. Por
+# isso ele só usa o que o Material for MkDocs também entende: se o Zensical
+# não servir, o Material constrói o mesmo site sem mudar nada aqui (ADR 0016).
+#
+# Parte das páginas é gerada, e não fica no repositório:
+#
+#   go run ./internal/sitegen      # a partir da raiz do repositório
+#
+# Depois, dentro de site/:
+#
+#   zensical serve                 # prévia em http://localhost:8000
+#   zensical build --strict        # o que a CI roda
+
+site_name: nfse
+site_description: >-
+  Emissor de NFS-e em linha de comando para o Sistema Nacional NFS-e, voltado a
+  prestadores do Simples Nacional: MEI, ME e EPP.
+site_url: https://edusouza.github.io/nfse-emissor-go/
+repo_url: https://github.com/edusouza/nfse-emissor-go
+repo_name: edusouza/nfse-emissor-go
+copyright: Código sob a licença MIT. O texto das regras de rejeição é do Sistema Nacional NFS-e.
+
+docs_dir: conteudo
+site_dir: _build
+
+theme:
+  name: material
+  language: pt-BR
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.instant
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Mudar para o tema escuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Mudar para o tema claro
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Início: index.md
+  - Primeiros passos:
+      - Instalação: comecar/instalacao.md
+      - Experimentar sem certificado: comecar/experimentar.md
+      - Configurar: comecar/configurar.md
+      - A primeira nota: comecar/primeira-nota.md
+  - Guias:
+      - Achar o código do serviço: guias/codigo-do-servico.md
+      - O certificado e a senha: guias/certificado.md
+      - Emitir uma nota: guias/emitir.md
+      - Alíquota do ISS e retenção: guias/aliquota-e-retencao.md
+      - Enviar à Sefin Nacional: guias/enviar.md
+      - Consultar uma nota: guias/consultar.md
+      - A numeração: guias/numeracao.md
+      - Cancelar uma nota: guias/cancelar.md
+      - Substituir uma nota: guias/substituir.md
+      - Entregar o PDF ao cliente: guias/danfse.md
+  - Referência:
+      - Comandos: referencia/comandos.md
+      - Códigos de rejeição: referencia/rejeicoes.md
+      - A chave de acesso: referencia/chave-de-acesso.md
+      - O que a validação local cobre: referencia/validacao.md
+      - Glossário: referencia/glossario.md
+  - Por dentro:
+      - Como o projeto está organizado: por-dentro/arquitetura.md
+      - Desenvolvimento: por-dentro/desenvolvimento.md
+      - Decisões de arquitetura: decisoes/index.md
+  - Changelog: changelog.md

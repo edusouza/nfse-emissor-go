@@ -2,6 +2,8 @@
 package docs
 
 import (
+	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,12 +22,51 @@ var longDigitRun = regexp.MustCompile(`\b\d{20,}\b`)
 // instead would sweep up dates and amounts.
 var serviceCodeInDocs = regexp.MustCompile(`(?:codigo_tributacao_nacional:\s*"?|--servico\s+)(\d{6})`)
 
-// docFiles lists the documentation that shows commands a reader will copy.
+// docFiles lists the documentation that shows commands a reader will copy,
+// besides the pages of the site.
 var docFiles = []string{
 	"README.md",
 	"CHANGELOG.md",
 	"exemplos/README.md",
 	"exemplos/README-windows.md",
+}
+
+// generatedMarker opens every page internal/sitegen writes into the site.
+// Those pages are skipped: they are copies of files read here already, or the
+// government's annex, which is not ours to correct.
+const generatedMarker = "<!-- Gerada por internal/sitegen"
+
+// sitePages lists the pages written by hand for the site, relative to the
+// repository root.
+func sitePages(t *testing.T, root string) []string {
+	t.Helper()
+
+	var pages []string
+	err := filepath.WalkDir(filepath.Join(root, "site", "conteudo"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(p) != ".md" {
+			return err
+		}
+		content, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		if bytes.Contains(content, []byte(generatedMarker)) {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		pages = append(pages, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) == 0 {
+		t.Fatal("nenhuma pagina do site em site/conteudo")
+	}
+	return pages
 }
 
 // TestAccessKeysInDocsAreValid guards against documenting a key that the tool
@@ -38,7 +79,7 @@ var docFiles = []string{
 func TestAccessKeysInDocsAreValid(t *testing.T) {
 	root := repoRoot(t)
 
-	for _, name := range docFiles {
+	for _, name := range append(append([]string{}, docFiles...), sitePages(t, root)...) {
 		t.Run(name, func(t *testing.T) {
 			content, err := os.ReadFile(filepath.Join(root, name))
 			if err != nil {
@@ -66,7 +107,7 @@ func TestServiceCodesInDocsExist(t *testing.T) {
 
 	// The configuration files count too: they are copied as starting points,
 	// which makes a wrong code there worse than a wrong code in prose.
-	arquivos := append(append([]string{}, docFiles...),
+	arquivos := append(append(append([]string{}, docFiles...), sitePages(t, root)...),
 		"internal/config/exemplo.yaml",
 		"exemplos/nfse.yaml",
 		"exemplos/nota-consultoria.yaml",

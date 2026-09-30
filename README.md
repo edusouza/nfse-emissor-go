@@ -7,6 +7,10 @@ Voltado a prestadores de serviço do Simples Nacional — MEI, ME e EPP — que
 querem emitir as próprias notas a partir do terminal ou de um script, sem
 depender de portal web.
 
+A documentação — guias, os códigos de rejeição da Sefin e as decisões de
+arquitetura — está em
+**[edusouza.github.io/nfse-emissor-go](https://edusouza.github.io/nfse-emissor-go/)**.
+
 ## O que funciona
 
 O ciclo completo de uma nota — configurar, achar o código do serviço, montar,
@@ -335,12 +339,13 @@ Ambiente de producao restrita: esta nota NAO tem valor fiscal.
 ```
 
 A emissão é **síncrona**: o governo valida e devolve a nota autorizada ou a
-rejeição na mesma requisição. Rejeições vêm com todos os motivos de uma vez:
+rejeição na mesma requisição. Rejeições vêm com todos os motivos de uma vez.
+Esta foi a resposta à primeira emissão real deste projeto
+([ADR 0008](docs/decisoes/0008-digest-sem-namespace.md)):
 
 ```
 erro: documento rejeitado pela Sefin Nacional
-  - [E001] Municipio nao conveniado ao Sistema Nacional
-  - [E042] cTribNac invalido (010101)
+  - [E0714] Arquivo enviado com erro na assinatura.
 ```
 
 O ambiente vem do `nfse.yaml`. Com `ambiente: producao` a nota tem **valor
