@@ -32,8 +32,13 @@ type admResposta struct {
 
 // stubADN starts a fake ADN answering each path from rotas, 404 for anything
 // else, and records the paths it was asked for.
+//
+// It also points the user cache directory at a fresh one, shared by every run
+// in the test: municipality names and remembered parameters must neither come
+// from nor land in the real cache.
 func stubADN(t *testing.T, rotas map[string]admResposta) *[]string {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	var mu sync.Mutex
 	var caminhos []string
@@ -66,9 +71,6 @@ func stubADN(t *testing.T, rotas map[string]admResposta) *[]string {
 func executarParametros(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
 	t.Setenv(envCertPassword, testCertPassword)
-	// Municipality names come from the user's cache; a test must neither read
-	// nor write the real one.
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	var out bytes.Buffer
 	root := NewRootCommand()
@@ -222,5 +224,43 @@ func TestParametros_EntradaInvalida(t *testing.T) {
 				t.Errorf("o ADN foi consultado com entrada invalida: %v", *caminhos)
 			}
 		})
+	}
+}
+
+// A second run the same day is answered from the cache, and says so.
+func TestParametros_Cache(t *testing.T) {
+	caminhos := stubADN(t, map[string]admResposta{
+		"/4106902/convenio":                         {http.StatusOK, admConvenioAtivo},
+		"/4106902/01.07.01.000/2026-09-01/aliquota": {http.StatusOK, admAliquota},
+	})
+	dir := workspace(t)
+	args := []string{"4106902", "010701", "--competencia", "2026-09-01"}
+
+	primeira, err := executarParametros(t, dir, args...)
+	if err != nil {
+		t.Fatalf("primeira consulta falhou: %v\n%s", err, primeira)
+	}
+	if strings.Contains(primeira, "Resposta guardada") {
+		t.Errorf("a primeira resposta veio do ADN, nao do cache:\n%s", primeira)
+	}
+
+	segunda, err := executarParametros(t, dir, args...)
+	if err != nil {
+		t.Fatalf("segunda consulta falhou: %v\n%s", err, segunda)
+	}
+	if got := len(*caminhos); got != 2 {
+		t.Errorf("%d consultas ao ADN em duas execucoes, esperava 2 (so a primeira)", got)
+	}
+	assertContem(t, segunda, "5,00%", "Resposta guardada", "--sem-cache")
+
+	terceira, err := executarParametros(t, dir, append(args, "--sem-cache")...)
+	if err != nil {
+		t.Fatalf("consulta com --sem-cache falhou: %v\n%s", err, terceira)
+	}
+	if got := len(*caminhos); got != 4 {
+		t.Errorf("%d consultas ao ADN, esperava que --sem-cache consultasse de novo", got)
+	}
+	if strings.Contains(terceira, "Resposta guardada") {
+		t.Errorf("com --sem-cache nada deveria vir do cache:\n%s", terceira)
 	}
 }
