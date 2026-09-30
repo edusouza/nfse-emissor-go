@@ -353,7 +353,7 @@ de produção. Os detalhes da API estão em
 As respostas ficam guardadas por **24 horas** no diretório de cache do sistema,
 e a saída diz quando uma veio de lá. Se o município acabou de mudar a
 parametrização, `--sem-cache` consulta de novo. Por que 24 horas:
-[ADR 0016](docs/decisoes/0016-parametros-municipais-com-cache.md).
+[ADR 0017](docs/decisoes/0017-parametros-municipais-com-cache.md).
 
 ### Enviar para a Sefin Nacional
 

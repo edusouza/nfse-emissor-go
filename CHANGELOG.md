@@ -16,7 +16,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Adicionado
 
 - `nfse parametros <municipio> <servico>` consulta no ADN se o convênio do município está ativo e qual alíquota do ISSQN ele parametrizou para o serviço: a vigente com `--competencia`, o histórico sem ela. Aceita o `cTribNac` e monta o código completo, com `--complemento` quando o município criou código próprio ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
-- As respostas do ADN ficam guardadas por 24 horas no diretório de cache do sistema; a saída diz quando uma veio de lá, e `--sem-cache` consulta de novo ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5), [ADR 0016](docs/decisoes/0016-parametros-municipais-com-cache.md)).
+- As respostas do ADN ficam guardadas por 24 horas no diretório de cache do sistema; a saída diz quando uma veio de lá, e `--sem-cache` consulta de novo ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5), [ADR 0017](docs/decisoes/0017-parametros-municipais-com-cache.md)).
 - Especificação OpenAPI oficial da API de Parâmetros Municipais do ADN em `docs/api/adn-parametrizacao-swagger.json` ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - `docs/convenio-municipal.md` documenta o que o swagger não diz, conferido no serviço real: o código completo do serviço (`01.07.01.000`), a competência em `AAAA-MM-DD`, a alíquota em percentual e os dois formatos de erro ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 
