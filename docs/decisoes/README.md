@@ -24,3 +24,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0013](0013-municipio-informado-pelo-nome.md) | Município informado pelo nome, resolvido por consulta e guardado em cache | Aceita |
 | [0014](0014-validacao-pelo-xsd.md) | Validar a DPS lendo os XSDs oficiais, com um validador próprio | Aceita |
 | [0015](0015-ibs-cbs-em-2027.md) | IBS/CBS: o grupo fica para quando for obrigatório e houver tabela | Aceita |
+| [0017](0017-parametros-municipais-com-cache.md) | Parâmetros municipais consultados no ADN, com cache de 24 horas | Aceita |

@@ -350,6 +350,11 @@ dela. **Em `producao-restrita` os dados são de teste**; a alíquota que vale é
 de produção. Os detalhes da API estão em
 [docs/convenio-municipal.md](docs/convenio-municipal.md).
 
+As respostas ficam guardadas por **24 horas** no diretório de cache do sistema,
+e a saída diz quando uma veio de lá. Se o município acabou de mudar a
+parametrização, `--sem-cache` consulta de novo. Por que 24 horas:
+[ADR 0017](docs/decisoes/0017-parametros-municipais-com-cache.md).
+
 ### Enviar para a Sefin Nacional
 
 ```bash

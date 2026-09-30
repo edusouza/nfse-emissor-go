@@ -30,35 +30,35 @@ type Convenio struct {
 	// E0621–E0640). The service answers an active municipality with its
 	// parameters and an inactive one with 404 and the reason in Mensagem,
 	// which is the only signal it gives: none of the fields below says it.
-	Ativo bool
+	Ativo bool `json:"ativo"`
 
 	// Mensagem is the service's own words, in either case.
-	Mensagem string
+	Mensagem string `json:"mensagem"`
 
-	AderenteAmbienteNacional              SimNao
-	AderenteEmissorNacional               SimNao
-	SituacaoEmissaoPadraoContribuintesRFB SimNao
-	AderenteMAN                           SimNao
+	AderenteAmbienteNacional              SimNao `json:"aderente_ambiente_nacional"`
+	AderenteEmissorNacional               SimNao `json:"aderente_emissor_nacional"`
+	SituacaoEmissaoPadraoContribuintesRFB SimNao `json:"situacao_emissao_padrao_contribuintes_rfb"`
+	AderenteMAN                           SimNao `json:"aderente_man"`
 
 	// PermiteAproveitamentoDeCreditos is nil when the service leaves it null.
-	PermiteAproveitamentoDeCreditos *bool
+	PermiteAproveitamentoDeCreditos *bool `json:"permite_aproveitamento_de_creditos"`
 }
 
 // Aliquota is one period of a service's ISSQN rate in a municipality.
 type Aliquota struct {
 	// Incidencia is the service's own word for whether the ISSQN applies,
 	// "SIM" in every answer seen so far.
-	Incidencia string
+	Incidencia string `json:"incidencia"`
 
 	// Percentual is the rate in percent (5.00 is 5%), the unit iss_aliquota
 	// uses. Nil when the service leaves it null.
-	Percentual *float64
+	Percentual *float64 `json:"percentual"`
 
 	// Inicio is the first day the rate applies.
-	Inicio time.Time
+	Inicio time.Time `json:"inicio"`
 
 	// Fim is the last day, or nil while the period is open.
-	Fim *time.Time
+	Fim *time.Time `json:"fim"`
 }
 
 // envelope is what every answer shares: the field the route is about, and a

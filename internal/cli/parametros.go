@@ -21,6 +21,7 @@ type parametrosFlags struct {
 	password    string
 	competencia string
 	complemento string
+	semCache    bool
 }
 
 // newParametrizacaoClient is a seam: tests replace it to reach a stub server
@@ -47,7 +48,10 @@ historico inteiro.
 
 A consulta usa o certificado A1 da configuracao, em TLS mutuo, e o ambiente
 dela: em producao-restrita os dados sao de teste. A aliquota que vale e a de
-producao.`,
+producao.
+
+As respostas ficam guardadas por 24 horas no diretorio de cache do sistema; a
+saida diz quando uma veio de la. --sem-cache consulta o ADN de novo.`,
 		Example: `  nfse parametros 4106902 010701 --competencia 2026-09-01
   nfse parametros Curitiba/PR 01.07.01
   nfse parametros 4106902 01.07.01 --complemento 001`,
@@ -63,6 +67,7 @@ producao.`,
 	fl.StringVarP(&f.password, "senha", "s", "", "senha do certificado (prefira "+envCertPassword+")")
 	fl.StringVar(&f.competencia, "competencia", "", "data de competencia (AAAA-MM-DD); sem ela, mostra o historico")
 	fl.StringVar(&f.complemento, "complemento", "", "complemento municipal do servico, 3 digitos (padrao: "+servico.ComplementoPadrao+")")
+	fl.BoolVar(&f.semCache, "sem-cache", false, "consulta o ADN mesmo que haja resposta guardada das ultimas 24 horas")
 
 	return cmd
 }
@@ -107,12 +112,24 @@ func runParametros(cmd *cobra.Command, args []string, f *parametrosFlags) error 
 		return err
 	}
 
-	fmt.Fprintf(out, "Consultando %s (%s)...\n\n", client.BaseURL(), cfg.Ambiente)
+	cache := parametrizacao.NovoCache("")
+	defer func() {
+		if err := cache.Gravar(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "aviso: nao consegui gravar o cache de parametros: %v\n", err)
+		}
+	}()
+	consulta := parametrizacao.NovaConsulta(client, cache)
+	consulta.Renovar = f.semCache
 
-	convenio, err := client.Convenio(cmd.Context(), municipio.codigo)
+	fmt.Fprintf(out, "Parametros municipais em %s (%s)\n\n", consulta.BaseURL(), cfg.Ambiente)
+
+	respostaConvenio, err := consulta.Convenio(cmd.Context(), municipio.codigo)
 	if err != nil {
 		return explainParametrosError(err, municipio, codigo, competencia)
 	}
+	convenio := respostaConvenio.Valor
+	origem := origemDasRespostas{}
+	origem.anotar(respostaConvenio.DoCache, respostaConvenio.ConsultadoEm)
 
 	fmt.Fprintf(out, "  Municipio    %s\n", municipio)
 	fmt.Fprintf(out, "  Convenio     %s\n", descreverConvenio(convenio))
@@ -126,18 +143,21 @@ func runParametros(cmd *cobra.Command, args []string, f *parametrosFlags) error 
 	if !convenio.Ativo {
 		fmt.Fprintf(out, "\nO ADN so parametriza municipios com convenio ativo: nao ha aliquota a consultar.\n")
 		orientarAliquota(out, cfg.Ambiente, false)
+		origem.informar(out)
 		return nil
 	}
 
-	var aliquotas []parametrizacao.Aliquota
+	var respostaAliquotas parametrizacao.Resposta[[]parametrizacao.Aliquota]
 	if competencia.IsZero() {
-		aliquotas, err = client.HistoricoAliquotas(cmd.Context(), municipio.codigo, codigo)
+		respostaAliquotas, err = consulta.HistoricoAliquotas(cmd.Context(), municipio.codigo, codigo)
 	} else {
-		aliquotas, err = client.Aliquota(cmd.Context(), municipio.codigo, codigo, competencia)
+		respostaAliquotas, err = consulta.Aliquota(cmd.Context(), municipio.codigo, codigo, competencia)
 	}
 	if err != nil {
 		return explainParametrosError(err, municipio, codigo, competencia)
 	}
+	aliquotas := respostaAliquotas.Valor
+	origem.anotar(respostaAliquotas.DoCache, respostaAliquotas.ConsultadoEm)
 
 	titulo := "Historico de aliquotas do ISSQN"
 	if !competencia.IsZero() {
@@ -152,7 +172,34 @@ func runParametros(cmd *cobra.Command, args []string, f *parametrosFlags) error 
 	}
 
 	orientarAliquota(out, cfg.Ambiente, true)
+	origem.informar(out)
 	return nil
+}
+
+// origemDasRespostas tracks whether anything shown came from the cache, and
+// the oldest such answer, so the output never passes a remembered answer off
+// as one the ADN just gave.
+type origemDasRespostas struct {
+	doCache    bool
+	maisAntiga time.Time
+}
+
+func (o *origemDasRespostas) anotar(doCache bool, consultadoEm time.Time) {
+	if !doCache {
+		return
+	}
+	if !o.doCache || consultadoEm.Before(o.maisAntiga) {
+		o.maisAntiga = consultadoEm
+	}
+	o.doCache = true
+}
+
+func (o *origemDasRespostas) informar(out io.Writer) {
+	if !o.doCache {
+		return
+	}
+	fmt.Fprintf(out, "\nResposta guardada, obtida do ADN em %s. Use --sem-cache para consultar de novo.\n",
+		o.maisAntiga.Local().Format(layoutDataHora))
 }
 
 // newParametrosClient builds a client authenticated by the configured
