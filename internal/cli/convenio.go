@@ -14,11 +14,11 @@ import (
 )
 
 // conferirConvenio applies E0635 and E0640, the two ISS rate rules that turn on
-// the municipality's convênio, by asking the ADN (ADR 0017).
+// the municipality's convênio, by asking the ADN (ADR 0018).
 //
 // Only an ME/EPP assessing the ISSQN outside the Simples depends on them, so
 // nobody else pays the round trip. The answer comes from the 24-hour cache when
-// it can (ADR 0016).
+// it can (ADR 0017).
 //
 // A lookup that fails does not stop the emission: the rules are left to the
 // Sefin, as they were before this check existed, and the user is told so. A

@@ -19,7 +19,7 @@ import (
 // author chose: it spares the ADN a round trip on every emission of the same
 // day, and ages out before a change can outlive one working day. The cost of
 // being wrong is bounded too: a stale convênio makes the Sefin reject the DPS,
-// it never makes a wrong invoice (ADR 0016).
+// it never makes a wrong invoice (ADR 0017).
 const Validade = 24 * time.Hour
 
 // NomeArquivo is the file the cache lives in, inside the user's cache

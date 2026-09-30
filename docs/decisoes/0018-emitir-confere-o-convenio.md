@@ -1,4 +1,4 @@
-# 0017 — O `emitir` consulta o convênio para aplicar E0635 e E0640
+# 0018 — O `emitir` consulta o convênio para aplicar E0635 e E0640
 
 **Status:** Aceita
 **Data:** 2026-09-30
@@ -18,7 +18,7 @@ ISSQN pela alíquota do município (`regime_apuracao` `iss-municipio` ou
 | inativo | obrigatória | E0640 |
 
 Com o cliente do ADN e o cache de 24 horas
-([ADR 0016](0016-parametros-municipais-com-cache.md)), a resposta passou a
+([ADR 0017](0017-parametros-municipais-com-cache.md)), a resposta passou a
 estar a uma consulta de distância.
 
 ## Decisão

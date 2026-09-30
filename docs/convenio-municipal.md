@@ -12,7 +12,7 @@ ME/EPP do Simples que apura o ISSQN fora do Simples (`regime_apuracao`
 convênio, então o `nfse emitir` consulta o ADN antes de assinar, nesse regime e
 só nele, e recusa a DPS que a Sefin rejeitaria. Se a consulta falhar, ele avisa
 e deixa as regras para a Sefin. Veja a
-[ADR 0017](decisoes/0017-emitir-confere-o-convenio.md).
+[ADR 0018](decisoes/0018-emitir-confere-o-convenio.md).
 
 ## 1. A consulta oficial (API de Parâmetros Municipais)
 

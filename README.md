@@ -326,7 +326,7 @@ mais. Se o ADN não responder, o `emitir` avisa e segue, e a Sefin confere na
 recepção. Se o serviço for prestado em outro município, os dois convênios são
 consultados, e a regra só é aplicada quando eles concordam: qual município
 recebe o ISSQN depende do serviço (LC 116/2003, art. 3º). Por quê:
-[ADR 0017](docs/decisoes/0017-emitir-confere-o-convenio.md).
+[ADR 0018](docs/decisoes/0018-emitir-confere-o-convenio.md).
 
 ### Consultar o convênio e a alíquota do município
 
@@ -361,7 +361,7 @@ de produção. Os detalhes da API estão em
 As respostas ficam guardadas por **24 horas** no diretório de cache do sistema,
 e a saída diz quando uma veio de lá. Se o município acabou de mudar a
 parametrização, `--sem-cache` consulta de novo. Por que 24 horas:
-[ADR 0016](docs/decisoes/0016-parametros-municipais-com-cache.md).
+[ADR 0017](docs/decisoes/0017-parametros-municipais-com-cache.md).
 
 ### Enviar para a Sefin Nacional
 
@@ -706,7 +706,7 @@ município.
 
 **As regras que dependem do convênio do município** (E0635, E0640), para o
 ME/EPP que apura o ISSQN fora do Simples, com uma consulta ao ADN antes de
-assinar ([ADR 0017](docs/decisoes/0017-emitir-confere-o-convenio.md)).
+assinar ([ADR 0018](docs/decisoes/0018-emitir-confere-o-convenio.md)).
 
 O que fica de fora são as outras parametrizações municipais: regimes
 especiais, retenções e benefícios. A palavra final é sempre do governo.
