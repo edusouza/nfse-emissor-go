@@ -37,6 +37,20 @@ type ISSRateContext struct {
 
 	// Rate is the pAliq about to be declared. Zero means it will be omitted.
 	Rate float64
+
+	// ConvenioAtivo is whether the convênio of the municipality where the
+	// ISSQN is due is active, or nil when that is not known. Only an ME/EPP
+	// assessing outside the Simples depends on it (DependsOnConvenio); for
+	// everyone else it is ignored.
+	ConvenioAtivo *bool
+}
+
+// DependsOnConvenio reports whether the outcome of ValidateISSRate turns on
+// the municipality's convênio, which is what decides whether asking the ADN is
+// worth a round trip. It is true only for an ME/EPP assessing the ISSQN
+// outside the Simples (rules E0635 and E0640).
+func (ctx ISSRateContext) DependsOnConvenio() bool {
+	return ctx.OpSimpNac == opSimpMEEPP && ctx.RegApTribSN != regApuracaoSN
 }
 
 // ValidateISSRate checks pAliq against the rules the Sefin applies on receipt,
@@ -45,10 +59,11 @@ type ISSRateContext struct {
 // The rules come from the "RN DPS_NFS-e" sheet of
 // docs/anexos/ANEXO_I-SEFIN_ADN-DPS_NFSe-SNNFSe-v1.00-20251226.xlsx.
 //
-// Two of them depend on whether the municipality's convênio is active, which
-// cannot be known offline. That only affects an ME/EPP assessing outside the
-// Simples; for everyone else the active and inactive cases agree, so the check
-// is decisive. See ValidateISSRate's warning return for the ambiguous case.
+// Two of them, E0635 and E0640, depend on whether the municipality's convênio
+// is active, which cannot be known offline. They only affect an ME/EPP
+// assessing outside the Simples, and are checked when ConvenioAtivo says
+// which; for everyone else the active and inactive cases agree, so the check
+// is decisive without it.
 func ValidateISSRate(ctx ISSRateContext) error {
 	declared := ctx.Rate > 0
 
@@ -68,9 +83,7 @@ func ValidateISSRate(ctx ISSRateContext) error {
 
 	case opSimpMEEPP:
 		if ctx.RegApTribSN != regApuracaoSN {
-			// Rules E0635 and E0640 disagree depending on the convênio, which
-			// is not knowable here. Stay out of the way.
-			return nil
+			return validateOutsideSimples(ctx.ConvenioAtivo, declared)
 		}
 
 		if ctx.TpRetISSQN == retencaoNenhuma {
@@ -93,5 +106,25 @@ func ValidateISSRate(ctx ISSRateContext) error {
 		}
 	}
 
+	return nil
+}
+
+// validateOutsideSimples applies E0635 and E0640, which the convênio decides:
+// with it active the Sefin applies the municipality's own rate and refuses one
+// declared; with it inactive there is no rate to apply, and one is required.
+// When the convênio is not known, the rules disagree, and nothing is said.
+func validateOutsideSimples(convenioAtivo *bool, declared bool) error {
+	switch {
+	case convenioAtivo == nil:
+		return nil
+	case *convenioAtivo && declared:
+		return fmt.Errorf("com o convenio do municipio ativo, um ME/EPP que apura o ISSQN fora do Simples " +
+			"nao informa aliquota: a Sefin aplica a que o municipio parametrizou (a Sefin rejeita: E0635). " +
+			"Use iss_aliquota: 0")
+	case !*convenioAtivo && !declared:
+		return fmt.Errorf("sem convenio ativo no municipio, um ME/EPP que apura o ISSQN fora do Simples " +
+			"precisa informar a aliquota (a Sefin rejeita: E0640). Use --iss-aliquota com a aliquota " +
+			"que a prefeitura cobra")
+	}
 	return nil
 }
