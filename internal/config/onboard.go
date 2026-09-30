@@ -29,6 +29,10 @@ type Onboarded struct {
 	Servico          string
 	ServicoDescricao string
 
+	// Descricao is padroes.servico.descricao, the text that goes in xDescServ
+	// when --descricao is not given. Only the user can say it.
+	Descricao string
+
 	// SugestoesServico are candidate codes ranked from the provider's CNAE and
 	// written commented out, for the user to uncomment one.
 	//
@@ -82,10 +86,38 @@ func RenderOnboarded(o Onboarded) (string, error) {
 // quoteYAML renders a value as a double-quoted YAML scalar.
 //
 // Quoting everything keeps codes that begin with a zero — the DPS series and
-// several IBGE municipality codes — from being read back as numbers.
+// several IBGE municipality codes — from being read back as numbers. The
+// values are single-line, so line breaks and tabs become spaces; anything
+// else YAML does not allow raw is escaped, because the razao social comes
+// from a third party and a file config check cannot read looks like success.
 func quoteYAML(value string) string {
-	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", " ", "\r", " ", "\t", " ")
-	return `"` + replacer.Replace(value) + `"`
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range value { // an invalid byte arrives as U+FFFD
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\n' || r == '\r' || r == '\t':
+			b.WriteByte(' ')
+		case imprimivelEmYAML(r):
+			b.WriteRune(r)
+		case r <= 0xFFFF:
+			fmt.Fprintf(&b, `\u%04X`, r)
+		default:
+			fmt.Fprintf(&b, `\U%08X`, r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// imprimivelEmYAML is YAML's c-printable, less NEL, which a double-quoted
+// scalar would fold as a line break.
+func imprimivelEmYAML(r rune) bool {
+	return (r >= 0x20 && r <= 0x7E) || (r >= 0xA0 && r <= 0xD7FF) ||
+		(r >= 0xE000 && r <= 0xFFFD) || (r >= 0x10000 && r <= 0x10FFFF)
 }
 
 // TaxRegimeFromSimples maps the registry's Simples flags onto

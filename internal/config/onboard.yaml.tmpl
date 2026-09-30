@@ -63,7 +63,7 @@ padroes:
     # Onde o servico e prestado. Se vazio, usa prestador.municipio.
     municipio_prestacao: ""
     # Descricao usada quando --descricao nao e informado.
-    descricao: ""
+    descricao: {{ q .Descricao }}
 
   valores:
     # Aliquota de ISS em porcentagem.

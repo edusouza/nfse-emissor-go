@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,14 @@ type onboardData struct {
 	municipio string
 	regime    string
 	origens   []string
+
+	// foraDoSimples is the registry saying outright that the provider is
+	// neither an MEI nor a Simples opter — not the same as not knowing, and
+	// not something a prompt should paper over with mei or me_epp.
+	foraDoSimples bool
+
+	// descricao is padroes.servico.descricao, which only the user can say.
+	descricao string
 
 	// servico is cTribNac, and it is the one field nothing can discover:
 	// it says what the provider does, and only the provider knows that. It is
@@ -76,6 +85,7 @@ func newOnboardCommand() *cobra.Command {
 		municipioFlag   string
 		fonteMunicipios string
 		cacheMunicipios string
+		naoInterativo   bool
 	)
 
 	cmd := &cobra.Command{
@@ -103,6 +113,10 @@ Informe em --servico se ja souber; senao, o comando usa o CNAE do cadastro para
 sugerir candidatos, e deixa a escolha para voce. Para procurar:
 
   nfse servico buscar "o que voce faz"
+
+No terminal, o comando pergunta o que a consulta nao respondeu — so isso — e
+Enter deixa o campo em branco. --nao-interativo desliga as perguntas; sem
+terminal (num script, por exemplo) elas nunca aparecem.
 
 Nada aqui e obrigatorio para emitir: tudo que o comando preenche pode ser
 escrito a mao no nfse.yaml.`,
@@ -135,17 +149,18 @@ escrito a mao no nfse.yaml.`,
 			out := cmd.OutOrStdout()
 			data := &onboardData{}
 
+			busca := buscaMunicipio{
+				ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
+				cache: ibge.NovoCache(cacheMunicipios),
+			}
+			if !semRede {
+				busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
+			}
+
 			// Resolved before the password prompt and before the registry:
 			// a municipality that does not exist is a reason to stop, and
 			// the flag outranks what the registry says.
 			if municipioFlag != "" {
-				busca := buscaMunicipio{
-					ctx: cmd.Context(), out: out, errOut: cmd.ErrOrStderr(),
-					cache: ibge.NovoCache(cacheMunicipios),
-				}
-				if !semRede {
-					busca.client = ibge.New(ibge.Config{BaseURL: fonteMunicipios, UserAgent: AppVersion()})
-				}
 				m, err := busca.resolver(municipioFlag)
 				if err != nil {
 					return err
@@ -202,7 +217,20 @@ escrito a mao no nfse.yaml.`,
 				lookupRegistry(cmd.Context(), out, cmd.ErrOrStderr(), data, fonte)
 			}
 
-			sugerirServico(out, data)
+			// Questions go where the password prompt goes: stderr, so that
+			// `nfse onboard > log` still shows them — and with them the
+			// service candidates they are answered from.
+			interativo := !naoInterativo && stdinEhTerminal(cmd.InOrStdin())
+			if interativo {
+				sugerirServico(cmd.ErrOrStderr(), data)
+			} else {
+				sugerirServico(out, data)
+			}
+
+			if interativo {
+				p := &perguntador{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.ErrOrStderr()}
+				completarNoTerminal(p, data, busca, &serie, !cmd.Flags().Changed("serie"))
+			}
 
 			rendered, err := config.RenderOnboarded(config.Onboarded{
 				Ambiente:           ambiente,
@@ -214,6 +242,7 @@ escrito a mao no nfse.yaml.`,
 				Serie:              serie,
 				Servico:            data.servico.Codigo,
 				ServicoDescricao:   umaLinha(data.servico.Descricao, comentarioLargura),
+				Descricao:          data.descricao,
 				SugestoesServico:   sugestoesParaOArquivo(data.sugestoes),
 				CNAE:               formatCNAE(data.cnae),
 				CNAEDescricao:      umaLinha(data.cnaeDesc, comentarioLargura),
@@ -221,6 +250,13 @@ escrito a mao no nfse.yaml.`,
 			})
 			if err != nil {
 				return err
+			}
+
+			// What is written must read back: a file config check cannot
+			// open is worse than no file, because it looks like success.
+			if _, err := config.Decode(strings.NewReader(rendered)); err != nil {
+				return fmt.Errorf("o arquivo montado nao e um YAML valido (%w); nada foi gravado. "+
+					"Informe o problema no repositorio do emissor", err)
 			}
 
 			if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {
@@ -245,6 +281,7 @@ escrito a mao no nfse.yaml.`,
 	cmd.Flags().BoolVar(&force, "forcar", false, "sobrescreve um arquivo existente")
 	cmd.Flags().StringVar(&municipioFlag, "municipio", "", `municipio do prestador: codigo IBGE de 7 digitos, ou "Cidade/UF"`)
 	cmd.Flags().StringVar(&fonteMunicipios, "fonte-municipios", ibge.DefaultBaseURL, "servidor da consulta de municipios")
+	cmd.Flags().BoolVar(&naoInterativo, "nao-interativo", false, "nao pergunta nada no terminal; so grava o que descobriu")
 	cmd.Flags().StringVar(&cacheMunicipios, "cache-municipios", "", "arquivo de cache dos municipios (padrao: o diretorio de cache do sistema)")
 
 	return cmd
@@ -356,6 +393,8 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 		data.regime = regime
 		data.origem("prestador.regime_tributario", fonte)
 	}
+	data.foraDoSimples = empresa.OpcaoPeloMEI != nil && !*empresa.OpcaoPeloMEI &&
+		empresa.OpcaoPeloSimples != nil && !*empresa.OpcaoPeloSimples
 
 	// The CNAE does not go into the file — it is not a field of the DPS. It is
 	// kept because it is the only thing the registry knows about what the
@@ -390,7 +429,12 @@ func lookupRegistry(ctx context.Context, out, errOut io.Writer, data *onboardDat
 	if !empresa.Ativa() {
 		fmt.Fprintf(errOut, "aviso: a situacao cadastral nao esta ATIVA; a Sefin recusa a emissao nesse estado\n")
 	}
-	if data.regime == "" {
+	switch {
+	case data.foraDoSimples:
+		fmt.Fprintf(errOut, "aviso: o cadastro informa que a empresa nao e MEI nem optante pelo Simples Nacional, "+
+			"e este emissor so atende o Simples; se a opcao for recente, confira no Portal do Simples "+
+			"antes de preencher prestador.regime_tributario\n")
+	case data.regime == "":
 		fmt.Fprintf(errOut, "aviso: a consulta nao informou a opcao pelo Simples Nacional; "+
 			"preencha prestador.regime_tributario a mao\n")
 	}
@@ -485,9 +529,15 @@ func printPending(out io.Writer, data *onboardData, certFile, path string) {
 		}
 		pending = append(pending, linha)
 	}
-	pending = append(pending, "padroes.servico.descricao — o que voce presta")
+	if data.descricao == "" {
+		pending = append(pending, "padroes.servico.descricao — o que voce presta")
+	}
 
-	fmt.Fprintf(out, "\nFalta preencher em %s:\n", path)
+	if len(pending) == 0 {
+		fmt.Fprintf(out, "\nNada ficou em branco em %s.\n", path)
+	} else {
+		fmt.Fprintf(out, "\nFalta preencher em %s:\n", path)
+	}
 	for _, p := range pending {
 		for i, linha := range quebrar(p, larguraTexto-4) {
 			prefixo := "  - "

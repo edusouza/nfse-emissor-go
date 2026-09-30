@@ -123,3 +123,37 @@ func TestTaxRegimeFromSimples(t *testing.T) {
 		})
 	}
 }
+
+// The default description is the one field the user types in full; it has
+// to reach padroes.servico.descricao and survive quotes and line breaks.
+func TestRenderOnboardedDescricao(t *testing.T) {
+	rendered, err := RenderOnboarded(Onboarded{Descricao: `Consultoria em "TI"` + "\nsob demanda"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Decode(strings.NewReader(rendered))
+	if err != nil {
+		t.Fatalf("YAML invalido: %v\n%s", err, rendered)
+	}
+	if got := cfg.Padroes.Servico.Descricao; got != `Consultoria em "TI" sob demanda` {
+		t.Errorf("descricao = %q", got)
+	}
+}
+
+// The razao social comes from a third party. Whatever it holds, the file must
+// read back, and read back as the same text: characters YAML does not take
+// raw are escaped, not dropped.
+func TestRenderOnboardedEscapaOQueOYAMLNaoAceita(t *testing.T) {
+	nome := "A\x1b[DB\ufffeC\u0085D\u2028E\U0001F600F\x00G"
+	rendered, err := RenderOnboarded(Onboarded{Nome: nome + "\xff"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Decode(strings.NewReader(rendered))
+	if err != nil {
+		t.Fatalf("YAML invalido: %v\n%s", err, rendered)
+	}
+	if got, want := cfg.Prestador.Nome, nome+"\ufffd"; got != want {
+		t.Errorf("nome = %q; esperava %q", got, want)
+	}
+}
