@@ -110,6 +110,13 @@ func writeTestPFX(t *testing.T, password string, notAfter time.Time) string {
 // common name, which is where ICP-Brasil keeps the holder's CNPJ.
 func writeTestPFXSubject(t *testing.T, commonName, password string, notAfter time.Time) string {
 	t.Helper()
+	return writeTestPFXExtensions(t, commonName, password, notAfter)
+}
+
+// writeTestPFXExtensions is writeTestPFXSubject with extra certificate
+// extensions, for the holders an authority describes outside the common name.
+func writeTestPFXExtensions(t *testing.T, commonName, password string, notAfter time.Time, extensions ...pkix.Extension) string {
+	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -122,6 +129,8 @@ func writeTestPFXSubject(t *testing.T, commonName, password string, notAfter tim
 		NotBefore:    time.Now().Add(-365 * 24 * time.Hour),
 		NotAfter:     notAfter,
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+
+		ExtraExtensions: extensions,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {

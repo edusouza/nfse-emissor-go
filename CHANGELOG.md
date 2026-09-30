@@ -86,6 +86,68 @@ passa.
   roda quando os clientes mudam, toda segunda-feira e sob demanda — é a
   verificação que o ambiente onde o código foi escrito nunca conseguiu fazer.
 
+### CNPJ do certificado lido da extensão `subjectAltName` ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13))
+
+O emissor lia só o *common name* no formato `RAZÃO SOCIAL:CNPJ`, e uma AC que
+gravasse o titular de outro jeito deixava o `nfse onboard --certificado` sem
+CNPJ. O lugar normativo é o `otherName` de OID 2.16.76.1.3.3, definido no
+DOC-ICP-04 — e é por ele que a Sefin identifica quem assina: o ANEXO I recusa
+a assinatura de um certificado que não o traga. Por isso ele passa a ser lido
+**primeiro**, e o *common name* fica como reserva para certificados fora do
+ICP-Brasil, como o de teste em `exemplos/`.
+
+- **A conferência do `emitir` e do `enviar`**, que recusa assinar com o
+  certificado de outro prestador, compara agora o mesmo número que a Sefin
+  vai comparar. Um *common name* que discorde da extensão não passa mais por
+  ela.
+- **Só esse identificador é lido:** os vizinhos dele trazem o CPF do
+  responsável, que nunca pode passar pelo CNPJ da empresa.
+- **A leitura é estrita.** O valor precisa ter exatamente 14 dígitos, sem nada
+  antes ou depois; duas entradas com CNPJs diferentes, ou uma entrada
+  ilegível, tornam o certificado ambíguo. O emissor não escolhe um lado: o
+  `onboard` pede `--cnpj`, e o `emitir` e o `enviar` recusam assinar com esse
+  certificado.
+- **Sem dependência nova:** a extensão é decodificada com `encoding/asn1`, e um
+  alvo de *fuzzing* garante que nenhum certificado derruba o parser.
+
+### Validação pelo schema oficial ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4))
+
+A DPS era conferida por 718 linhas de regras escritas à mão, que divergiam do
+XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
+[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md).
+
+- **A DPS é validada contra os XSDs do pacote v1.01**, os que a Sefin usa,
+  embutidos no binário: ordem e cardinalidade dos elementos, escolhas,
+  enumerações, padrões, tamanhos e a assinatura XML-DSig. Todos os problemas
+  saem de uma vez, cada um com o caminho do campo, antes de o certificado ser
+  usado.
+- **Validador próprio, em Go puro**, sem `cgo` e sem dependência nova. Ele se
+  recusa a carregar um schema que use uma construção que não implementa: uma
+  versão futura quebra os testes em vez de ter uma regra ignorada.
+- Mensagens que explicam o `TSString`: um caractere fora do Latin-1 (o
+  travessão que editores de texto inserem sozinhos, por exemplo) ou um espaço
+  no começo ou no fim.
+
+### Corrigido
+
+- **`--deducoes` gerava uma DPS que a Sefin recusa.** O grupo `vDedRed` aceita
+  o valor (`vDR`) **ou** o percentual (`pDR`), e o emissor escrevia os dois. O
+  teste do gerador exigia os dois elementos, o que prendia o código ao
+  defeito. Achado pelo validador novo no primeiro dia.
+- **Endereço do tomador fora do leiaute** em `pkg/xmlbuilder`: o `TCEndereco`
+  começa por `endNac` (`cMun`, `CEP`) ou `endExt`, e o gerador escrevia `cMun`,
+  `UF`, `CEP` e `cPais` soltos depois da rua. Nenhum caminho do CLI monta
+  endereço hoje. Também achado pelo validador.
+
+### Removido
+
+- O validador estrutural escrito à mão (`validation.StructuralValidator`). A
+  fixture "válida" dele falhava no schema real de três jeitos.
+- Os montadores de endereço baseados em `etree` de `pkg/xmlbuilder`
+  (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`,
+  `AddressFromDomain`). Nada os chamava, e eles tinham o mesmo defeito de
+  leiaute. `AddressConfig` ganhou `City`, para o endereço no exterior.
+
 ## [0.8.0] - 2026-09-29
 
 O DANFSe volta, agora gerado aqui. A NT 008 suspendeu a API do governo em

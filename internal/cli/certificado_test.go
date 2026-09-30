@@ -3,6 +3,8 @@ package cli
 import (
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,10 +14,10 @@ import (
 )
 
 // certFor builds a CertificateInfo carrying only what the check reads: the
-// ICP-Brasil common name.
-func certFor(cn string) *xmlsigner.CertificateInfo {
+// common name and, optionally, the subjectAltName.
+func certFor(cn string, extensions ...pkix.Extension) *xmlsigner.CertificateInfo {
 	return &xmlsigner.CertificateInfo{
-		Certificate: &x509.Certificate{Subject: pkix.Name{CommonName: cn}},
+		Certificate: &x509.Certificate{Subject: pkix.Name{CommonName: cn}, Extensions: extensions},
 	}
 }
 
@@ -30,10 +32,10 @@ func TestEnsureCertificateBelongsToProvider(t *testing.T) {
 		{"CNPJ do prestador mascarado", "EMPRESA LTDA:12345678000195", "12.345.678/0001-95", false},
 		{"outra empresa", "EMPRESA LTDA:12345678000195", "11222333000181", true},
 
-		// The emitter only knows the certificate's CNPJ when the common name
+		// The emitter only knows the certificate's CNPJ when the certificate
 		// follows the ICP-Brasil layout. Refusing anything else would lock out
 		// certificates laid out differently, so silence is the safe answer.
-		{"certificado sem CNPJ no CN", "EMPRESA LTDA", "11222333000181", false},
+		{"certificado sem CNPJ no CN nem no SAN", "EMPRESA LTDA", "11222333000181", false},
 		{"CN com digitos invalidos", "EMPRESA LTDA:12345678000100", "11222333000181", false},
 		{"prestador desconhecido", "EMPRESA LTDA:12345678000195", "", false},
 	} {
@@ -47,6 +49,77 @@ func TestEnsureCertificateBelongsToProvider(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The Sefin identifies the signer by the subjectAltName, so that is what the
+// check compares — including when the common name has no CNPJ, or a different
+// one.
+func TestEnsureCertificateBelongsToProvider_PeloSubjectAltName(t *testing.T) {
+	san := icpBrasilCNPJExtension(t, "12345678000195")
+
+	for _, tc := range []struct {
+		name     string
+		cn       string
+		provider string
+		wantErr  bool
+	}{
+		{"mesmo CNPJ", "EMPRESA LTDA", "12345678000195", false},
+		{"outra empresa", "EMPRESA LTDA", "11222333000181", true},
+		{"CN diz outra empresa, SAN diz o prestador", "EMPRESA LTDA:11222333000181", "12345678000195", false},
+		{"CN diz o prestador, SAN diz outra empresa", "EMPRESA LTDA:11222333000181", "11222333000181", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ensureCertificateBelongsToProvider(certFor(tc.cn, san), tc.provider)
+			if tc.wantErr && err == nil {
+				t.Fatal("esperava recusa")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("nao esperava erro: %v", err)
+			}
+		})
+	}
+
+	err := ensureCertificateBelongsToProvider(certFor("EMPRESA LTDA", san), "11222333000181")
+	for _, want := range []string{"12.345.678/0001-95", "11.222.333/0001-81", "EMPRESA LTDA"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("mensagem nao menciona %q:\n%v", want, err)
+		}
+	}
+}
+
+// A certificate whose CNPJ entry contradicts itself says something about its
+// holder, and the Sefin reads that same entry: it is refused, not waved
+// through as if it had no CNPJ at all.
+func TestEnsureCertificateBelongsToProvider_RecusaCertificadoAmbiguo(t *testing.T) {
+	ambiguo := pkix.Extension{Id: asn1.ObjectIdentifier{2, 5, 29, 17}, Value: sanDoisCNPJs(t)}
+
+	for _, cn := range []string{"EMPRESA LTDA", "EMPRESA LTDA:12345678000195"} {
+		err := ensureCertificateBelongsToProvider(certFor(cn, ambiguo), "12345678000195")
+		if !errors.Is(err, xmlsigner.ErrCNPJAmbiguo) {
+			t.Errorf("CN %q: esperava a recusa por ambiguidade; veio %v", cn, err)
+		}
+	}
+}
+
+// sanDoisCNPJs is a subjectAltName with two CNPJ otherNames naming different
+// companies.
+func sanDoisCNPJs(t *testing.T) []byte {
+	t.Helper()
+
+	var nomes []asn1.RawValue
+	for _, cnpj := range []string{"12345678000195", "11222333000181"} {
+		ext := icpBrasilCNPJExtension(t, cnpj)
+		var um []asn1.RawValue
+		if _, err := asn1.Unmarshal(ext.Value, &um); err != nil {
+			t.Fatal(err)
+		}
+		nomes = append(nomes, um...)
+	}
+	b, err := asn1.Marshal(nomes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // The message exists to end a specific confusion, so it has to name both

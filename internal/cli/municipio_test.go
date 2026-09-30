@@ -293,6 +293,9 @@ func TestOnboardMunicipioDivergeDoCadastro(t *testing.T) {
 	if !strings.Contains(out, "vale o --municipio 4106902") {
 		t.Errorf("a divergencia nao foi avisada:\n%s", out)
 	}
+	if !strings.Contains(out, "(IBGE 3550308, nao usado)") {
+		t.Errorf("o resumo mostra o codigo do cadastro como se tivesse sido gravado:\n%s", out)
+	}
 	if !strings.Contains(gerado, "prestador.municipio: --municipio") {
 		t.Errorf("a origem ficou errada:\n%s", gerado)
 	}
@@ -309,6 +312,9 @@ func TestOnboardMunicipioConcordaComOCadastro(t *testing.T) {
 	}
 	if strings.Contains(out, "aviso") {
 		t.Errorf("avisou sem motivo:\n%s", out)
+	}
+	if !strings.Contains(out, "(IBGE 3550308)") {
+		t.Errorf("o resumo nao mostra o codigo gravado:\n%s", out)
 	}
 	if !strings.Contains(gerado, "prestador.municipio: --municipio\n") {
 		t.Errorf("a origem deveria continuar sendo o --municipio:\n%s", gerado)

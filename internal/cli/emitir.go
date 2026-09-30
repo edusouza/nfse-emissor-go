@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/edusouza/nfse-emissor-go/internal/config"
+	"github.com/edusouza/nfse-emissor-go/internal/domain/esquema"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/query"
 	"github.com/edusouza/nfse-emissor-go/internal/domain/validation"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
@@ -168,15 +169,11 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return err
 	}
 
-	// Validate the generated XML before spending the certificate on it: a
-	// structural problem is cheaper to report here than as a rejection later.
-	if errs := validation.NewStructuralValidator().ValidateDPS(built.XML); len(errs) > 0 {
-		var b strings.Builder
-		b.WriteString("o XML gerado nao passou na validacao estrutural:")
-		for _, e := range errs {
-			fmt.Fprintf(&b, "\n  - %s", e.Error())
-		}
-		return fmt.Errorf("%s", b.String())
+	// Validate the generated XML against the official schema before spending
+	// the certificate on it: a schema problem is cheaper to report here than
+	// as a rejection later.
+	if err := validarContraOSchema(built.XML); err != nil {
+		return err
 	}
 
 	if f.semAssinar {
@@ -490,11 +487,18 @@ func takerFor(nota config.Nota) *xmlbuilder.DPSTaker {
 // certificate cannot be salvaged by resending it with the right one, because
 // the signature inside the XML is part of what the government validates.
 //
-// An unreadable certificate CNPJ is not an error. Only ICP-Brasil guarantees
-// the "RAZAO SOCIAL:CNPJ" form, and refusing everything else would break
-// anyone whose certificate is laid out differently.
+// A certificate without a CNPJ is not an error. Only ICP-Brasil guarantees
+// where the holder's CNPJ is written — the subjectAltName otherName or the
+// "RAZAO SOCIAL:CNPJ" common name — and refusing everything else would break
+// anyone whose certificate is laid out differently. A certificate whose CNPJ
+// entry contradicts itself is refused: it does say who holds it, and the
+// Sefin reads that same entry.
 func ensureCertificateBelongsToProvider(certInfo *xmlsigner.CertificateInfo, providerCNPJ string) error {
-	certCNPJ := certInfo.SubjectCNPJ()
+	certCNPJ, err := certInfo.SubjectCNPJConferido()
+	if err != nil {
+		return fmt.Errorf("%w; nao da para conferir se ele e do prestador, e a Sefin le essa mesma extensao. "+
+			"Use outro A1 da empresa, ou peca a Autoridade Certificadora que emita um novo", err)
+	}
 	if certCNPJ == "" || providerCNPJ == "" {
 		return nil
 	}
@@ -735,4 +739,31 @@ func issRateContext(cfg *config.Config, nota config.Nota) validation.ISSRateCont
 		TpRetISSQN:  nota.RetencaoCode(),
 		Rate:        nota.ISSRate(),
 	}
+}
+
+// validarContraOSchema checks a DPS against the official XSD (ADR 0014).
+//
+// A failure here is the emitter's fault or the input's, never the network's,
+// so the message lists every problem at once with the path to each: fixing
+// one and rerunning to find the next is the cost this check exists to avoid.
+func validarContraOSchema(xml string) error {
+	schema, err := esquema.DPS()
+	if err != nil {
+		// The schemas are embedded and tested; reaching this is a defect in
+		// the binary, not something the user can fix.
+		return fmt.Errorf("o schema embutido da DPS nao carregou (%w); informe o problema no repositorio do emissor", err)
+	}
+
+	erros := schema.Validar([]byte(xml))
+	if len(erros) == 0 {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString("a DPS nao passou no schema oficial (XSD v1.01), e a Sefin a recusaria:")
+	for _, e := range erros {
+		fmt.Fprintf(&b, "\n  - %s", e)
+	}
+	b.WriteString("\nNada foi assinado nem enviado. Corrija os campos acima e emita de novo.")
+	return errors.New(b.String())
 }
