@@ -27,9 +27,9 @@ func entradaEhTerminal(in io.Reader) bool {
 	return ok && term.IsTerminal(int(f.Fd()))
 }
 
-// tentativas bounds how often one question is asked again after an invalid
-// answer. Past it the field is left blank and listed as pending: a file with
-// a gap beats a prompt that never lets go.
+// tentativas bounds how often one question is asked, the first time
+// included. Past it the field keeps its suggestion, or is left blank and
+// listed as pending: a file with a gap beats a prompt that never lets go.
 const tentativas = 3
 
 // perguntador reads answers from the terminal, one line each.
@@ -60,7 +60,9 @@ func (p *perguntador) perguntar(pergunta, sugestao string) (string, error) {
 }
 
 // ateValer asks until aceitar takes the answer, an empty answer is given, or
-// the attempts run out. aceitar returns what to say about a refused answer.
+// the attempts run out; in the last two cases it returns the suggestion,
+// which is blank when there is none. aceitar returns what to say about a
+// refused answer.
 func (p *perguntador) ateValer(pergunta, sugestao string, aceitar func(string) error) (string, error) {
 	for i := 0; i < tentativas; i++ {
 		resposta, err := p.perguntar(pergunta, sugestao)

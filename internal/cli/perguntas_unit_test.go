@@ -63,8 +63,7 @@ func TestAteValerRespostaVazia(t *testing.T) {
 // file is still written with what was discovered.
 func TestOnboardInterativoErroDeLeitura(t *testing.T) {
 	comoTerminal(t)
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 
 	var out bytes.Buffer
 	path := t.TempDir() + "/nfse.yaml"

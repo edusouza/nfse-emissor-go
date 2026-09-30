@@ -21,8 +21,7 @@ func comoTerminal(t *testing.T) {
 // onboardRespondendo runs onboard with the given lines typed at the prompt.
 func onboardRespondendo(t *testing.T, respostas string, args ...string) (string, string, error) {
 	t.Helper()
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 
 	path := filepath.Join(t.TempDir(), "nfse.yaml")
 	var out bytes.Buffer
@@ -233,8 +232,7 @@ func TestOnboardInterativoSerieInvalidaFicaASugerida(t *testing.T) {
 // stdout does not leave the user answering an invisible prompt.
 func TestOnboardInterativoPerguntaNoStderr(t *testing.T) {
 	comoTerminal(t)
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 
 	var stdout, stderr bytes.Buffer
 	root := NewRootCommand()
@@ -260,8 +258,7 @@ func TestOnboardInterativoPerguntaNoStderr(t *testing.T) {
 // typed field is recorded as typed.
 func TestOnboardInterativoPerguntaTudoSemCertificado(t *testing.T) {
 	comoTerminal(t)
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 
 	respostas := "Minha Empresa LTDA\n4106902\nme_epp\n12\n00003\n999999\n010101\nConsultoria\n"
 	var out bytes.Buffer
@@ -386,8 +383,7 @@ func TestOnboardInterativoMunicipioSemUF(t *testing.T) {
 // answering: they go to stderr with the question they are answered from.
 func TestOnboardInterativoSugestoesNoStderr(t *testing.T) {
 	comoTerminal(t)
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 	registro := registroFake(t, http.StatusOK, respostaTI)
 
 	var stdout, stderr bytes.Buffer
@@ -415,8 +411,7 @@ func TestOnboardInterativoSugestoesNoStderr(t *testing.T) {
 func TestOnboardInterativoNomeLongoDemais(t *testing.T) {
 	comoTerminal(t)
 
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
+	isolarCache(t)
 
 	// Without a certificate nothing knows the name, so it is asked.
 	var out bytes.Buffer

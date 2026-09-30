@@ -32,9 +32,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
     seta digitada por engano.
   - As perguntas, e os códigos de serviço sugeridos junto com elas, vão para
     o stderr: com `nfse onboard > log`, continuam aparecendo no terminal.
-  - Uma resposta inválida é perguntada de novo, no máximo três vezes. Enter
-    deixa o campo em branco e Ctrl-D encerra as perguntas; nos dois casos o
-    arquivo é gravado com o que se sabe.
+  - Cada pergunta é feita no máximo três vezes, contando a primeira, e uma
+    resposta inválida é recusada com o motivo. Enter, ou as tentativas
+    esgotadas, deixam o campo em branco — ou com a sugestão, no caso da
+    série. Ctrl-D encerra as perguntas, e o arquivo é gravado com o que se
+    sabe.
 - **`--nao-interativo`** mantém o comportamento anterior, que continua sendo o
   padrão quando não há terminal: o mesmo critério do prompt de senha.
 - `padroes.servico.descricao` passa a ser preenchida pelo `onboard`, quando
