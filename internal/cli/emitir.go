@@ -490,11 +490,18 @@ func takerFor(nota config.Nota) *xmlbuilder.DPSTaker {
 // certificate cannot be salvaged by resending it with the right one, because
 // the signature inside the XML is part of what the government validates.
 //
-// An unreadable certificate CNPJ is not an error. Only ICP-Brasil guarantees
-// the "RAZAO SOCIAL:CNPJ" form, and refusing everything else would break
-// anyone whose certificate is laid out differently.
+// A certificate without a CNPJ is not an error. Only ICP-Brasil guarantees
+// where the holder's CNPJ is written — the subjectAltName otherName or the
+// "RAZAO SOCIAL:CNPJ" common name — and refusing everything else would break
+// anyone whose certificate is laid out differently. A certificate whose CNPJ
+// entry contradicts itself is refused: it does say who holds it, and the
+// Sefin reads that same entry.
 func ensureCertificateBelongsToProvider(certInfo *xmlsigner.CertificateInfo, providerCNPJ string) error {
-	certCNPJ := certInfo.SubjectCNPJ()
+	certCNPJ, err := certInfo.SubjectCNPJConferido()
+	if err != nil {
+		return fmt.Errorf("%w; nao da para conferir se ele e do prestador, e a Sefin le essa mesma extensao. "+
+			"Use outro A1 da empresa, ou peca a Autoridade Certificadora que emita um novo", err)
+	}
 	if certCNPJ == "" || providerCNPJ == "" {
 		return nil
 	}
