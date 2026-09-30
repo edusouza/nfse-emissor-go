@@ -15,176 +15,38 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [0.9.0] - 2026-09-30
 
-O `onboard` completa o `nfse.yaml` no terminal, aceita o município pelo nome e
-confere o que vem do cadastro público antes de gravar. O CNPJ do certificado
-passa a ser lido de onde a Sefin o lê. E a DPS passa a ser validada contra os
-XSDs oficiais, o que achou no primeiro dia uma DPS recusável em toda emissão
-com `--deducoes`.
-Ver [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md),
-[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md) e
-[ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md).
+O `onboard` completa o `nfse.yaml` no terminal e aceita o município pelo nome, o CNPJ do certificado passa a ser lido de onde a Sefin o lê, e a DPS passa a ser validada contra os XSDs oficiais.
+Ver [ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md), [ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md) e [ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md).
 
-### `onboard` interativo ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14))
+### Adicionado
 
-- **No terminal, o `nfse onboard` pergunta o que a consulta não respondeu**, e
-  só isso: o que o certificado ou o cadastro público já disse não é perguntado
-  de novo. O arquivo sai completo, sem precisar abrir um editor.
-  - A série vem com a sugestão preenchida (`[00001]`).
-  - O **regime tributário** é explicado em duas linhas e **nunca sugerido**:
-    quando o cadastro diz que não sabe, sugerir seria adivinhar um campo que
-    vai em toda nota. Quando o cadastro diz que a empresa não é MEI nem
-    optante pelo Simples, ele nem é perguntado: o comando avisa, porque este
-    emissor só atende o Simples.
-  - O código do serviço é conferido na lista nacional e também não é
-    sugerido (ver [ADR 0009](docs/decisoes/0009-lista-de-servicos-embutida.md)).
-  - O município aceita o código ou "Cidade/UF", como o `--municipio`.
-  - A razão social e a descrição são conferidas no tamanho que a DPS aceita
-    (300 e 2000 caracteres) e recusam caracteres de controle, como os de uma
-    seta digitada por engano.
-  - As perguntas, e os códigos de serviço sugeridos junto com elas, vão para
-    o stderr: com `nfse onboard > log`, continuam aparecendo no terminal.
-  - Cada pergunta é feita no máximo três vezes, contando a primeira, e uma
-    resposta inválida é recusada com o motivo. Enter, ou as tentativas
-    esgotadas, deixam o campo em branco — ou com a sugestão, no caso da
-    série. Ctrl-D encerra as perguntas, e o arquivo é gravado com o que se
-    sabe.
-- **`--nao-interativo`** mantém o comportamento anterior, que continua sendo o
-  padrão quando não há terminal: o mesmo critério do prompt de senha.
-- `padroes.servico.descricao` passa a ser preenchida pelo `onboard`, quando
-  informada.
-- O `nfse.yaml` gerado é sempre legível: um caractere que o YAML não aceita
-  cru, vindo do cadastro público ou do certificado, é escapado em vez de
-  deixar o arquivo quebrado.
+- No terminal, o `nfse onboard` pergunta só o que o certificado e o cadastro público não responderam ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
+- O regime tributário é explicado e nunca sugerido; se o cadastro diz que a empresa está fora do Simples, ele nem é perguntado ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
+- `--nao-interativo` mantém o `onboard` sem perguntas, que continua sendo o padrão quando não há terminal ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
+- O `onboard` preenche `padroes.servico.descricao` ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
+- `nfse onboard --municipio` aceita o código IBGE, conferido sem rede, ou "Cidade/UF", resolvido pela lista do IBGE e guardado em cache ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
+- Opções `--fonte-municipios` e `--cache-municipios` no `onboard` ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
+- `pkg/codmun` confere um código de município pelo prefixo da UF e pelo dígito verificador, sem embutir a tabela ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12)).
+- Testes de contrato contra a BrasilAPI e o IBGE (`NFSE_TESTE_CONTRATO=1`), rodados por um workflow semanal ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12)).
+- O CNPJ do certificado é lido do `subjectAltName` (OID 2.16.76.1.3.3), com o *common name* como reserva ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
+- Um certificado com CNPJs divergentes ou ilegíveis na extensão é recusado como ambíguo, sem escolher um lado ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
+- A DPS é validada contra os XSDs oficiais do pacote v1.01, por um validador em Go puro, com todos os problemas de uma vez ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+- O `emitir` avisa quando a competência é de 2027 em diante, quando o grupo IBS/CBS passa a ser obrigatório no Simples ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21)).
 
-### Município informado à mão, sem tabela embutida ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11))
+### Corrigido
 
-O município era o único campo que o `onboard --sem-rede` deixava em branco
-sem ter nada a oferecer. É também o pior de digitar, e o erro nele nunca
-aparece: a Sefin aceita qualquer código válido. Ver
-[ADR 0013](docs/decisoes/0013-municipio-informado-pelo-nome.md).
+- `--deducoes` escrevia `vDR` e `pDR` juntos, e a Sefin recusaria a DPS ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+- O endereço do tomador em `pkg/xmlbuilder` saía fora do leiaute do `TCEndereco` ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+- O `onboard` gravava o código de município do cadastro sem conferir o dígito verificador e a UF ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12)).
+- O `config check` e o `emitir` conferiam só o tamanho de `prestador.municipio` e `servico.municipio_prestacao`, e não o dígito verificador ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
+- O cache de municípios, também usado pelo `nfse danfse`, aceitava entradas adulteradas sem conferir código e UF ([#11](https://github.com/edusouza/nfse-emissor-go/issues/11)).
+- A conferência do `emitir` e do `enviar` comparava o CNPJ do *common name*, e não o da extensão, que é o que a Sefin compara ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13)).
+- O `nfse.yaml` gerado pelo `onboard` podia sair ilegível com um caractere que o YAML não aceita, vindo do cadastro ou do certificado ([#14](https://github.com/edusouza/nfse-emissor-go/issues/14)).
 
-- **`nfse onboard --municipio`** aceita o código IBGE de 7 dígitos, conferido
-  sem rede, ou o nome com a UF: `"Curitiba/PR"`, `"curitiba - pr"`,
-  `"Curitiba-PR"` e `"CURITIBA, PR"` dão no mesmo. O nome é procurado na lista do estado no
-  IBGE, e a lista inteira fica em cache: da segunda vez em diante, qualquer
-  município daquela UF funciona com `--sem-rede`. Um nome digitado errado
-  volta com os nomes parecidos, e um nome sem UF é recusado, porque 232 nomes
-  se repetem entre estados.
-- O `--municipio` vale mais que o cadastro público. Quando os dois
-  divergem, o comando avisa.
-- **O cache de municípios é conferido, não aceito de boa-fé.** Toda entrada
-  que entra, é lida do disco ou sai dele precisa de um código IBGE válido,
-  da UF desse código e de um nome imprimível. Um cache adulterado, que ligue
-  "Curitiba/PR" ao código de São Paulo, é ignorado, e a lista é consultada de
-  novo. A mesma regra vale para o `nfse danfse`, que usa o mesmo cache.
-- **O `config check` e o `emitir` conferem o dígito verificador** de
-  `prestador.municipio` e de `servico.municipio_prestacao`. Antes, só o
-  tamanho era conferido.
-- **A tabela de municípios continua fora do binário**, como decidido na
-  [ADR 0012](docs/decisoes/0012-municipio-por-consulta.md). Ela entra só nos
-  testes, que conferem contra os 5570 municípios oficiais o dígito
-  verificador, as UFs e a normalização dos nomes.
-- Novas opções `--fonte-municipios` e `--cache-municipios`, equivalentes ao
-  `--fonte` e ao `--cache` do `nfse danfse`.
+### Removido
 
-### Município do cadastro conferido antes de ir para o arquivo ([#12](https://github.com/edusouza/nfse-emissor-go/issues/12))
-
-O `onboard` confiava no campo `codigo_municipio_ibge` da BrasilAPI sem
-conferir nada além do tamanho. A resposta traz também `codigo_municipio`, o
-código TOM de quatro dígitos da Receita, e um campo trocado mandaria toda nota
-para o município errado — com a Sefin aceitando, porque qualquer código válido
-passa.
-
-- **O código do município vem conferido pelo dígito verificador do IBGE** e
-  pela UF que a mesma resposta informa. Um código que não confere fica
-  pendente, com aviso, em vez de ir para o `nfse.yaml`.
-- **`pkg/codmun`** traz essa conferência sem carregar a tabela de municípios
-  no binário ([ADR 0012](docs/decisoes/0012-municipio-por-consulta.md)): o
-  código tem o prefixo da UF e um dígito verificador, e isso basta para pegar
-  um dígito trocado. Os nove municípios que o IBGE numerou sem dígito válido
-  estão listados, e um teste confere o algoritmo contra os 5570 códigos do
-  `ANEXO_A` oficial.
-- **Testes de contrato** contra a BrasilAPI e o serviço de localidades do
-  IBGE, desligados por padrão (`NFSE_TESTE_CONTRATO=1`). Um workflow novo os
-  roda quando os clientes mudam, toda segunda-feira e sob demanda — é a
-  verificação que o ambiente onde o código foi escrito nunca conseguiu fazer.
-
-### CNPJ do certificado lido da extensão `subjectAltName` ([#13](https://github.com/edusouza/nfse-emissor-go/issues/13))
-
-O emissor lia só o *common name* no formato `RAZÃO SOCIAL:CNPJ`, e uma AC que
-gravasse o titular de outro jeito deixava o `nfse onboard --certificado` sem
-CNPJ. O lugar normativo é o `otherName` de OID 2.16.76.1.3.3, definido no
-DOC-ICP-04 — e é por ele que a Sefin identifica quem assina: o ANEXO I recusa
-a assinatura de um certificado que não o traga. Por isso ele passa a ser lido
-**primeiro**, e o *common name* fica como reserva para certificados fora do
-ICP-Brasil, como o de teste em `exemplos/`.
-
-- **A conferência do `emitir` e do `enviar`**, que recusa assinar com o
-  certificado de outro prestador, compara agora o mesmo número que a Sefin
-  vai comparar. Um *common name* que discorde da extensão não passa mais por
-  ela.
-- **Só esse identificador é lido:** os vizinhos dele trazem o CPF do
-  responsável, que nunca pode passar pelo CNPJ da empresa.
-- **A leitura é estrita.** O valor precisa ter exatamente 14 dígitos, sem nada
-  antes ou depois; duas entradas com CNPJs diferentes, ou uma entrada
-  ilegível, tornam o certificado ambíguo. O emissor não escolhe um lado: o
-  `onboard` pede `--cnpj`, e o `emitir` e o `enviar` recusam assinar com esse
-  certificado.
-- **Sem dependência nova:** a extensão é decodificada com `encoding/asn1`, e um
-  alvo de *fuzzing* garante que nenhum certificado derruba o parser.
-
-### Validação pelo schema oficial ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4))
-
-A DPS era conferida por 718 linhas de regras escritas à mão, que divergiam do
-XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
-[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md).
-
-- **A DPS é validada contra os XSDs do pacote v1.01**, os que a Sefin usa,
-  embutidos no binário: ordem e cardinalidade dos elementos, escolhas,
-  enumerações, padrões, tamanhos e a assinatura XML-DSig. Todos os problemas
-  saem de uma vez, cada um com o caminho do campo, antes de o certificado ser
-  usado.
-- **Validador próprio, em Go puro**, sem `cgo` e sem dependência nova. Ele se
-  recusa a carregar um schema que use uma construção que não implementa: uma
-  versão futura quebra os testes em vez de ter uma regra ignorada.
-- Mensagens que explicam o `TSString`: um caractere fora do Latin-1 (o
-  travessão que editores de texto inserem sozinhos, por exemplo) ou um espaço
-  no começo ou no fim.
-
-#### Corrigido pelo validador novo
-
-- **`--deducoes` gerava uma DPS que a Sefin recusa.** O grupo `vDedRed` aceita
-  o valor (`vDR`) **ou** o percentual (`pDR`), e o emissor escrevia os dois. O
-  teste do gerador exigia os dois elementos, o que prendia o código ao
-  defeito. Achado pelo validador novo no primeiro dia.
-- **Endereço do tomador fora do leiaute** em `pkg/xmlbuilder`: o `TCEndereco`
-  começa por `endNac` (`cMun`, `CEP`) ou `endExt`, e o gerador escrevia `cMun`,
-  `UF`, `CEP` e `cPais` soltos depois da rua. Nenhum caminho do CLI monta
-  endereço hoje. Também achado pelo validador.
-
-#### Removido
-
-- O validador estrutural escrito à mão (`validation.StructuralValidator`). A
-  fixture "válida" dele falhava no schema real de três jeitos.
-- Os montadores de endereço baseados em `etree` de `pkg/xmlbuilder`
-  (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`,
-  `AddressFromDomain`). Nada os chamava, e eles tinham o mesmo defeito de
-  leiaute. `AddressConfig` ganhou `City`, para o endereço no exterior.
-
-### IBS/CBS: a pergunta respondida, e um aviso ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21))
-
-- **Quando um MEI ou ME/EPP precisa declarar IBS/CBS:** pelo ANEXO I v1.01, o
-  grupo `IBSCBS` só é obrigatório para optantes do Simples Nacional **a partir
-  de 2027**. Até lá ele é opcional, exige a DPS 1.01 e o `cNBS` do serviço, e
-  a DPS 1.00 que o emissor gera continua válida. A análise completa, com a
-  fonte de cada afirmação e o que os documentos não dizem, está na
-  [ADR 0015](docs/decisoes/0015-ibs-cbs-em-2027.md).
-- **`emitir` avisa quando a competência é de 2027 em diante**: a nota sai
-  sem o grupo que o ANEXO I torna obrigatório. É um aviso, não uma recusa,
-  porque nenhuma regra recusa a DPS ainda.
-- O grupo em si fica para quando houver a tabela oficial de
-  `CST`/`cClassTrib`, que não está no repositório. Preenchê-lo antes disso
-  seria adivinhar o imposto.
+- O validador estrutural escrito à mão (`validation.StructuralValidator`), substituído pela validação pelo XSD ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
+- Os montadores de endereço sem uso de `pkg/xmlbuilder` (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`, `AddressFromDomain`) ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4)).
 
 ## [0.8.0] - 2026-09-29
 
