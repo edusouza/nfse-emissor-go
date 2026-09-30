@@ -180,6 +180,10 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 	}
 
 	if f.semAssinar {
+		// The ADN only answers a certificate, and this path never loads one.
+		if issRateContext(cfg, nota).DependsOnConvenio() {
+			avisarConvenioNaoConferido(cmd.ErrOrStderr(), "sem assinar, o certificado nao e carregado, e o ADN so responde a ele")
+		}
 		path, err := writeDPS(cfg, f, built.DPSID, built.XML, false)
 		if err != nil {
 			return err
@@ -193,6 +197,12 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 	}
 
 	if err := ensureCertificateBelongsToProvider(certInfo, cfg.Prestador.CNPJ); err != nil {
+		return err
+	}
+
+	// Before signing, so that a declaration the Sefin is certain to refuse
+	// neither spends the certificate nor a number of the series.
+	if err := conferirConvenio(cmd, cfg, nota, certInfo); err != nil {
 		return err
 	}
 

@@ -19,8 +19,8 @@ auxiliar que se entrega ao cliente, desenhado aqui conforme a NT 008.
 
 - **Emissão em produção**, com valor fiscal. É o mesmo caminho técnico; o que
   muda é a consequência de errar. É o que falta para a `1.0.0`.
-- As regras que dependem do convênio do município com o Sistema Nacional —
-  veja [o que a validação local cobre](#o-que-a-validação-local-cobre).
+- Regimes especiais, retenções e benefícios municipais, que o ADN também
+  parametriza — veja [o que a validação local cobre](#o-que-a-validação-local-cobre).
 
 ## Instalação
 
@@ -313,12 +313,20 @@ Os valores são `nao` (padrão), `tomador` e `intermediario`.
 Um ME/EPP que apura o ISSQN fora do Simples declara isso em
 `prestador.regime_apuracao` (`sn`, `iss-municipio` ou `fora-do-sn`). Nesses dois
 últimos casos a regra depende do convênio do município com o Sistema Nacional,
-e o `emitir` ainda não o consulta. Consulte você mesmo com o `nfse parametros`:
+e o `emitir` o consulta no ADN antes de assinar:
 
 | Convênio do município | Alíquota |
 |---|---|
 | ativo | não pode informar (E0635) — a Sefin aplica a parametrizada |
 | inativo | **precisa** informar (E0640) |
+
+A consulta usa o certificado e o cache de 24 horas do `nfse parametros`, e só
+acontece nesse regime: MEI e ME/EPP no Simples não fazem nenhuma chamada a
+mais. Se o ADN não responder, o `emitir` avisa e segue, e a Sefin confere na
+recepção. Se o serviço for prestado em outro município, os dois convênios são
+consultados, e a regra só é aplicada quando eles concordam: qual município
+recebe o ISSQN depende do serviço (LC 116/2003, art. 3º). Por quê:
+[ADR 0017](docs/decisoes/0017-emitir-confere-o-convenio.md).
 
 ### Consultar o convênio e a alíquota do município
 
@@ -696,10 +704,12 @@ regras de alíquota do ISS que dependem só do regime do prestador (E0595,
 E0600, E0621, E0625) e o dígito verificador de CNPJ, CPF e código de
 município.
 
-O que fica de fora, por enquanto, são as regras que dependem do convênio do
-município (E0635, E0640). O `nfse parametros` responde a pergunta, mas o
-`emitir` ainda não a faz sozinho. A palavra final é sempre do governo. Veja a
-issue [#5](https://github.com/edusouza/nfse-emissor-go/issues/5).
+**As regras que dependem do convênio do município** (E0635, E0640), para o
+ME/EPP que apura o ISSQN fora do Simples, com uma consulta ao ADN antes de
+assinar ([ADR 0017](docs/decisoes/0017-emitir-confere-o-convenio.md)).
+
+O que fica de fora são as outras parametrizações municipais: regimes
+especiais, retenções e benefícios. A palavra final é sempre do governo.
 
 ## Glossário
 
