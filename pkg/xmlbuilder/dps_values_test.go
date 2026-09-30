@@ -139,18 +139,36 @@ func TestDPSBuilder_Discounts(t *testing.T) {
 	})
 }
 
+// TCInfoDedRed is a choice between pDR, vDR and a list of documents. This
+// test used to require both pDR and vDR, and so held the builder to a DPS the
+// schema refuses; the schema validator of issue #4 caught it.
 func TestDPSBuilder_Deductions(t *testing.T) {
-	cfg := basicDPSConfig()
-	cfg.Values = DPSValues{ServiceValue: 1000, Deductions: 200}
-	xmlStr := buildXML(t, cfg)
+	t.Run("valor", func(t *testing.T) {
+		cfg := basicDPSConfig()
+		cfg.Values = DPSValues{ServiceValue: 1000, Deductions: 200, DeductionPercentage: 20}
+		xmlStr := buildXML(t, cfg)
 
-	if got := path(t, xmlStr, "DPS/infDPS/valores/vDedRed/vDR"); got != "200.00" {
-		t.Errorf("vDR = %q", got)
-	}
-	// 200 / 1000 = 20%
-	if got := path(t, xmlStr, "DPS/infDPS/valores/vDedRed/pDR"); got != "20.00" {
-		t.Errorf("pDR = %q, esperava 20.00", got)
-	}
+		if got := path(t, xmlStr, "DPS/infDPS/valores/vDedRed/vDR"); got != "200.00" {
+			t.Errorf("vDR = %q", got)
+		}
+		absent(t, xmlStr, "DPS/infDPS/valores/vDedRed/pDR")
+	})
+
+	t.Run("so o percentual", func(t *testing.T) {
+		cfg := basicDPSConfig()
+		cfg.Values = DPSValues{ServiceValue: 1000, DeductionPercentage: 12.5}
+		xmlStr := buildXML(t, cfg)
+
+		if got := path(t, xmlStr, "DPS/infDPS/valores/vDedRed/pDR"); got != "12.50" {
+			t.Errorf("pDR = %q", got)
+		}
+		absent(t, xmlStr, "DPS/infDPS/valores/vDedRed/vDR")
+	})
+
+	t.Run("nenhum", func(t *testing.T) {
+		xmlStr := buildXML(t, basicDPSConfig())
+		absent(t, xmlStr, "DPS/infDPS/valores/vDedRed")
+	})
 }
 
 func TestDPSBuilder_TaxSection(t *testing.T) {

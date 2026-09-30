@@ -90,6 +90,44 @@ ICP-Brasil, como o de teste em `exemplos/`.
 - **Sem dependência nova:** a extensão é decodificada com `encoding/asn1`, e um
   alvo de *fuzzing* garante que nenhum certificado derruba o parser.
 
+### Validação pelo schema oficial ([#4](https://github.com/edusouza/nfse-emissor-go/issues/4))
+
+A DPS era conferida por 718 linhas de regras escritas à mão, que divergiam do
+XSD versionado ao lado. Agora o emissor lê o próprio XSD. Ver
+[ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md).
+
+- **A DPS é validada contra os XSDs do pacote v1.01**, os que a Sefin usa,
+  embutidos no binário: ordem e cardinalidade dos elementos, escolhas,
+  enumerações, padrões, tamanhos e a assinatura XML-DSig. Todos os problemas
+  saem de uma vez, cada um com o caminho do campo, antes de o certificado ser
+  usado.
+- **Validador próprio, em Go puro**, sem `cgo` e sem dependência nova. Ele se
+  recusa a carregar um schema que use uma construção que não implementa: uma
+  versão futura quebra os testes em vez de ter uma regra ignorada.
+- Mensagens que explicam o `TSString`: um caractere fora do Latin-1 (o
+  travessão que editores de texto inserem sozinhos, por exemplo) ou um espaço
+  no começo ou no fim.
+
+### Corrigido
+
+- **`--deducoes` gerava uma DPS que a Sefin recusa.** O grupo `vDedRed` aceita
+  o valor (`vDR`) **ou** o percentual (`pDR`), e o emissor escrevia os dois. O
+  teste do gerador exigia os dois elementos, o que prendia o código ao
+  defeito. Achado pelo validador novo no primeiro dia.
+- **Endereço do tomador fora do leiaute** em `pkg/xmlbuilder`: o `TCEndereco`
+  começa por `endNac` (`cMun`, `CEP`) ou `endExt`, e o gerador escrevia `cMun`,
+  `UF`, `CEP` e `cPais` soltos depois da rua. Nenhum caminho do CLI monta
+  endereço hoje. Também achado pelo validador.
+
+### Removido
+
+- O validador estrutural escrito à mão (`validation.StructuralValidator`). A
+  fixture "válida" dele falhava no schema real de três jeitos.
+- Os montadores de endereço baseados em `etree` de `pkg/xmlbuilder`
+  (`BuildAddressXML`, `BuildNationalAddressXML`, `BuildForeignAddressXML`,
+  `AddressFromDomain`). Nada os chamava, e eles tinham o mesmo defeito de
+  leiaute. `AddressConfig` ganhou `City`, para o endereço no exterior.
+
 ### IBS/CBS: a pergunta respondida, e um aviso ([#21](https://github.com/edusouza/nfse-emissor-go/issues/21))
 
 - **Quando um MEI ou ME/EPP precisa declarar IBS/CBS:** pelo ANEXO I v1.01, o
