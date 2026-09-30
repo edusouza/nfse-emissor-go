@@ -16,6 +16,12 @@ import (
 // ResponseErro. Keeping the test bodies faithful to the published shapes is the
 // point — the previous client passed a large test suite while speaking a
 // protocol the government does not implement.
+//
+// The rejection codes are real ones, with their official messages: the DPS
+// rules come from ANEXO I. The lookups have no codes of their own in the
+// published annexes, so their fixtures borrow the ADN's for the same situation
+// (ANEXO IV). The tests check that a code reaches the user, not what it means,
+// but a made-up code would teach the wrong format to whoever reads them.
 
 const testSignedDPS = `<?xml version="1.0"?><DPS><infDPS Id="DPS123"/></DPS>`
 
@@ -118,8 +124,8 @@ func TestEmit_RejectionListsEveryReason(t *testing.T) {
 			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
 			"idDPS":                 "DPS123",
 			"erros": []map[string]string{
-				{"codigo": "E001", "descricao": "cTribNac invalido", "complemento": "serv/cServ/cTribNac"},
-				{"codigo": "E002", "descricao": "Aliquota nao informada"},
+				{"codigo": "E0310", "descricao": "O código de tributação nacional informado não existe conforme a lista de serviços nacional do Sistema Nacional NFS-e.", "complemento": "serv/cServ/cTribNac"},
+				{"codigo": "E0600", "descricao": "Não é permitido informar a alíquota para prestador de serviço optante do simples nacional do tipo MEI."},
 			},
 		})
 	})
@@ -143,12 +149,12 @@ func TestEmit_RejectionListsEveryReason(t *testing.T) {
 		t.Fatalf("esperava 2 rejeicoes, obtive %d", len(rejection.Rejections))
 	}
 	msg := err.Error()
-	for _, want := range []string{"E001", "cTribNac invalido", "serv/cServ/cTribNac", "E002"} {
+	for _, want := range []string{"E0310", "código de tributação nacional", "serv/cServ/cTribNac", "E0600"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("a mensagem nao menciona %q:\n%s", want, msg)
 		}
 	}
-	if got := rejection.Codes(); len(got) != 2 || got[0] != "E001" {
+	if got := rejection.Codes(); len(got) != 2 || got[0] != "E0310" {
 		t.Errorf("Codes() = %v", got)
 	}
 }
@@ -164,7 +170,7 @@ func TestEmit_SingularErrorForm(t *testing.T) {
 			"versaoAplicativo":      "1.0.0",
 			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
 			"erro": map[string]string{
-				"codigo": "E999", "descricao": "Regra de negocio violada",
+				"codigo": "E0714", "descricao": "Arquivo enviado com erro na assinatura.",
 			},
 		})
 	})
@@ -173,7 +179,7 @@ func TestEmit_SingularErrorForm(t *testing.T) {
 	if !errors.Is(err, ErrRejected) {
 		t.Fatalf("erro nao casa com ErrRejected: %v", err)
 	}
-	if !strings.Contains(err.Error(), "E999") {
+	if !strings.Contains(err.Error(), "E0714") {
 		t.Errorf("a mensagem nao traz o codigo: %v", err)
 	}
 }
@@ -393,7 +399,8 @@ func TestLookupDPS_SingularErrorForm(t *testing.T) {
 			"tipoAmbiente":          EnvCodeRestrictedProduction,
 			"versaoAplicativo":      "1.0.0",
 			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
-			"erro":                  map[string]string{"codigo": "E100", "descricao": "Identificador invalido"},
+			"erro": map[string]string{"codigo": "E2240",
+				"descricao": "Nenhum documento localizado – não existe documentos fiscal para a chave de acesso informada."},
 		})
 	})
 
@@ -401,7 +408,7 @@ func TestLookupDPS_SingularErrorForm(t *testing.T) {
 	if !errors.Is(err, ErrRejected) {
 		t.Fatalf("erro = %v, esperava ErrRejected", err)
 	}
-	if !strings.Contains(err.Error(), "E100") {
+	if !strings.Contains(err.Error(), "E2240") {
 		t.Errorf("a mensagem nao traz o codigo: %v", err)
 	}
 }
@@ -496,13 +503,14 @@ func TestClassify_ProxyVersusSefin403(t *testing.T) {
 				"tipoAmbiente":          EnvCodeRestrictedProduction,
 				"versaoAplicativo":      "1.0.0",
 				"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
-				"erro":                  map[string]string{"codigo": "E403", "descricao": "Ator nao consta na NFS-e"},
+				"erro": map[string]string{"codigo": "E2241",
+					"descricao": "Chave de acesso da NFS-e não referencia o Contribuinte solicitante e por isso não pode ser compartilhado."},
 			})
 		})
 
 		err := mustFetchErr(t, client)
 		// The government's own explanation is more useful than the sentinel.
-		if !strings.Contains(err.Error(), "Ator nao consta") {
+		if !strings.Contains(err.Error(), "Contribuinte solicitante") {
 			t.Errorf("a explicacao da Sefin deveria aparecer: %v", err)
 		}
 	})

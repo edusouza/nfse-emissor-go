@@ -159,7 +159,9 @@ func TestCancelar_Rejeicao(t *testing.T) {
 			"tipoAmbiente":          2,
 			"versaoAplicativo":      "1.0.0",
 			"dataHoraProcessamento": "2026-09-18T09:57:36-03:00",
-			"erro":                  map[string]string{"codigo": "E900", "descricao": "Prazo de cancelamento expirado"},
+			// E0822, from the "RN EVENTO_PED." sheet of ANEXO II.
+			"erro": map[string]string{"codigo": "E0822",
+				"descricao": "O prazo para o cancelamento da NFS-e expirou, conforme parametrização do município emissor da NFS-e."},
 		})
 	})
 
@@ -168,7 +170,7 @@ func TestCancelar_Rejeicao(t *testing.T) {
 	if err == nil {
 		t.Fatal("esperava erro para cancelamento rejeitado")
 	}
-	for _, want := range []string{"E900", "Prazo de cancelamento expirado"} {
+	for _, want := range []string{"E0822", "prazo para o cancelamento da NFS-e expirou"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("a mensagem nao menciona %q: %v", want, err)
 		}
