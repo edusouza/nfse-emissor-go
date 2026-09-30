@@ -95,6 +95,6 @@ impede a geração.
   precisou ser removido de lá. Um domínio exclusivo para o `nfse` continua
   possível, com um arquivo `CNAME` e o `site_url` do `mkdocs.yml`.
 - **O catálogo de `errors.go` continua no código,** morto e errado. Removê-lo é
-  outra mudança.
+  a [issue #37](https://github.com/edusouza/nfse-emissor-go/issues/37).
 - **O Zensical é 0.0.x.** A versão fica fixada em `site/requirements.txt`, e
   atualizá-la é uma decisão, não um efeito colateral.
