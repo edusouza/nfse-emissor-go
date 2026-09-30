@@ -31,6 +31,10 @@ go test -race ./...           # o que a CI roda
 NFSE_TESTE_CONTRATO=1 go test -run Contrato ./internal/infrastructure/...  # serviços reais
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
+
+# site (ADR 0016): gera as páginas derivadas, depois constrói com o Zensical
+go run ./internal/sitegen
+pip install -r site/requirements.txt && cd site && zensical build --strict
 ```
 
 ## Arquitetura
@@ -40,13 +44,15 @@ cmd/nfse/                  entrypoint
 internal/
   cli/                     comandos cobra, apresentação e leitura de entrada
   domain/                  regras de negócio, sem I/O
-    emission/              cálculo de valores, tradução de rejeições
+    emission/              cálculo de valores (o catálogo de errors.go é obsoleto: ADR 0016)
     validation/            regras de negócio da DPS que o XSD não expressa
     esquema/               validação contra os XSDs oficiais (v1.01, embutidos)
     query/                 chave de acesso e respostas de consulta
     danfse/                modelo do documento auxiliar, montado do XML da NFS-e
     texto/                 normalização de texto das buscas (acentos, caixa)
   anexoa/                  leitor do ANEXO_A oficial — só para testes
+  docs/                    testes que conferem a documentação (README e site) contra o código
+  sitegen/                 gera as páginas derivadas do site: rejeições (ANEXO I), ADRs, changelog
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
     sefin/                 cliente HTTP da API do governo
@@ -96,7 +102,14 @@ docs/anexos/      planilhas de referência (códigos IBGE, lista de serviços)
 docs/nfse-nacional/  PDFs originais dos manuais; docs/markdown/ tem a conversão
 docs/notas-tecnicas/ notas técnicas — superam os manuais, confira a data
 specs/            especificações Speckit do desenho anterior (API REST)
+site/             site de documentação (GitHub Pages); as páginas de site/conteudo
+                  escritas à mão são testadas por internal/docs
 ```
+
+Códigos de rejeição da Sefin têm quatro dígitos (`E0600`) e estão no ANEXO I
+(`docs/anexos/anexo_i-*.xlsx`). O catálogo de três dígitos em
+`internal/domain/emission/errors.go` não corresponde a nenhum código real —
+não o use como referência.
 
 Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
 

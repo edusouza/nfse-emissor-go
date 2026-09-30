@@ -17,10 +17,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 - Especificação OpenAPI oficial da API de Parâmetros Municipais do ADN em `docs/api/adn-parametrizacao-swagger.json` ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - `docs/convenio-municipal.md` documenta o que o swagger não diz, conferido no serviço real: o código completo do serviço (`01.07.01.000`), a competência em `AAAA-MM-DD`, a alíquota em percentual e os dois formatos de erro ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+- Site de documentação no GitHub Pages, com a fonte em `site/`, publicado pelo workflow `pages.yml` ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
+- Página com os 426 códigos de rejeição que a Sefin pode devolver na recepção de uma DPS, gerada do ANEXO I oficial a cada publicação, com a mensagem, a regra, o campo do XML e o nível de cada um ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 
 ### Corrigido
 
 - `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
+- O README ilustrava uma rejeição com códigos que não existem (`E001`, `E042`). Agora mostra o `E0714` real da primeira emissão ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 
 ## [0.9.0] - 2026-09-30
 
