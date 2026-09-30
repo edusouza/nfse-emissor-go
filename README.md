@@ -72,9 +72,9 @@ Todos aceitam `--help`.
 ### Configurar em um comando
 
 O `nfse onboard` monta a configuração a partir do que já se sabe sobre você. O
-CNPJ sai do próprio certificado — o ICP-Brasil grava o titular como
-`RAZÃO SOCIAL:CNPJ` no A1 — e o resto vem do cadastro público da Receita
-Federal:
+CNPJ sai do próprio certificado — o ICP-Brasil o grava numa extensão do A1,
+a mesma que a Sefin lê para saber quem assina — e o resto vem do cadastro
+público da Receita Federal:
 
 ```bash
 export NFSE_CERT_SENHA='sua-senha'
