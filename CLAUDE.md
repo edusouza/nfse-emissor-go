@@ -44,7 +44,7 @@ cmd/nfse/                  entrypoint
 internal/
   cli/                     comandos cobra, apresentação e leitura de entrada
   domain/                  regras de negócio, sem I/O
-    emission/              cálculo de valores (o catálogo de errors.go é obsoleto: ADR 0016)
+    emission/              cálculo de valores e o pedido de emissão
     validation/            regras de negócio da DPS que o XSD não expressa
     esquema/               validação contra os XSDs oficiais (v1.01, embutidos)
     query/                 chave de acesso e respostas de consulta
@@ -107,9 +107,8 @@ site/             site de documentação (GitHub Pages); as páginas de site/con
 ```
 
 Códigos de rejeição da Sefin têm quatro dígitos (`E0600`) e estão no ANEXO I
-(`docs/anexos/anexo_i-*.xlsx`). O catálogo de três dígitos em
-`internal/domain/emission/errors.go` não corresponde a nenhum código real —
-não o use como referência.
+(`docs/anexos/anexo_i-*.xlsx`). Não escreva um mapa deles à mão: leia o anexo,
+como faz `internal/sitegen`.
 
 Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
 

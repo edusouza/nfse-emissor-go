@@ -20,6 +20,10 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Site de documentação no GitHub Pages, com a fonte em `site/`, publicado pelo workflow `pages.yml` ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 - Página com os 426 códigos de rejeição que a Sefin pode devolver na recepção de uma DPS, gerada do ANEXO I oficial a cada publicação, com a mensagem, a regra, o campo do XML e o nível de cada um ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 
+### Removido
+
+- O catálogo de 38 códigos de rejeição em `internal/domain/emission/errors.go` (`E001`, `E042`, `E200`...). Nenhum deles existe: os códigos da Sefin têm quatro dígitos e estão no ANEXO I. Era código morto da época da API REST, sem chamadas nem testes ([#37](https://github.com/edusouza/nfse-emissor-go/issues/37)).
+
 ### Corrigido
 
 - `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
