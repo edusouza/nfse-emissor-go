@@ -1,4 +1,4 @@
-package anexoi
+package anexos
 
 import (
 	"archive/zip"

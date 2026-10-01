@@ -20,6 +20,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Site de documentação no GitHub Pages, com a fonte em `site/`, publicado pelo workflow `pages.yml` ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 - Página com os 426 códigos de rejeição que a Sefin pode devolver na recepção de uma DPS, gerada do ANEXO I oficial a cada publicação, com a mensagem, a regra, o campo do XML e o nível de cada um ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 - Quando a Sefin rejeita uma DPS, cada código vem acompanhado do que o ANEXO I diz sobre ele: o campo da DPS a corrigir, a regra que falhou, um aviso quando a regra depende do município e o link para o código no site ([ADR 0019](docs/decisoes/0019-rejeicoes-explicadas-no-terminal.md)).
+- O mesmo vale para o `nfse cancelar`: um cancelamento recusado vem explicado pelo ANEXO II, com o campo do pedido de evento e o aviso quando a regra é do município, como o prazo para cancelar (`E0822`). O site ganha a página dos 49 códigos de rejeição de eventos ([ADR 0019](docs/decisoes/0019-rejeicoes-explicadas-no-terminal.md)).
 
 ### Removido
 

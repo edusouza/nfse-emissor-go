@@ -129,7 +129,7 @@ func runCancelar(cmd *cobra.Command, chave string, f *cancelarFlags) error {
 
 	result, err := client.RegisterEvent(cmd.Context(), chave, []byte(signed))
 	if err != nil {
-		return explainQueryError(err)
+		return explainQueryError(explicarRejeicaoDeEvento(err))
 	}
 
 	path, err := writeEvent(cfg, f, built.RequestID, result)

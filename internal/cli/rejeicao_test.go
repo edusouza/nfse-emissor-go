@@ -142,7 +142,7 @@ func TestEnviar_RejeicaoExplicadaPeloAnexo(t *testing.T) {
 	)
 }
 
-// The link points at the site the repository publishes, at the page the site
+// The links point at the site the repository publishes, at the pages the site
 // generator writes. Either moving would leave the terminal pointing at nothing.
 func TestPaginaRejeicoesEhADoSite(t *testing.T) {
 	mkdocs, err := os.ReadFile(filepath.Join("..", "..", "site", "mkdocs.yml"))
@@ -158,17 +158,34 @@ func TestPaginaRejeicoesEhADoSite(t *testing.T) {
 	if siteURL == "" {
 		t.Fatal("site_url ausente de site/mkdocs.yml")
 	}
-	if want := strings.TrimSuffix(siteURL, "/") + "/referencia/rejeicoes/"; paginaRejeicoes != want {
-		t.Errorf("paginaRejeicoes = %q, o site publica %q", paginaRejeicoes, want)
-	}
-
 	gerador, err := os.ReadFile(filepath.Join("..", "sitegen", "rejections.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(gerador), fmt.Sprintf("%q", "referencia/rejeicoes.md")) {
-		t.Error("o sitegen nao grava mais referencia/rejeicoes.md; atualize paginaRejeicoes")
+	for pagina, arquivo := range map[string]string{
+		paginaRejeicoes:          "referencia/rejeicoes.md",
+		paginaRejeicoesDeEventos: "referencia/rejeicoes-de-eventos.md",
+	} {
+		want := strings.TrimSuffix(siteURL, "/") + "/" + strings.TrimSuffix(arquivo, ".md") + "/"
+		if pagina != want {
+			t.Errorf("pagina = %q, o site publica %q", pagina, want)
+		}
+		if !strings.Contains(string(gerador), fmt.Sprintf("%q", arquivo)) {
+			t.Errorf("o sitegen nao grava mais %s; atualize a constante da pagina", arquivo)
+		}
 	}
+}
+
+// The annexes share E1260, about a different field in each: the explanation
+// follows the document that was refused.
+func TestExplicarRejeicaoDeEvento(t *testing.T) {
+	rej := &sefin.RejectionError{Rejections: []sefin.Message{{Codigo: "E1260"}}}
+
+	evento := explicarRejeicaoDeEvento(rej).Error()
+	exigirTrechos(t, evento, "Campo   evento/versao", paginaRejeicoesDeEventos+"#e1260")
+
+	dps := explicarRejeicao(rej).Error()
+	exigirTrechos(t, dps, "Campo   NFSe/versao", paginaRejeicoes+"#e1260")
 }
 
 func exigirTrechos(t *testing.T, texto string, trechos ...string) {

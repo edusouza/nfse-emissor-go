@@ -1,5 +1,6 @@
 # Gerados por `go run ./internal/sitegen` a partir do repositório (ADR 0016).
 /conteudo/referencia/rejeicoes.md
+/conteudo/referencia/rejeicoes-de-eventos.md
 /conteudo/decisoes/
 /conteudo/changelog.md
 

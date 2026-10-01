@@ -48,11 +48,11 @@ internal/
     validation/            regras de negócio da DPS que o XSD não expressa
     esquema/               validação contra os XSDs oficiais (v1.01, embutidos)
     query/                 chave de acesso e respostas de consulta
-    rejeicao/              o que cada código de rejeição significa, gerado do ANEXO I
+    rejeicao/              o que cada código de rejeição significa, gerado dos anexos I e II
     danfse/                modelo do documento auxiliar, montado do XML da NFS-e
     texto/                 normalização de texto das buscas (acentos, caixa)
   anexoa/                  leitor do ANEXO_A oficial — só para testes
-  anexoi/                  leitor do ANEXO I — para o sitegen e o gerador de rejeicao/
+  anexos/                  leitor dos anexos I e II — para o sitegen e o gerador de rejeicao/
   docs/                    testes que conferem a documentação (README e site) contra o código
   sitegen/                 gera as páginas derivadas do site: rejeições (ANEXO I), ADRs, changelog
   infrastructure/
@@ -109,9 +109,10 @@ site/             site de documentação (GitHub Pages); as páginas de site/con
 ```
 
 Códigos de rejeição da Sefin têm quatro dígitos (`E0600`) e estão no ANEXO I
-(`docs/anexos/anexo_i-*.xlsx`). Não escreva um mapa deles à mão: a tabela de
-`internal/domain/rejeicao` é gerada do anexo (`go generate`) e o site lê o
-mesmo anexo, ambos por `internal/anexoi`
+(`docs/anexos/anexo_i-*.xlsx`); os dos eventos, como o cancelamento, estão no
+ANEXO II (`anexo_ii-*.xlsx`). Não escreva um mapa deles à mão: as tabelas de
+`internal/domain/rejeicao` são geradas dos anexos (`go generate`) e o site lê
+os mesmos arquivos, ambos por `internal/anexos`
 ([ADR 0019](docs/decisoes/0019-rejeicoes-explicadas-no-terminal.md)).
 
 Namespace dos XMLs: `http://www.sped.fazenda.gov.br/nfse`
