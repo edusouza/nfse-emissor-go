@@ -46,15 +46,21 @@ emissão. Um arquivo sem assinatura é recusado antes de sair da máquina, porqu
 
 A emissão é **síncrona**: o governo valida e devolve a nota autorizada ou a
 rejeição na mesma requisição. A rejeição vem com um código por motivo, todos de
-uma vez. Esta foi a resposta à primeira emissão real deste projeto:
+uma vez. Esta foi a resposta à primeira emissão real deste projeto, como o
+`nfse` a mostra hoje:
 
 ```
 erro: documento rejeitado pela Sefin Nacional
   - [E0714] Arquivo enviado com erro na assinatura.
+      Campo   DPS/Signature
+      Regra   A assinatura da DPS deve ser válida.
+      Mais    https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes/#e0714
 ```
 
-Cada código está em [códigos de rejeição](../referencia/rejeicoes.md), com a
-regra que ele aplica e o campo do XML a que se refere. A história deste E0714,
+A primeira linha de cada motivo é a da Sefin. As de baixo vêm do ANEXO I: o
+campo da DPS, a regra que falhou e, quando a regra depende do município, um
+aviso. O link leva ao código em [códigos de rejeição](../referencia/rejeicoes.md),
+que traz também as observações do anexo. A história deste E0714,
 e das três rejeições que vieram depois dele, está na
 [ADR 0008](../decisoes/0008-digest-sem-namespace.md).
 
