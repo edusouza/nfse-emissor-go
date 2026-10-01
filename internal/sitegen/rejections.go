@@ -1,56 +1,37 @@
 package main
 
 import (
-	"archive/zip"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
+
+	"github.com/edusouza/nfse-emissor-go/internal/anexoi"
 )
 
-// annexI is the business-rules annex of the DPS and the NFS-e: every rule the
-// Sefin applies to a declaration, with the code it answers when one fails.
-const annexI = "docs/anexos/anexo_i-sefin_adn-dps_nfse-snnfse-v1-01-20260209.xlsx"
-
-const (
-	// receptionSheet is RN_RECEPCAO_DPS: the rules checked on the
-	// transmission itself, the certificate, before the document is read.
-	receptionSheet = "xl/worksheets/sheet3.xml"
-
-	// rulesSheet is "RN DPS_NFS-e": one rule per field of the NFS-e and of
-	// the DPS it carries.
-	rulesSheet = "xl/worksheets/sheet5.xml"
-)
+// annexI is the business-rules annex of the DPS and the NFS-e.
+const annexI = anexoi.Arquivo
 
 // rejectionsPage is where the page lands, relative to the site content.
 const rejectionsPage = "referencia/rejeicoes.md"
 
-var codePattern = regexp.MustCompile(`^E\d{4}$`)
-
-// rejection is one code and every rule that answers with it. A code
-// normally belongs to one rule, but the annex reuses a few (E1570 is two
-// unrelated rules, with two messages), and choosing one would hide the other.
+// rejection is one code of the annex, and whether nfse emitir checks it
+// before signing.
 type rejection struct {
-	code  string
-	rules []rule
+	anexoi.Rejeicao
 	local bool
 }
 
-type rule struct {
-	message string
-	field   string // XML path; empty for the reception rules
-	text    string
-	level   string // "1", "2" or "3"; empty for the reception rules
-	notes   string
-}
-
 func writeRejections(root, out string) error {
-	rejections, err := readRejections(filepath.Join(root, filepath.FromSlash(annexI)))
+	read, err := anexoi.Ler(filepath.Join(root, filepath.FromSlash(annexI)))
 	if err != nil {
 		return err
+	}
+	rejections := make([]rejection, len(read))
+	for i, r := range read {
+		rejections[i] = rejection{Rejeicao: r}
 	}
 
 	local, err := localCodes(filepath.Join(root, "internal", "domain", "validation"))
@@ -59,7 +40,7 @@ func writeRejections(root, out string) error {
 	}
 	byCode := map[string]*rejection{}
 	for i := range rejections {
-		byCode[rejections[i].code] = &rejections[i]
+		byCode[rejections[i].Codigo] = &rejections[i]
 	}
 	for code, source := range local {
 		r, ok := byCode[code]
@@ -78,152 +59,6 @@ func writeRejections(root, out string) error {
 	}
 	fmt.Printf("%s: %d codigos\n", dst, len(rejections))
 	return nil
-}
-
-// readRejections reads the codes the Sefin can answer when it receives a DPS,
-// sorted by code.
-func readRejections(file string) ([]rejection, error) {
-	zr, err := zip.OpenReader(file)
-	if err != nil {
-		return nil, fmt.Errorf("abrir o ANEXO I: %w", err)
-	}
-	defer zr.Close()
-
-	shared, err := readSharedStrings(&zr.Reader)
-	if err != nil {
-		return nil, err
-	}
-	reception, err := readSheet(&zr.Reader, shared, receptionSheet)
-	if err != nil {
-		return nil, err
-	}
-	rules, err := readSheet(&zr.Reader, shared, rulesSheet)
-	if err != nil {
-		return nil, err
-	}
-
-	// The columns are fixed, and a future annex that moves one would put a
-	// message where a rule belongs without any error. Checking the headers
-	// turns that into a refusal to generate.
-	headers := []struct {
-		sheet sheet
-		name  string
-		cell  string
-		want  string
-	}{
-		{reception, receptionSheet, "B1", "REGRAS DE NEGÓCIO"},
-		{reception, receptionSheet, "F1", "CÓD. ERRO"},
-		{reception, receptionSheet, "G1", "MSG. ERRO"},
-		{reception, receptionSheet, "H1", "NOTAS EXPLICATIVAS"},
-		{rules, rulesSheet, "B1", "CAMINHO NO XML"},
-		{rules, rulesSheet, "C1", "CAMPO"},
-		{rules, rulesSheet, "J1", "NÍVEL DA REGRA"},
-		{rules, rulesSheet, "K1", "EMISSORES PÚBLICOS NACIONAIS"},
-		{rules, rulesSheet, "O1", "OBSERVAÇÕES DE NEGÓCIO"},
-		{rules, rulesSheet, "D3", "REGRAS DE NEGÓCIO"},
-		{rules, rulesSheet, "H3", "CÓD. ERRO"},
-		{rules, rulesSheet, "I3", "MSG. ERRO"},
-	}
-	for _, h := range headers {
-		// Headers wrap inside their cells ("NÍVEL\nDA REGRA").
-		got := strings.Join(strings.Fields(h.sheet.cells[h.cell]), " ")
-		if !strings.HasPrefix(got, h.want) {
-			return nil, fmt.Errorf("%s: a celula %s deveria comecar com %q e traz %q; o leiaute do anexo mudou", h.name, h.cell, h.want, got)
-		}
-	}
-
-	byCode := map[string]*rejection{}
-	var order []string
-	add := func(code string, r rule) {
-		if byCode[code] == nil {
-			byCode[code] = &rejection{code: code}
-			order = append(order, code)
-		}
-		byCode[code].rules = append(byCode[code].rules, r)
-	}
-
-	for row := 2; row <= reception.lastRow; row++ {
-		code, ok, err := codeAt(reception, "F", row, receptionSheet)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-		r := rule{
-			message: reception.cell("G", row),
-			text:    reception.cell("B", row),
-			notes:   meaningful(reception.cell("H", row)),
-		}
-		if r.message == "" {
-			return nil, fmt.Errorf("%s linha %d: codigo %s sem mensagem", receptionSheet, row, code)
-		}
-		add(code, r)
-	}
-
-	for row := 4; row <= rules.lastRow; row++ {
-		code, ok, err := codeAt(rules, "H", row, rulesSheet)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-		// Column K says whether the rule runs when the Sefin receives a DPS
-		// from the provider. The ones marked X only run on invoices that a
-		// municipality shares with the national repository, and an emitter
-		// never meets them.
-		switch k := rules.cell("K", row); k {
-		case "X":
-			continue
-		case "V":
-		default:
-			return nil, fmt.Errorf("%s linha %d: codigo %s sem V ou X na coluna K (traz %q)", rulesSheet, row, code, k)
-		}
-		r := rule{
-			message: rules.cell("I", row),
-			field:   rules.cell("B", row) + rules.cell("C", row),
-			text:    rules.cell("D", row),
-			level:   rules.cell("J", row),
-			notes:   meaningful(rules.cell("O", row)),
-		}
-		if r.message == "" {
-			return nil, fmt.Errorf("%s linha %d: codigo %s sem mensagem", rulesSheet, row, code)
-		}
-		add(code, r)
-	}
-
-	if len(order) == 0 {
-		return nil, fmt.Errorf("nenhum codigo de rejeicao encontrado no ANEXO I")
-	}
-	sort.Strings(order)
-	out := make([]rejection, len(order))
-	for i, code := range order {
-		out[i] = *byCode[code]
-	}
-	return out, nil
-}
-
-// codeAt reads the rejection code of a row. Rows without one — group
-// headings, and rules that only warn — hold "-" or nothing; anything else
-// that is not a code means the annex changed shape.
-func codeAt(s sheet, col string, row int, name string) (string, bool, error) {
-	v := s.cell(col, row)
-	switch {
-	case v == "" || v == "-":
-		return "", false, nil
-	case codePattern.MatchString(v):
-		return v, true, nil
-	}
-	return "", false, fmt.Errorf("%s linha %d: %q nao e um codigo de rejeicao", name, row, v)
-}
-
-// meaningful drops the "-" the annex writes in an empty column.
-func meaningful(s string) string {
-	if s == "-" {
-		return ""
-	}
-	return s
 }
 
 // localPattern matches how the validation package cites the rule it applies
@@ -293,30 +128,30 @@ o que não pode conferir antes de enviar.
 `, generatedMarker, annexI, len(rejections), githubBlob(annexI), path.Base(annexI))
 
 	for _, r := range rejections {
-		fmt.Fprintf(&b, "## %s\n\n", r.code)
+		fmt.Fprintf(&b, "## %s\n\n", r.Codigo)
 		if r.local {
 			b.WriteString("!!! info \"Conferido pelo `nfse` antes de assinar\"\n" +
 				"    O `nfse emitir` recusa a DPS por esta regra antes de usar o certificado, com a mesma explicação.\n\n")
 		}
-		for _, ru := range r.rules {
+		for _, ru := range r.Regras {
 			// A message is one sentence that the annex sometimes wraps; kept
 			// wrapped, the bold around it would depend on where the break fell.
-			fmt.Fprintf(&b, "**%s**\n\n", inline(oneLine(ru.message)))
+			fmt.Fprintf(&b, "**%s**\n\n", inline(oneLine(ru.Mensagem)))
 			var meta []string
-			if ru.field != "" {
-				meta = append(meta, "Campo `"+oneLine(ru.field)+"`")
+			if ru.Campo != "" {
+				meta = append(meta, "Campo `"+oneLine(ru.Campo)+"`")
 			}
-			if l, ok := levels[ru.level]; ok {
+			if l, ok := levels[ru.Nivel]; ok {
 				meta = append(meta, l)
 			}
 			if len(meta) > 0 {
 				b.WriteString(strings.Join(meta, " · ") + "\n\n")
 			}
-			if ru.text != "" && oneLine(ru.text) != oneLine(ru.message) {
-				b.WriteString(prose(ru.text) + "\n\n")
+			if ru.Texto != "" && oneLine(ru.Texto) != oneLine(ru.Mensagem) {
+				b.WriteString(prose(ru.Texto) + "\n\n")
 			}
-			if ru.notes != "" {
-				b.WriteString("*Observação do anexo:* " + prose(ru.notes) + "\n\n")
+			if ru.Notas != "" {
+				b.WriteString("*Observação do anexo:* " + prose(ru.Notas) + "\n\n")
 			}
 		}
 	}
