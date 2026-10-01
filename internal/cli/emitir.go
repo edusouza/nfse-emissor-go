@@ -589,7 +589,8 @@ func transmit(ctx context.Context, cfg *config.Config, certInfo *xmlsigner.Certi
 		return nil, err
 	}
 
-	return client.Emit(ctx, []byte(signedDPS))
+	result, err := client.Emit(ctx, []byte(signedDPS))
+	return result, explicarRejeicao(err)
 }
 
 func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed bool) (string, error) {

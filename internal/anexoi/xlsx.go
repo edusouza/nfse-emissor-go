@@ -1,4 +1,4 @@
-package main
+package anexoi
 
 import (
 	"archive/zip"
@@ -8,11 +8,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// The .xlsx is read with archive/zip and encoding/xml, like the other readers
-// of government annexes in this repository. This program never ships in the
-// binary, but a spreadsheet library would still land in go.mod, next to the
-// code that handles a private key.
 
 // sheet is a worksheet as plain text, addressed by cell reference ("B505").
 type sheet struct {

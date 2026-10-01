@@ -341,12 +341,20 @@ Ambiente de producao restrita: esta nota NAO tem valor fiscal.
 A emissão é **síncrona**: o governo valida e devolve a nota autorizada ou a
 rejeição na mesma requisição. Rejeições vêm com todos os motivos de uma vez.
 Esta foi a resposta à primeira emissão real deste projeto
-([ADR 0008](docs/decisoes/0008-digest-sem-namespace.md)):
+([ADR 0008](docs/decisoes/0008-digest-sem-namespace.md)), como o `nfse` a
+mostra hoje:
 
 ```
 erro: documento rejeitado pela Sefin Nacional
   - [E0714] Arquivo enviado com erro na assinatura.
+      Campo   DPS/Signature
+      Regra   A assinatura da DPS deve ser válida.
+      Mais    https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes/#e0714
 ```
+
+A primeira linha de cada motivo é a da Sefin. As de baixo vêm do ANEXO I: o
+campo da DPS, a regra que falhou e, quando a regra depende do município, um
+aviso ([ADR 0019](docs/decisoes/0019-rejeicoes-explicadas-no-terminal.md)).
 
 O ambiente vem do `nfse.yaml`. Com `ambiente: producao` a nota tem **valor
 fiscal** e o comando pede confirmação no terminal antes de enviar — cancelar uma

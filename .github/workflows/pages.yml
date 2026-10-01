@@ -11,6 +11,7 @@ on:
     paths:
       - "site/**"
       - "internal/sitegen/**"
+      - "internal/anexoi/**"
       - "internal/domain/validation/**"
       - "docs/decisoes/**"
       - "docs/anexos/**"
@@ -20,6 +21,7 @@ on:
     paths:
       - "site/**"
       - "internal/sitegen/**"
+      - "internal/anexoi/**"
       - "internal/domain/validation/**"
       - "docs/decisoes/**"
       - "docs/anexos/**"
