@@ -355,7 +355,7 @@ senha em texto no script.
 
 **Proteja o diretório de saída.** Os XMLs e PDFs trazem dados pessoais de
 tomadores. Hoje eles são gravados com permissão `0644` (leitura para todos os
-usuários da máquina — veja [O que ainda não temos](#o-que-ainda-não-temos)).
+usuários da máquina; a correção é a [#46](https://github.com/edusouza/nfse-emissor-go/issues/46)).
 Numa máquina compartilhada, restrinja o diretório:
 
 ```bash
@@ -397,22 +397,19 @@ autentique.
 
 ## O que ainda não temos
 
-Transparência sobre o que falta faz parte da política. Os itens abaixo são
-melhorias planejadas, em ordem de prioridade:
+Transparência sobre o que falta faz parte da política. Cada lacuna abaixo tem
+uma issue, e **vamos corrigir todas**, nesta ordem de prioridade. Quando uma
+issue fecha, o item sai desta lista e entra na tabela de controles
+correspondente acima.
 
-1. **`govulncheck` na CI**, para avisar quando uma vulnerabilidade conhecida
-   atinge código que o `nfse` de fato chama — no Go e nas dependências.
-2. **Atualização automática de dependências** (Dependabot ou Renovate), para
-   módulos Go e ações do GitHub.
-3. **Ações do GitHub fixadas por hash de commit**, não por tag (`@v4`), para
-   que uma tag movida não mude o que roda na CI.
-4. **Arquivos de saída com permissão `0600`**, já que contêm dados pessoais.
-5. **Análise estática de segurança** (CodeQL ou `gosec`) e o
-   [OpenSSF Scorecard](https://securityscorecards.dev).
-6. **Binários pré-compilados assinados**, com proveniência
-   [SLSA](https://slsa.dev), se o projeto passar a distribuí-los. Hoje a
-   distribuição é só pelo código-fonte (`go install`), cuja integridade é
-   garantida pelo checksum database do Go.
+| # | Lacuna | Risco enquanto não for corrigida | Issue |
+|---|---|---|---|
+| 1 | **`govulncheck` na CI** | Uma vulnerabilidade conhecida no Go ou numa dependência, em código que o `nfse` de fato chama, passa sem aviso. | [#43](https://github.com/edusouza/nfse-emissor-go/issues/43) |
+| 2 | **Atualização automática de dependências** (Dependabot), para módulos Go e ações do GitHub | Uma correção de segurança publicada numa dependência demora a chegar aqui. | [#44](https://github.com/edusouza/nfse-emissor-go/issues/44) |
+| 3 | **Ações do GitHub fixadas por hash de commit**, não por tag (`@v4`) | Uma tag movida num repositório comprometido muda o que roda na CI, com acesso aos segredos. | [#45](https://github.com/edusouza/nfse-emissor-go/issues/45) |
+| 4 | **Arquivos de saída com permissão `0600`** | XMLs e PDFs com dados pessoais de tomadores ficam legíveis para os outros usuários da máquina. | [#46](https://github.com/edusouza/nfse-emissor-go/issues/46) |
+| 5 | **Análise estática de segurança** (CodeQL ou `gosec`) e o [OpenSSF Scorecard](https://securityscorecards.dev) | Padrões inseguros dependem só da revisão humana para serem pegos. | [#47](https://github.com/edusouza/nfse-emissor-go/issues/47) |
+| 6 | **Binários pré-compilados assinados**, com proveniência [SLSA](https://slsa.dev) | Só passa a valer se o projeto distribuir binários. Hoje a distribuição é só pelo código-fonte (`go install`), cuja integridade é garantida pelo checksum database do Go. | [#48](https://github.com/edusouza/nfse-emissor-go/issues/48) |
 
 ## Histórico de avisos
 
