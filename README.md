@@ -686,6 +686,12 @@ palavra final é sempre do governo. Veja a issue
 | **cTribNac** | Código nacional do serviço, 6 dígitos (LC 116/2003) |
 | **A1** | Certificado digital em arquivo (`.pfx`/`.p12`), válido por 1 ano |
 
+## Segurança
+
+Para relatar uma vulnerabilidade, **não abra uma issue pública**: use o relato
+privado descrito no [SECURITY.md](SECURITY.md), que também explica o que o
+`nfse` faz para proteger o certificado e o que você pode fazer do seu lado.
+
 ## Licença
 
 [MIT](LICENSE).
