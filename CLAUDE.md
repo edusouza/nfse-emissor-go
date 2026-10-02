@@ -29,6 +29,7 @@ go test -short ./...          # testes rápidos (~2s) — use durante o desenvol
 go test ./...                 # suíte completa (~75s, inclui testes de backoff)
 go test -race ./...           # o que a CI roda
 NFSE_TESTE_CONTRATO=1 go test -run Contrato ./internal/infrastructure/...  # serviços reais
+# o ADN exige certificado: NFSE_TESTE_CERT=a1.pfx NFSE_CERT_SENHA=... (sem eles, pula)
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
 
@@ -61,7 +62,9 @@ internal/
   sitegen/                 gera as páginas derivadas do site: rejeições (ANEXO I), ADRs, changelog
   infrastructure/
     xmlsigner/             XMLDSig, canonicalização exc-c14n, certificado A1
+    mtls/                  cliente HTTP com TLS mútuo, comum à Sefin e ao ADN
     sefin/                 cliente HTTP da API do governo
+    parametrizacao/        parâmetros municipais do ADN: convênio e alíquotas
     brasilapi/             consulta do cadastro público de CNPJ (só no `onboard`)
     ibge/                  municípios do IBGE, com cache (`danfse` e `onboard --municipio`)
     danfsepdf/             desenho do DANFSe em PDF, nas coordenadas da NT 008

@@ -5,13 +5,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/mtls"
 )
 
 // Environment names accepted by Config.
@@ -32,18 +32,9 @@ const DefaultTimeout = 60 * time.Second
 
 // defaultRetryDelays are the pauses between attempts of a lookup whose
 // connection could not be opened, so a lookup is tried len+1 times. They are
-// short because the outages seen so far last seconds.
+// short because the outages seen so far last seconds. With mtls.DialTimeout,
+// an unreachable server is given up on after ~37s in all, retries included.
 var defaultRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
-
-// dialTimeout bounds opening the connection, apart from the request.
-//
-// DefaultTimeout is generous because an emission is processed inside the
-// request, but opening a connection is not where that time goes. Left to the
-// operating system, a host that never answers the handshake takes ~21s on
-// Windows and up to two minutes on Linux, where the SYN is retried — per
-// attempt, and a lookup makes three. Ten seconds is ample for a reachable
-// server, and caps an unreachable one at ~37s in all, retries included.
-const dialTimeout = 10 * time.Second
 
 // Config configures a Client.
 type Config struct {
@@ -110,31 +101,10 @@ func New(cfg Config) (*Client, error) {
 			timeout = DefaultTimeout
 		}
 
-		httpClient = &http.Client{
-			Timeout: timeout,
-			Transport: &http.Transport{
-				DialContext: (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext,
-				TLSClientConfig: &tls.Config{
-					Certificates: []tls.Certificate{*cfg.Certificate},
-					MinVersion:   tls.VersionTLS12,
-
-					// The Sefin does not ask for the client certificate in the
-					// initial handshake: it renegotiates afterwards to request
-					// it. Go refuses renegotiation by default, which surfaces as
-					// "local error: tls: no renegotiation" on the first request
-					// and makes every emission impossible.
-					//
-					// Freely rather than once, because a keep-alive connection
-					// serves several requests and the server may re-request the
-					// certificate on each. Go only accepts renegotiation from a
-					// server that advertises RFC 5746 secure renegotiation, so
-					// this does not reopen CVE-2009-3555.
-					//
-					// Ignored when the connection lands on TLS 1.3, where the
-					// same need is served by post-handshake authentication.
-					Renegotiation: tls.RenegotiateFreelyAsClient,
-				},
-			},
+		var err error
+		httpClient, err = mtls.NewHTTPClient(cfg.Certificate, timeout)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -216,8 +186,12 @@ func (c *Client) post(ctx context.Context, url string, payload []byte) ([]byte, 
 // A failure to open the connection is set apart because it is the one case
 // where the outcome is certain: nothing reached the government. Any later
 // failure may have happened after an invoice was issued.
+//
+// net/http retries a POST on a fresh connection only when nothing was written
+// on the previous one, so a dial error as the final outcome holds for every
+// attempt the transport made.
 func communicationError(err error, attempts int) error {
-	if !isDialError(err) {
+	if !mtls.IsDialError(err) {
 		return fmt.Errorf("falha na comunicacao com a Sefin Nacional: %w", err)
 	}
 
@@ -228,17 +202,6 @@ func communicationError(err error, attempts int) error {
 	return fmt.Errorf("%w%s: a requisicao nao chegou ao servidor, entao nada foi processado. "+
 		"Confira a conexao com a internet e tente de novo em alguns minutos; "+
 		"se persistir, o servico do governo pode estar fora do ar\ndetalhe: %w", ErrUnreachable, tried, err)
-}
-
-// isDialError reports whether err happened while opening the connection:
-// resolving the name or completing the TCP handshake.
-//
-// net/http retries a POST on a fresh connection only when nothing was written
-// on the previous one, so a dial error as the final outcome holds for every
-// attempt the transport made.
-func isDialError(err error) bool {
-	var opErr *net.OpError
-	return errors.As(err, &opErr) && opErr.Op == "dial"
 }
 
 // classify maps an error status onto the sentinel a caller can branch on.
@@ -366,7 +329,7 @@ func (c *Client) doIdempotent(ctx context.Context, method, url string) (*http.Re
 		if err == nil {
 			return resp, nil
 		}
-		if !isDialError(err) || attempt > len(c.retryDelays) {
+		if !mtls.IsDialError(err) || attempt > len(c.retryDelays) {
 			return nil, communicationError(err, attempt)
 		}
 
