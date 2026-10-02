@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -123,5 +124,26 @@ func TestState_SaveIsAtomic(t *testing.T) {
 	}
 	if got := reloaded.LastNumber("00001"); got != 1000000 {
 		t.Errorf("ultimo numero = %d, esperava 1000000", got)
+	}
+}
+
+func TestState_SaveIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("o Windows nao tem as permissoes de arquivo do Unix")
+	}
+	path := filepath.Join(t.TempDir(), StateFileName)
+
+	state := &State{Series: map[string]SeriesState{}}
+	state.Record("00001", "1")
+	if err := state.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("estado gravado com permissao %#o, esperava 0600", got)
 	}
 }

@@ -36,6 +36,20 @@ Para fixar uma versão, troque `@latest` pela tag desejada; as versões estão n
 [CHANGELOG](CHANGELOG.md). O `nfse versao` mostra o que está instalado — e é o
 mesmo identificador que vai no `verAplic` de cada declaração.
 
+Sem o Go instalado, baixe o binário do seu sistema na
+[página de releases](https://github.com/edusouza/nfse-emissor-go/releases) e
+**confira que ele foi construído por este repositório antes de usá-lo** — ele
+vai receber o seu certificado digital:
+
+```bash
+gh attestation verify nfse_v1.0.0_linux_amd64 --repo edusouza/nfse-emissor-go
+```
+
+Sem o [`gh`](https://cli.github.com), confira ao menos o checksum contra o
+`SHA256SUMS` da mesma release (`sha256sum -c SHA256SUMS --ignore-missing`).
+Por que e como isso funciona:
+[ADR 0020](docs/decisoes/0020-binarios-assinados.md).
+
 Ou compilando a partir do código:
 
 ```bash
@@ -44,8 +58,10 @@ cd nfse-emissor-go
 go build -o nfse ./cmd/nfse
 ```
 
-Requer Go 1.26 ou superior. O resultado é um binário único, sem `cgo` e sem
-dependência de serviço externo.
+Requer Go 1.26 ou superior. O `go.mod` pede a versão de correção mais recente
+(hoje a `go1.26.8`), e um Go 1.26 mais antigo a baixa sozinho, para que o
+binário saia com as correções de segurança da biblioteca padrão. O resultado é
+um binário único, sem `cgo` e sem dependência de serviço externo.
 
 ## Experimentar em 2 minutos
 
@@ -619,6 +635,10 @@ go test ./...          # suíte completa (~75s: inclui testes de backoff reais)
 go test -short ./...   # rápida (~2s), pulando os testes dependentes de relógio
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
+
+# segurança: o que a CI também roda (SECURITY.md)
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -severity=medium -confidence=medium ./...
 ```
 
 Os clientes da BrasilAPI e do IBGE foram escritos a partir da documentação
@@ -673,6 +693,12 @@ palavra final é sempre do governo. Veja a issue
 | **chaveAcesso** | Identificador de 50 caracteres da NFS-e emitida |
 | **cTribNac** | Código nacional do serviço, 6 dígitos (LC 116/2003) |
 | **A1** | Certificado digital em arquivo (`.pfx`/`.p12`), válido por 1 ano |
+
+## Segurança
+
+Para relatar uma vulnerabilidade, **não abra uma issue pública**: use o relato
+privado descrito no [SECURITY.md](SECURITY.md), que também explica o que o
+`nfse` faz para proteger o certificado e o que você pode fazer do seu lado.
 
 ## Licença
 

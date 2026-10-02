@@ -48,7 +48,7 @@ de linha de comando ficam visiveis na lista de processos do sistema.`,
 				return err
 			}
 
-			data, err := os.ReadFile(file)
+			data, err := os.ReadFile(file) // #nosec G304 -- the certificate path is the user's own choice
 			if err != nil {
 				return fmt.Errorf("nao foi possivel ler o certificado: %w", err)
 			}

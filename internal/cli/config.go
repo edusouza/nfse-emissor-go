@@ -40,7 +40,7 @@ func newConfigInitCommand() *cobra.Command {
 				}
 			}
 
-			if err := os.WriteFile(path, []byte(config.ExampleFile), 0o644); err != nil {
+			if err := writePrivateFile(path, []byte(config.ExampleFile)); err != nil {
 				return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
 			}
 

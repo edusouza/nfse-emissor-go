@@ -180,7 +180,7 @@ func writeEvent(cfg *config.Config, f *cancelarFlags, requestID string, result *
 	if dir == "" {
 		dir = cfg.Saida.Diretorio
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, privateDirMode); err != nil {
 		return "", fmt.Errorf("nao foi possivel criar o diretorio de saida: %w", err)
 	}
 

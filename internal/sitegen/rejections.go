@@ -51,9 +51,11 @@ func writeRejections(root, out string) error {
 	}
 
 	dst := filepath.Join(out, filepath.FromSlash(rejectionsPage))
+	// #nosec G301 -- the generated site is public and read by the site builder
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
+	// #nosec G306 -- the generated site is public and read by the site builder
 	if err := os.WriteFile(dst, []byte(renderRejections(rejections)), 0o644); err != nil {
 		return err
 	}
@@ -78,7 +80,7 @@ func localCodes(dir string) (map[string]string, error) {
 		if strings.HasSuffix(f, "_test.go") {
 			continue
 		}
-		data, err := os.ReadFile(f)
+		data, err := os.ReadFile(f) // #nosec G304 -- reads the repository's own sources
 		if err != nil {
 			return nil, err
 		}

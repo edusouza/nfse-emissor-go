@@ -259,7 +259,7 @@ escrito a mao no nfse.yaml.`,
 					"Informe o problema no repositorio do emissor", err)
 			}
 
-			if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {
+			if err := writePrivateFile(path, []byte(rendered)); err != nil {
 				return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
 			}
 
@@ -303,7 +303,7 @@ func serieValida(serie string) bool {
 
 // fillFromCertificate reads what the A1 file already knows about its holder.
 func fillFromCertificate(out io.Writer, data *onboardData, file, password string) error {
-	raw, err := os.ReadFile(file)
+	raw, err := os.ReadFile(file) // #nosec G304 -- the certificate path is the user's own choice
 	if err != nil {
 		return fmt.Errorf("nao foi possivel ler o certificado: %w", err)
 	}

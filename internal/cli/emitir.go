@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -234,7 +235,7 @@ func runEmitir(cmd *cobra.Command, f *emitirFlags) error {
 		return err
 	}
 
-	nfsePath, err := writeNFSe(cfg, f, result)
+	nfsePath, err := writeNFSe(cfg, f, result, built.DPSID)
 	if err != nil {
 		return err
 	}
@@ -541,7 +542,7 @@ func loadCertificate(cmd *cobra.Command, cfg *config.Config, f *emitirFlags) (*x
 		return nil, err
 	}
 
-	data, err := os.ReadFile(certPath)
+	data, err := os.ReadFile(certPath) // #nosec G304 -- the certificate path is the user's own choice
 	if err != nil {
 		return nil, fmt.Errorf("nao foi possivel ler o certificado: %w", err)
 	}
@@ -598,7 +599,7 @@ func writeDPS(cfg *config.Config, f *emitirFlags, dpsID, content string, signed 
 	if dir == "" {
 		dir = cfg.Saida.Diretorio
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, privateDirMode); err != nil {
 		return "", fmt.Errorf("nao foi possivel criar o diretorio de saida: %w", err)
 	}
 
@@ -635,13 +636,35 @@ func arquivoExistente(path string) error {
 		errArquivoExistente, path)
 }
 
+// privateFileMode and privateDirMode are the permissions of what the CLI
+// writes. A DPS, an NFS-e, an event or a DANFSe names the taker — CPF, name,
+// address — and the configuration and the state file name the provider, so
+// none of it is for the other users of the machine to read (LGPD).
+const (
+	privateFileMode os.FileMode = 0o600
+	privateDirMode  os.FileMode = 0o700
+)
+
+// writePrivateFile writes a file that may already exist, owner-only.
+func writePrivateFile(path string, content []byte) error {
+	if err := os.WriteFile(path, content, privateFileMode); err != nil {
+		return err
+	}
+	// WriteFile keeps the mode of a file it replaces. Best effort, as in
+	// writeNew: the content is already written.
+	_ = os.Chmod(path, privateFileMode)
+	return nil
+}
+
 func writeNew(path string, content []byte, overwrite bool) error {
 	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if overwrite {
 		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	}
 
-	file, err := os.OpenFile(path, flags, 0o644)
+	// The directory is the user's choice, and every file name is built by this
+	// package from a validated identifier (see fileStem).
+	file, err := os.OpenFile(path, flags, privateFileMode) // #nosec G304 G703
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return arquivoExistente(path)
@@ -649,6 +672,16 @@ func writeNew(path string, content []byte, overwrite bool) error {
 		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
 	}
 	defer file.Close()
+
+	// The mode given to OpenFile only applies to a file it creates. A file
+	// being replaced keeps whatever it had, which for anything written before
+	// this was tightened is world-readable. Best effort: a FAT drive or a
+	// network share has no Unix modes and refuses the change, and by now the
+	// file is truncated — failing here would lose the document over
+	// permissions the filesystem cannot hold anyway.
+	if overwrite {
+		_ = file.Chmod(privateFileMode)
+	}
 
 	if _, err := file.Write(content); err != nil {
 		return fmt.Errorf("nao foi possivel gravar %q: %w", path, err)
@@ -680,19 +713,41 @@ func report(cmd *cobra.Command, cfg *config.Config, nota config.Nota, dpsID, pat
 	return nil
 }
 
+// dpsIDPattern is TSIdDPS: "DPS" and 42 digits.
+var dpsIDPattern = regexp.MustCompile(`^DPS[0-9]{42}$`)
+
+// fileStem picks the first candidate that is an access key or a DPS
+// identifier, to name a file after.
+//
+// Some candidates come from the Sefin's response, and a name taken from a
+// response as is could carry a path separator or "..": a tampered or broken
+// answer would then write outside the output directory. Both identifiers are
+// digits behind a fixed prefix, so a candidate that has the shape cannot
+// escape. When none has it, a timestamp still names the file — an authorised
+// invoice is never lost to a bad field.
+func fileStem(candidates ...string) string {
+	for _, c := range candidates {
+		if query.IsValidAccessKey(c) && strings.TrimSpace(c) == c {
+			return c
+		}
+		if dpsIDPattern.MatchString(c) {
+			return c
+		}
+	}
+	return "nfse-" + time.Now().Format("20060102-150405")
+}
+
 // writeNFSe stores the authorised invoice next to the declaration that produced
-// it, named by the access key so the two can be matched later.
-func writeNFSe(cfg *config.Config, f *emitirFlags, result *sefin.EmissionResult) (string, error) {
+// it, named by the access key so the two can be matched later. localDPSID is
+// the identifier of the DPS as this machine knows it, the fallback when the
+// response has no usable access key.
+func writeNFSe(cfg *config.Config, f *emitirFlags, result *sefin.EmissionResult, localDPSID string) (string, error) {
 	dir := f.outputDir
 	if dir == "" {
 		dir = cfg.Saida.Diretorio
 	}
 
-	name := result.AccessKey
-	if name == "" {
-		// Never lose an authorised invoice to a missing field.
-		name = result.DPSID
-	}
+	name := fileStem(result.AccessKey, localDPSID, result.DPSID)
 
 	path := filepath.Join(dir, name+"-nfse.xml")
 	if err := writeNew(path, result.NFSeXML, f.sobrescrever); err != nil {

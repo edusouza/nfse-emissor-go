@@ -44,6 +44,7 @@ func writeDecisions(root, out string) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return err
 	}
+	// #nosec G301 -- the generated site is public and read by the site builder
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
@@ -67,22 +68,23 @@ func writeChangelog(root, out string) error {
 // are slash-separated: from relative to the repository, to relative to the
 // site content.
 func copyPage(root, out, from, to string) error {
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(from)))
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(from))) // #nosec G304 -- reads the repository's own sources
 	if err != nil {
 		return err
 	}
 	isDir := func(p string) bool {
-		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(p)))
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))) // #nosec G703 -- a link target in the repository's own Markdown
 		return err == nil && info.IsDir()
 	}
 	text := fmt.Sprintf("%s a partir de %s. Edite o original. -->\n\n", generatedMarker, from) +
 		rewriteLinks(string(data), from, to, isDir)
 
 	dst := filepath.Join(out, filepath.FromSlash(to))
+	// #nosec G301 -- the generated site is public and read by the site builder
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, []byte(text), 0o644)
+	return os.WriteFile(dst, []byte(text), 0o644) // #nosec G306 G703 -- a public page, at a path built from the repository's own sources
 }
 
 // sitePage tells where a file of the repository is published on the site, if

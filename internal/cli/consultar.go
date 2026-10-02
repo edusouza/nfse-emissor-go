@@ -123,7 +123,7 @@ func consultarPorChave(cmd *cobra.Command, cfg *config.Config, f *consultarFlags
 		return explainQueryError(err)
 	}
 
-	path, err := writeQueriedNFSe(cfg, f, result)
+	path, err := writeQueriedNFSe(cfg, f, chave, result)
 	if err != nil {
 		return err
 	}
@@ -209,12 +209,14 @@ func detailBeyond(err error, sentinel error) string {
 	return strings.TrimSpace(strings.TrimPrefix(full, bare))
 }
 
-func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, result *sefin.NFSeResult) (string, error) {
+// writeQueriedNFSe names the file by the key that was asked for, which was
+// validated before the request, and not by the one in the response.
+func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, chave string, result *sefin.NFSeResult) (string, error) {
 	dir := f.outputDir
 	if dir == "" {
 		dir = cfg.Saida.Diretorio
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, privateDirMode); err != nil {
 		return "", fmt.Errorf("nao foi possivel criar o diretorio de saida: %w", err)
 	}
 
@@ -222,7 +224,7 @@ func writeQueriedNFSe(cfg *config.Config, f *consultarFlags, result *sefin.NFSeR
 	// is immutable at the government, so a second fetch of the same access key
 	// brings back the same document — refusing to write it protected nothing and
 	// turned a harmless repeat into an error.
-	path := filepath.Join(dir, result.AccessKey+"-nfse.xml")
+	path := filepath.Join(dir, fileStem(strings.TrimSpace(chave))+"-nfse.xml")
 	if err := writeNew(path, result.NFSeXML, true); err != nil {
 		return "", err
 	}

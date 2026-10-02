@@ -42,7 +42,7 @@ func StatePath(configPath string) string {
 // LoadState reads the state file. A missing file is not an error: it simply
 // means nothing has been emitted from this machine yet.
 func LoadState(path string) (*State, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the state file sits next to the user's config
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &State{Series: map[string]SeriesState{}}, nil
@@ -69,9 +69,11 @@ func (s *State) Save(path string) error {
 	}
 
 	// Write to a temporary file and rename, so an interrupted write cannot
-	// leave a truncated file that loses the counter entirely.
+	// leave a truncated file that loses the counter entirely. Owner-only, like
+	// everything else the CLI writes: the series and numbering are the
+	// provider's business.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("nao foi possivel gravar %q: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {

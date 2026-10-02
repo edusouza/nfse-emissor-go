@@ -195,7 +195,7 @@ const DefaultFileName = "nfse.yaml"
 
 // Load reads and validates a config file.
 func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- the config path is the user's own choice
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("arquivo de configuracao %q nao encontrado; rode "+
@@ -245,7 +245,7 @@ func DecodeNota(r io.Reader) (*Nota, error) {
 
 // LoadNota reads an invoice file from disk.
 func LoadNota(path string) (*Nota, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- the invoice path is the user's own choice
 	if err != nil {
 		return nil, fmt.Errorf("nao foi possivel ler a nota %q: %w", path, err)
 	}

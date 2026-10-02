@@ -60,7 +60,7 @@ este comando nao assina nada. Para gerar e enviar de uma vez, use
 }
 
 func runEnviar(cmd *cobra.Command, path string, f *enviarFlags) error {
-	signedXML, err := os.ReadFile(path)
+	signedXML, err := os.ReadFile(path) // #nosec G304 -- the DPS path is the user's own choice
 	if err != nil {
 		return fmt.Errorf("nao consegui ler %s: %w", path, err)
 	}
@@ -106,7 +106,7 @@ func runEnviar(cmd *cobra.Command, path string, f *enviarFlags) error {
 	nfsePath, err := writeNFSe(cfg, &emitirFlags{
 		outputDir:    f.outputDir,
 		sobrescrever: f.sobrescrever,
-	}, result)
+	}, result, dps.id)
 	if err != nil {
 		return err
 	}

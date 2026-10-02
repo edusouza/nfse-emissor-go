@@ -132,7 +132,7 @@ func runDanfse(cmd *cobra.Command, entrada string, f *danfseFlags) error {
 const maxTamanhoNFSe = 5 << 20
 
 func lerNFSe(caminho string) ([]byte, error) {
-	arquivo, err := os.Open(caminho)
+	arquivo, err := os.Open(caminho) // #nosec G304 -- the NFS-e path is the user's own choice
 	if err != nil {
 		return nil, fmt.Errorf("nao consegui ler %q: %w", caminho, err)
 	}
