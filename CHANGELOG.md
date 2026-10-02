@@ -31,6 +31,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `docs/convenio-municipal.md` ensinava os caminhos do manual em PDF (`/parametros_municipais/...`), que não existem na API. Agora segue o swagger ([#5](https://github.com/edusouza/nfse-emissor-go/issues/5)).
 - O README ilustrava uma rejeição com códigos que não existem (`E001`, `E042`). Agora mostra o `E0714` real da primeira emissão ([ADR 0016](docs/decisoes/0016-site-de-documentacao.md)).
 
+### Segurança
+
+- **A resposta da Sefin não escolhe mais onde a NFS-e é gravada.** O nome do arquivo vinha da `chaveAcesso` devolvida, sem validação: uma resposta adulterada ou com defeito, com `../` na chave, gravava a nota fora do diretório de saída. Agora só uma chave de acesso válida (50 dígitos) ou o Id da DPS dão nome a um arquivo; no `consultar`, o nome vem da chave pedida. Encontrado pelo `gosec` ([#47](https://github.com/edusouza/nfse-emissor-go/issues/47)).
+- Os XMLs, os PDFs, o `nfse.yaml` e o arquivo de numeração passam a ser gravados com permissão `0600`, e os diretórios criados pelo `nfse`, com `0700`. Antes eram legíveis por todos os usuários da máquina, e os documentos trazem CPF, nome e endereço de tomadores. Um arquivo sobrescrito também é restringido; um diretório que já existe não é alterado ([#46](https://github.com/edusouza/nfse-emissor-go/issues/46)).
+- O `go.mod` pede o Go `1.26.8` (`toolchain`): a CI e quem instala com `go install` compilam com as correções de segurança mais recentes da biblioteca padrão.
+- A CI ganha o `govulncheck` (vulnerabilidades conhecidas no Go e nas dependências, também toda semana), o `gosec` e o CodeQL (análise estática) e o OpenSSF Scorecard ([#43](https://github.com/edusouza/nfse-emissor-go/issues/43), [#47](https://github.com/edusouza/nfse-emissor-go/issues/47)).
+- O Dependabot passa a atualizar os módulos Go, as ações do GitHub e o construtor do site ([#44](https://github.com/edusouza/nfse-emissor-go/issues/44)).
+- Todas as ações do GitHub ficam fixadas pelo hash do commit, e os checkouts não deixam a credencial do Git gravada ([#45](https://github.com/edusouza/nfse-emissor-go/issues/45)).
+
 ## [0.9.0] - 2026-09-30
 
 O `onboard` completa o `nfse.yaml` no terminal e aceita o município pelo nome, o CNPJ do certificado passa a ser lido de onde a Sefin o lê, e a DPS passa a ser validada contra os XSDs oficiais.

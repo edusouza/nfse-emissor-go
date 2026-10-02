@@ -44,8 +44,10 @@ cd nfse-emissor-go
 go build -o nfse ./cmd/nfse
 ```
 
-Requer Go 1.26 ou superior. O resultado é um binário único, sem `cgo` e sem
-dependência de serviço externo.
+Requer Go 1.26 ou superior. O `go.mod` pede a versão de correção mais recente
+(hoje a `go1.26.8`), e um Go 1.26 mais antigo a baixa sozinho, para que o
+binário saia com as correções de segurança da biblioteca padrão. O resultado é
+um binário único, sem `cgo` e sem dependência de serviço externo.
 
 ## Experimentar em 2 minutos
 
@@ -619,6 +621,10 @@ go test ./...          # suíte completa (~75s: inclui testes de backoff reais)
 go test -short ./...   # rápida (~2s), pulando os testes dependentes de relógio
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
+
+# segurança: o que a CI também roda (SECURITY.md)
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -severity=medium -confidence=medium ./...
 ```
 
 Os clientes da BrasilAPI e do IBGE foram escritos a partir da documentação

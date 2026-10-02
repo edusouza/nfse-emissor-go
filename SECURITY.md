@@ -257,6 +257,7 @@ apontam para o código, para que você possa conferir.
 | Resposta gigante esgotando a memória | Toda leitura de resposta HTTP tem limite (`io.LimitReader`): 8 MiB na Sefin, limites próprios na BrasilAPI e no IBGE. |
 | Bomba de descompressão (gzip) | O XML descompactado da Sefin é limitado a 32 MiB; passar disso é erro, não truncamento silencioso (`internal/infrastructure/sefin/payload.go`). |
 | XXE e expansão de entidades ("billion laughs") | O XML é lido com `encoding/xml` e `etree`, que não resolvem entidades externas nem expandem entidades declaradas em DTD. Nenhum XML dispara acesso a arquivo ou rede. |
+| Resposta da Sefin escolhendo onde gravar (*path traversal*) | Os arquivos são nomeados só por identificadores validados: a chave de acesso (50 dígitos) ou o Id da DPS (`DPS` + 42 dígitos). Uma `chaveAcesso` com `../` na resposta não sai do diretório de saída — o arquivo recebe o nome da DPS local. No `consultar`, o nome vem da chave pedida e validada, não da devolvida (`fileStem` em `internal/cli/emitir.go`, encontrado pelo `gosec`). |
 | XML de entrada enorme no `danfse` | Limite de 5 MiB na leitura (`internal/cli/danfse.go`). |
 | DPS malformada chegando a ser assinada | A DPS é validada contra os **XSDs oficiais v1.01, embutidos no binário**, e contra as regras de negócio, **antes** de o certificado ser usado ([ADR 0014](docs/decisoes/0014-validacao-pelo-xsd.md)). O validador recusa construções de XSD que não conhece em vez de ignorá-las. |
 | Assinatura que não verifica ou que cobre outra coisa | Canonicalização exc-c14n testada contra casos reais ([ADR 0004](docs/decisoes/0004-assinatura-que-nao-verificava.md), [ADR 0008](docs/decisoes/0008-digest-sem-namespace.md)), RSA-SHA256, e testes de ida e volta que assinam e verificam. |
@@ -274,7 +275,9 @@ apontam para o código, para que você possa conferir.
 | `go vet` e `gofmt` na CI | Pegam erros comuns e mantêm o código revisável. |
 | `go mod tidy` conferido na CI | Um `go.mod` ou `go.sum` alterado sem explicação faz a CI falhar. |
 | Erros sempre com contexto (`%w`) | O usuário recebe uma mensagem que diz o que fazer, e o erro original não se perde. |
-| Toolchain do Go atualizada | O projeto exige Go 1.26+, uma versão suportada pelo time do Go. Versões de correção do Go (`1.26.x`) devem ser adotadas logo que saem, porque trazem correções em `crypto/tls`, `net/http` e `encoding/xml`. |
+| **Go 1.26.8 no mínimo, fixado no `go.mod`** | A diretiva `toolchain go1.26.8` faz a CI e quem instala com `go install` compilarem com a versão de correção mais recente, com as correções em `crypto/tls`, `net/http` e `encoding/xml`; um Go 1.26 mais antigo baixa essa versão sozinho (`GOTOOLCHAIN=auto`, o padrão). Ela é atualizada a cada versão de correção do Go. |
+| **`gosec` na CI** | Procura padrões inseguros específicos de Go: permissões de arquivo, caminhos vindos de entrada não confiável, TLS, erros ignorados. Achados de severidade e confiança a partir de média falham a CI (`.github/workflows/seguranca.yml`). Um falso positivo é suprimido na linha, com o motivo (`// #nosec G304 -- ...`), nunca desligando a regra. |
+| **CodeQL na CI** | A análise semântica do GitHub, com o conjunto `security-extended`, segue os dados entre funções e pacotes. Os alertas vão para a aba Security, e um alerta novo de severidade alta reprova o PR (`.github/workflows/codeql.yml`). |
 
 ### Cadeia de suprimentos
 
@@ -283,7 +286,11 @@ apontam para o código, para que você possa conferir.
 | Dependências demais | Sete dependências diretas, cada uma justificada — em ADR quando é nova num binário que lida com certificado ([ADR 0002](docs/decisoes/0002-parser-pkcs12.md), [ADR 0011](docs/decisoes/0011-bibliotecas-de-pdf-e-qr-code.md)). Dependência nova exige justificativa no PR. |
 | Módulo adulterado | O `go.sum` fixa o hash de cada módulo, e o Go confere contra o [checksum database](https://sum.golang.org) público. Quem instala com `go install ...@versão` recebe exatamente o código publicado. |
 | Dados de referência adulterados | XSDs e a lista de serviços são embutidos no binário a partir dos arquivos oficiais versionados em `docs/`; as tabelas de rejeição são geradas dos anexos oficiais com `go generate`, nunca escritas à mão. |
-| Workflow do GitHub com permissão demais | Os workflows declaram permissões mínimas (`contents: read`) e só elevam no job que precisa: `pages: write` no deploy do site, `id-token: write` no workflow do assistente de código. Nenhum usa `pull_request_target`, então código de um fork nunca roda com segredos. |
+| Vulnerabilidade conhecida numa dependência ou no Go | O [`govulncheck`](https://go.dev/doc/security/vuln/) roda em todo PR, no `master` e toda semana, e falha a CI quando o código do `nfse` alcança uma função vulnerável (`.github/workflows/seguranca.yml`). |
+| Correção de segurança demorando a chegar | O Dependabot abre PRs para módulos Go, ações do GitHub e o construtor do site: os alertas de segurança assim que são publicados, as atualizações de versão toda semana, agrupadas (`.github/dependabot.yml`). |
+| Ação do GitHub adulterada | Toda ação é referenciada pelo **hash do commit**, com a tag num comentário (`actions/checkout@11d5960… # v4.4.0`). Uma tag movida num repositório comprometido não muda o que roda aqui. O Dependabot atualiza o hash e o comentário juntos. |
+| Práticas do repositório se degradando | O [OpenSSF Scorecard](https://securityscorecards.dev) avalia o repositório toda semana — proteção de branch, permissões, dependências fixadas, revisão — e publica o resultado (`.github/workflows/scorecard.yml`). |
+| Workflow do GitHub com permissão demais | Os workflows declaram permissões mínimas (`contents: read`) e só elevam no job que precisa: `pages: write` no deploy do site, `security-events: write` para enviar os resultados do CodeQL e do Scorecard, `id-token: write` no workflow do assistente de código e no Scorecard. Os checkouts não deixam a credencial do Git gravada (`persist-credentials: false`), porque nenhum desses jobs faz push. Nenhum usa `pull_request_target`, então código de um fork nunca roda com segredos. |
 | Dados pessoais em log público de CI | O teste de contrato roda na CI **sem** o CNPJ de um MEI real, porque a razão social de um MEI traz nome e CPF de uma pessoa (`.github/workflows/contrato.yml`). |
 
 ### Privacidade
@@ -292,8 +299,15 @@ apontam para o código, para que você possa conferir.
 - Os únicos destinos de rede são a Sefin Nacional (emissão, consulta,
   cancelamento), a BrasilAPI (só no `onboard`, e só com o CNPJ do prestador) e
   o IBGE (lista pública de municípios, sem dado do usuário).
+- **Tudo o que o `nfse` grava é só do dono.** DPS, NFS-e, eventos, DANFSe,
+  `nfse.yaml` e o arquivo de numeração saem com permissão `0600`, e os
+  diretórios que ele cria, com `0700`: os documentos trazem CPF, nome e
+  endereço de tomadores, e os outros usuários da máquina não têm por que lê-los.
+  Um arquivo sobrescrito com `--sobrescrever` ou `--forcar` também é
+  restringido. Um diretório que **já existe** não é alterado — ele é seu.
 - O cache do IBGE fica no diretório de cache do usuário e só contém dados
-  públicos. Ele é gravado de forma atômica (arquivo temporário + `rename`).
+  públicos. Ele segue a mesma regra e é gravado de forma atômica (arquivo
+  temporário + `rename`).
 
 ## Regras para quem contribui
 
@@ -318,10 +332,16 @@ seu, confira:
 - [ ] **Dependência nova só com justificativa** no PR — e um ADR, se ela entra
       no caminho do certificado, da assinatura ou da rede. Prefira a biblioteca
       padrão.
+- [ ] **Arquivos gravados pelo `nfse` são `0600`, diretórios `0700`.** Um nome
+      de arquivo que vem de fora — de uma resposta, de um XML — só é usado
+      depois de validado contra o formato que ele deve ter.
 - [ ] **`go test -race ./...`, `go vet ./...` e `gofmt -l`** passam localmente.
-- [ ] Mudanças em workflows mantêm as permissões mínimas e não introduzem
-      `pull_request_target` nem interpolação de dados do evento
-      (`${{ github.event... }}`) dentro de `run:`.
+- [ ] **`gosec` e `govulncheck` passam** (os comandos estão no README). Um
+      falso positivo do `gosec` é suprimido na linha, com o motivo.
+- [ ] Mudanças em workflows mantêm as permissões mínimas, fixam toda ação
+      nova pelo hash do commit e não introduzem `pull_request_target` nem
+      interpolação de dados do evento (`${{ github.event... }}`) dentro de
+      `run:`.
 - [ ] Mudanças com impacto de segurança entram no CHANGELOG, na seção
       **Segurança**.
 
@@ -353,13 +373,15 @@ read -rs NFSE_CERT_SENHA && export NFSE_CERT_SENHA
 Em automações (CI, cron), use o cofre de segredos da plataforma — nunca a
 senha em texto no script.
 
-**Proteja o diretório de saída.** Os XMLs e PDFs trazem dados pessoais de
-tomadores. Hoje eles são gravados com permissão `0644` (leitura para todos os
-usuários da máquina; a correção é a [#46](https://github.com/edusouza/nfse-emissor-go/issues/46)).
-Numa máquina compartilhada, restrinja o diretório:
+**Confira o diretório de saída.** Os XMLs e PDFs trazem dados pessoais de
+tomadores. O `nfse` os grava só para você (`0600`) e cria o diretório de saída
+só para você (`0700`), mas não muda um diretório que já existia, nem os arquivos
+gravados por versões anteriores. Numa máquina compartilhada, restrinja-os uma
+vez:
 
 ```bash
 chmod 700 notas/
+chmod 600 notas/*
 ```
 
 **Teste em `producao-restrita`.** Só mude `ambiente` para `producao` quando o
@@ -397,19 +419,24 @@ autentique.
 
 ## O que ainda não temos
 
-Transparência sobre o que falta faz parte da política. Cada lacuna abaixo tem
-uma issue, e **vamos corrigir todas**, nesta ordem de prioridade. Quando uma
-issue fecha, o item sai desta lista e entra na tabela de controles
-correspondente acima.
+Transparência sobre o que falta faz parte da política. As lacunas abertas
+quando esta política foi escrita viraram as issues
+[#43](https://github.com/edusouza/nfse-emissor-go/issues/43) a [#48](https://github.com/edusouza/nfse-emissor-go/issues/48); as que já foram fechadas estão nas tabelas acima.
+Falta:
 
-| # | Lacuna | Risco enquanto não for corrigida | Issue |
-|---|---|---|---|
-| 1 | **`govulncheck` na CI** | Uma vulnerabilidade conhecida no Go ou numa dependência, em código que o `nfse` de fato chama, passa sem aviso. | [#43](https://github.com/edusouza/nfse-emissor-go/issues/43) |
-| 2 | **Atualização automática de dependências** (Dependabot), para módulos Go e ações do GitHub | Uma correção de segurança publicada numa dependência demora a chegar aqui. | [#44](https://github.com/edusouza/nfse-emissor-go/issues/44) |
-| 3 | **Ações do GitHub fixadas por hash de commit**, não por tag (`@v4`) | Uma tag movida num repositório comprometido muda o que roda na CI, com acesso aos segredos. | [#45](https://github.com/edusouza/nfse-emissor-go/issues/45) |
-| 4 | **Arquivos de saída com permissão `0600`** | XMLs e PDFs com dados pessoais de tomadores ficam legíveis para os outros usuários da máquina. | [#46](https://github.com/edusouza/nfse-emissor-go/issues/46) |
-| 5 | **Análise estática de segurança** (CodeQL ou `gosec`) e o [OpenSSF Scorecard](https://securityscorecards.dev) | Padrões inseguros dependem só da revisão humana para serem pegos. | [#47](https://github.com/edusouza/nfse-emissor-go/issues/47) |
-| 6 | **Binários pré-compilados assinados**, com proveniência [SLSA](https://slsa.dev) | Só passa a valer se o projeto distribuir binários. Hoje a distribuição é só pelo código-fonte (`go install`), cuja integridade é garantida pelo checksum database do Go. | [#48](https://github.com/edusouza/nfse-emissor-go/issues/48) |
+| Lacuna | Risco enquanto não for corrigida | Issue |
+|---|---|---|
+| **Binários pré-compilados assinados**, com proveniência [SLSA](https://slsa.dev) | Só passa a valer se o projeto distribuir binários. Hoje a distribuição é só pelo código-fonte (`go install`), cuja integridade é garantida pelo checksum database do Go. | [#48](https://github.com/edusouza/nfse-emissor-go/issues/48) |
+
+Algumas proteções dependem de configurações do repositório no GitHub, que o
+código não liga sozinho. Quem mantém o projeto confere:
+
+- **Relato privado de vulnerabilidades** ativo (Settings → Code security) — sem
+  ele, o canal de [Como relatar](#como-relatar-uma-vulnerabilidade) não existe;
+- **Dependabot alerts** e **security updates** ativos;
+- **Code scanning** pela configuração avançada (o `codeql.yml`), com a
+  configuração padrão do CodeQL desligada — as duas juntas conflitam;
+- **Proteção do `master`**: PR obrigatório, CI verde e sem push forçado.
 
 ## Histórico de avisos
 

@@ -32,6 +32,10 @@ NFSE_TESTE_CONTRATO=1 go test -run Contrato ./internal/infrastructure/...  # ser
 go vet ./...
 gofmt -l ./cmd ./internal ./pkg
 
+# segurança (SECURITY.md) — a CI roda os dois, mais o CodeQL
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -severity=medium -confidence=medium ./...
+
 # site (ADR 0016): gera as páginas derivadas, depois constrói com o Zensical
 go run ./internal/sitegen
 pip install -r site/requirements.txt && cd site && zensical build --strict
@@ -93,6 +97,17 @@ assinar com o A1 → enviar à Sefin Nacional → receber a NFS-e autorizada.
   processos. Prefira `NFSE_CERT_SENHA` ou o prompt interativo.
 - O `.gitignore` bloqueia `*.pfx`, `*.p12`, `*.pem` e `*.key`. Não force a
   adição desses arquivos — gere fixtures em memória nos testes.
+- Tudo o que o CLI grava é `0600`, e os diretórios que ele cria, `0700`
+  (`privateFileMode`/`privateDirMode` em `internal/cli`): os documentos trazem
+  dados pessoais de tomadores.
+- Nome de arquivo vindo de fora — resposta da Sefin, XML — só depois de
+  validado contra o formato esperado (`fileStem`). Nunca `filepath.Join` com
+  texto de uma resposta.
+- Falso positivo do `gosec` se suprime na linha, com o motivo
+  (`// #nosec G304 -- ...`), nunca desligando a regra.
+- Ação nova em workflow entra fixada pelo hash do commit, com a tag num
+  comentário, e com as permissões mínimas. A política completa está no
+  [SECURITY.md](SECURITY.md).
 
 ## Documentação de referência
 
