@@ -8,24 +8,31 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/edusouza/nfse-emissor-go/internal/anexoi"
+	"github.com/edusouza/nfse-emissor-go/internal/anexos"
 )
 
 // annexI is the business-rules annex of the DPS and the NFS-e.
-const annexI = anexoi.Arquivo
+const annexI = anexos.ArquivoI
 
-// rejectionsPage is where the page lands, relative to the site content.
-const rejectionsPage = "referencia/rejeicoes.md"
+// annexII is the business-rules annex of the event requests.
+const annexII = anexos.ArquivoII
 
-// rejection is one code of the annex, and whether nfse emitir checks it
+// Where the pages land, relative to the site content. The emitter links to
+// both, by these paths (internal/cli/rejeicao.go).
+const (
+	rejectionsPage      = "referencia/rejeicoes.md"
+	eventRejectionsPage = "referencia/rejeicoes-de-eventos.md"
+)
+
+// rejection is one code of an annex, and whether nfse emitir checks it
 // before signing.
 type rejection struct {
-	anexoi.Rejeicao
+	anexos.Rejeicao
 	local bool
 }
 
 func writeRejections(root, out string) error {
-	read, err := anexoi.Ler(filepath.Join(root, filepath.FromSlash(annexI)))
+	read, err := anexos.LerI(filepath.Join(root, filepath.FromSlash(annexI)))
 	if err != nil {
 		return err
 	}
@@ -50,11 +57,27 @@ func writeRejections(root, out string) error {
 		r.local = true
 	}
 
-	dst := filepath.Join(out, filepath.FromSlash(rejectionsPage))
+	if err := writePage(out, rejectionsPage, dpsHeader(len(rejections)), rejections); err != nil {
+		return err
+	}
+
+	read, err = anexos.LerII(filepath.Join(root, filepath.FromSlash(annexII)))
+	if err != nil {
+		return err
+	}
+	events := make([]rejection, len(read))
+	for i, r := range read {
+		events[i] = rejection{Rejeicao: r}
+	}
+	return writePage(out, eventRejectionsPage, eventHeader(len(events)), events)
+}
+
+func writePage(out, page, header string, rejections []rejection) error {
+	dst := filepath.Join(out, filepath.FromSlash(page))
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(dst, []byte(renderRejections(rejections)), 0o644); err != nil {
+	if err := os.WriteFile(dst, []byte(header+renderRejections(rejections)), 0o644); err != nil {
 		return err
 	}
 	fmt.Printf("%s: %d codigos\n", dst, len(rejections))
@@ -98,9 +121,8 @@ var levels = map[string]string{
 	"3": "Nível 3 — depende da legislação do município, parametrizada no Sistema Nacional",
 }
 
-func renderRejections(rejections []rejection) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, `---
+func dpsHeader(count int) string {
+	return fmt.Sprintf(`---
 hide:
   - toc
 ---
@@ -125,8 +147,42 @@ As regras de **nível 3** dependem da legislação do município; a página
 [o que a validação local cobre](validacao.md) explica o que o `+"`nfse`"+` pode e
 o que não pode conferir antes de enviar.
 
-`, generatedMarker, annexI, len(rejections), githubBlob(annexI), path.Base(annexI))
+`, generatedMarker, annexI, count, githubBlob(annexI), path.Base(annexI))
+}
 
+func eventHeader(count int) string {
+	return fmt.Sprintf(`---
+hide:
+  - toc
+---
+
+%s a partir de %s. Não edite: as mudanças somem na próxima publicação. -->
+
+# Códigos de rejeição de eventos
+
+Um cancelamento é um pedido de registro de evento, e a Sefin Nacional o recusa
+com códigos próprios, diferentes dos da DPS. Esta página lista os %d códigos
+que ela pode devolver na recepção de um pedido de evento, com a regra que cada
+um aplica. Os da emissão estão em [códigos de rejeição](rejeicoes.md).
+
+O texto é o do governo, tirado do [ANEXO II](%s) do Sistema Nacional NFS-e
+(`+"`%s`"+`) toda vez que o site é publicado. Em caso de dúvida, vale a planilha.
+
+!!! tip "Procurando um código?"
+    Use a busca do site ou o Ctrl+F do navegador com o código — por exemplo, `+"`E0822`"+`.
+
+O anexo cobre todos os eventos, e o `+"`nfse`"+` só envia o cancelamento: as regras
+dos outros eventos (manifestação, análise fiscal, bloqueio) estão aqui porque
+estão no anexo, mas um cancelamento nunca as encontra. Ficam de fora as regras
+que o anexo aplica só aos eventos que os municípios compartilham com o Ambiente
+de Dados Nacional. As regras de **nível 3** dependem do que o município
+parametrizou no Sistema Nacional, como o prazo e o valor máximo para cancelar.
+
+`, generatedMarker, annexII, count, githubBlob(annexII), path.Base(annexII))
+}
+
+func renderRejections(rejections []rejection) string {
+	var b strings.Builder
 	for _, r := range rejections {
 		fmt.Fprintf(&b, "## %s\n\n", r.Codigo)
 		if r.local {

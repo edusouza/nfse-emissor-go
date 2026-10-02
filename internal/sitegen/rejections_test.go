@@ -52,6 +52,39 @@ func TestLocalCodesAreMarked(t *testing.T) {
 	}
 }
 
+// The cancellation's codes come from ANEXO II, on a page of their own: the
+// annexes share a few numbers, and one page would mix two meanings.
+func TestEventRejectionsPage(t *testing.T) {
+	out := t.TempDir()
+	if err := writeRejections(repoRoot, out); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(eventRejectionsPage)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(data)
+	_, after, ok := strings.Cut(page, "\n## E0822\n")
+	if !ok {
+		t.Fatal("E0822, o prazo de cancelamento, sem secao na pagina de eventos")
+	}
+	section, _, _ := strings.Cut(after, "\n## ")
+	for _, want := range []string{"prazo para o cancelamento", "evento/pedRegEvento/infPedReg/chNFSe", "Nível 3"} {
+		if !strings.Contains(section, want) {
+			t.Errorf("E0822: faltou %q:\n%s", want, section)
+		}
+	}
+	if strings.Contains(page, "\n## E0600\n") {
+		t.Error("E0600 e da DPS e nao deveria estar na pagina de eventos")
+	}
+	if strings.Contains(page, "Conferido pelo `nfse`") {
+		t.Error("nenhum codigo de evento e conferido localmente")
+	}
+	if !strings.HasPrefix(strings.SplitN(page, "\n", 7)[5], generatedMarker) {
+		t.Error("a pagina de eventos deveria trazer o marcador de pagina gerada")
+	}
+}
+
 func TestInline(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"texto comum", "texto comum"},

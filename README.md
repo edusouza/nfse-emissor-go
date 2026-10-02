@@ -495,6 +495,18 @@ prática obriga a explicar o que aconteceu em vez de escrever "erro".
 
 Cancelar em `producao` pede confirmação no terminal — a operação é definitiva.
 
+O prazo e o valor máximo para cancelar são do município. Uma recusa vem
+explicada pelo ANEXO II, como as da emissão pelo ANEXO I:
+
+```
+erro: documento rejeitado pela Sefin Nacional
+  - [E0822] O prazo para o cancelamento da NFS-e expirou, conforme parametrização do município emissor da NFS-e.
+      Campo   pedRegEvento/infPedReg/chNFSe
+      Regra   Não pode ocorrer cancelamento de NFS-e fora do prazo limite para o cancelamento da NFS-e, conforme parametrização do município emissor da NFS-e.
+      Depende do municipio: segue a parametrizacao que ele fez no Sistema Nacional.
+      Mais    https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes-de-eventos/#e0822
+```
+
 ### Substituir uma nota
 
 Substituição **não é cancelamento**. O cancelamento é um evento que anula a
@@ -673,6 +685,12 @@ palavra final é sempre do governo. Veja a issue
 | **chaveAcesso** | Identificador de 50 caracteres da NFS-e emitida |
 | **cTribNac** | Código nacional do serviço, 6 dígitos (LC 116/2003) |
 | **A1** | Certificado digital em arquivo (`.pfx`/`.p12`), válido por 1 ano |
+
+## Segurança
+
+Para relatar uma vulnerabilidade, **não abra uma issue pública**: use o relato
+privado descrito no [SECURITY.md](SECURITY.md), que também explica o que o
+`nfse` faz para proteger o certificado e o que você pode fazer do seu lado.
 
 ## Licença
 

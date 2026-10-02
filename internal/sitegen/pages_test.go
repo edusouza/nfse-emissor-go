@@ -78,7 +78,7 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, page := range []string{rejectionsPage, changelogPage, "decisoes/index.md", "decisoes/0001-cli-em-vez-de-api.md"} {
+	for _, page := range []string{rejectionsPage, eventRejectionsPage, changelogPage, "decisoes/index.md", "decisoes/0001-cli-em-vez-de-api.md"} {
 		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(page))); err != nil {
 			t.Errorf("%s nao foi gerada: %v", page, err)
 		}

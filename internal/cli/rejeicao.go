@@ -9,31 +9,54 @@ import (
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 )
 
-// paginaRejeicoes is the page of the documentation site that lists every code,
-// generated from the same annex as the table (ADR 0016). Each code is a
-// heading there, so "#e0600" lands on it.
-const paginaRejeicoes = "https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes/"
+// The pages of the documentation site that list every code, generated from
+// the same annexes as the tables (ADR 0016). Each code is a heading there, so
+// "#e0600" lands on it.
+const (
+	paginaRejeicoes          = "https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes/"
+	paginaRejeicoesDeEventos = "https://edusouza.github.io/nfse-emissor-go/referencia/rejeicoes-de-eventos/"
+)
 
 // recuoRegra lines up the explanation under the code it belongs to.
 const recuoRegra = "      "
 
-// explicarRejeicao adds, under each code the Sefin answered with, what ANEXO I
-// says about it: the field of the DPS, the rule that failed and, when it
-// applies, that the rule depends on the municipality. The Sefin's sentence
+// anexo is where the codes of one kind of document are explained: the table
+// generated from its annex, and the page of the site that lists them.
+type anexo struct {
+	buscar func(codigo, mensagem string) []rejeicao.Regra
+	pagina string
+}
+
+var (
+	anexoDPS    = anexo{rejeicao.BuscarDPS, paginaRejeicoes}
+	anexoEvento = anexo{rejeicao.BuscarEvento, paginaRejeicoesDeEventos}
+)
+
+// explicarRejeicao adds, under each code the Sefin answered a DPS with, what
+// ANEXO I says about it: the field of the DPS, the rule that failed and, when
+// it applies, that the rule depends on the municipality. The Sefin's sentence
 // alone rarely says which field to fix.
 //
 // Anything that is not a rejection passes through untouched, and the result
 // still matches sefin.ErrRejected and *sefin.RejectionError.
-func explicarRejeicao(err error) error {
+func explicarRejeicao(err error) error { return explicar(err, anexoDPS) }
+
+// explicarRejeicaoDeEvento does the same for an event request, such as a
+// cancellation, with ANEXO II. The annexes share a few codes with different
+// fields, so the caller has to say which document was refused.
+func explicarRejeicaoDeEvento(err error) error { return explicar(err, anexoEvento) }
+
+func explicar(err error, a anexo) error {
 	var rej *sefin.RejectionError
 	if !errors.As(err, &rej) {
 		return err
 	}
-	return &rejeicaoExplicada{rej}
+	return &rejeicaoExplicada{rej, a}
 }
 
 type rejeicaoExplicada struct {
 	*sefin.RejectionError
+	anexo anexo
 }
 
 func (e *rejeicaoExplicada) Unwrap() error { return e.RejectionError }
@@ -42,17 +65,17 @@ func (e *rejeicaoExplicada) Error() string {
 	var b strings.Builder
 	b.WriteString(sefin.ErrRejected.Error())
 	for _, m := range e.Rejections {
-		escreverRejeicao(&b, m)
+		e.anexo.escrever(&b, m)
 	}
 	return b.String()
 }
 
-func escreverRejeicao(b *strings.Builder, m sefin.Message) {
+func (a anexo) escrever(b *strings.Builder, m sefin.Message) {
 	mensagem := m.Descricao
 	if mensagem == "" {
 		mensagem = m.Mensagem
 	}
-	regras := rejeicao.Buscar(m.Codigo, mensagem)
+	regras := a.buscar(m.Codigo, mensagem)
 
 	// An answer without a sentence still has one in the annex.
 	if mensagem == "" && len(regras) == 1 {
@@ -64,7 +87,7 @@ func escreverRejeicao(b *strings.Builder, m sefin.Message) {
 		return
 	}
 	for _, r := range regras {
-		if campo := r.CampoNaDPS(); campo != "" {
+		if campo := r.CampoNoArquivo(); campo != "" {
 			fmt.Fprintf(b, "\n%sCampo   %s", recuoRegra, campo)
 		}
 		if r.AcrescentaAMensagem() {
@@ -74,7 +97,7 @@ func escreverRejeicao(b *strings.Builder, m sefin.Message) {
 			fmt.Fprintf(b, "\n%sDepende do municipio: segue a parametrizacao que ele fez no Sistema Nacional.", recuoRegra)
 		}
 	}
-	fmt.Fprintf(b, "\n%sMais    %s#%s", recuoRegra, paginaRejeicoes, strings.ToLower(strings.TrimSpace(m.Codigo)))
+	fmt.Fprintf(b, "\n%sMais    %s#%s", recuoRegra, a.pagina, strings.ToLower(strings.TrimSpace(m.Codigo)))
 }
 
 // recuar indents every line of a multi-line text but the first, which the

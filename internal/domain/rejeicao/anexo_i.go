@@ -428,7 +428,7 @@ var anexoI = map[string][]Regra{
 		{Mensagem: "O grupo de informações de obra não é permitido quando o código de tributação nacional não pertencer a algum dos subitens 07.02.01, 07.02.02, 07.04.01, 07.05,01, 07.05.02, 07.06.01, 07.06.02, 07.07.01, 07.08.01, 07.17.01, 07.19.01, 1414.03 e 14.14.04 da lista de serviços, com exceção do código 99.01.01.", Campo: "NFSe/infNFSe/DPS/infDPS/servobra", Texto: "Se o código de tributação nacional não pertencer a algum dos subitens 07.02.01, 07.02.02, 07.04.01, 07.05,01, 07.05.02, 07.06.01, 07.06.02, 07.07.01, 07.08.01, 07.17.01, 07.19.01, 14.14.03 e 14.14.04 da lista de serviços, então o grupo de informações de obra não é permitido.\n*Exceção: O grupo de informações de obra pode ser informado se o código de tributação nacional for o 99.01.01.", Nivel: "1"},
 	},
 	"E0373": {
-		{Mensagem: "Código CIB inválido.", Campo: "NFSe/infNFSe/DPS/infDPS/serv/obra/cCIB", Texto: "Código do Cadastro Imobiliário Brasileito - CIB deve ser um código válido - 7 caracteres + DV", Nivel: "-"},
+		{Mensagem: "Código CIB inválido.", Campo: "NFSe/infNFSe/DPS/infDPS/serv/obra/cCIB", Texto: "Código do Cadastro Imobiliário Brasileito - CIB deve ser um código válido - 7 caracteres + DV", Nivel: ""},
 	},
 	"E0380": {
 		{Mensagem: "Informe um CEP correspondente ao município do local da prestação do serviço informado nesta DPS para indicar corretamente o endereço da obra.", Campo: "NFSe/infNFSe/DPS/infDPS/serv/obra/end/CEP", Texto: "O CEP a ser informa para endereço da obra deve pertencer ao município que foi informado como local da prestação do serviço.", Nivel: "1"},

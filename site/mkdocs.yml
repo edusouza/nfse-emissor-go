@@ -86,6 +86,7 @@ nav:
   - Referência:
       - Comandos: referencia/comandos.md
       - Códigos de rejeição: referencia/rejeicoes.md
+      - Códigos de rejeição de eventos: referencia/rejeicoes-de-eventos.md
       - A chave de acesso: referencia/chave-de-acesso.md
       - O que a validação local cobre: referencia/validacao.md
       - Glossário: referencia/glossario.md

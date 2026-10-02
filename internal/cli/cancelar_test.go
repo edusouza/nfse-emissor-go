@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/beevik/etree"
 
+	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/sefin"
 	"github.com/edusouza/nfse-emissor-go/internal/infrastructure/xmlsigner"
 )
 
@@ -174,6 +176,16 @@ func TestCancelar_Rejeicao(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("a mensagem nao menciona %q: %v", want, err)
 		}
+	}
+	// Explained by ANEXO II, not ANEXO I: the field of the request, the
+	// deadline being the municipality's, and the page of event codes.
+	exigirTrechos(t, err.Error(),
+		"Campo   pedRegEvento/infPedReg/chNFSe",
+		"Depende do municipio",
+		paginaRejeicoesDeEventos+"#e0822",
+	)
+	if !errors.Is(err, sefin.ErrRejected) {
+		t.Errorf("o cancelamento recusado deveria continuar sendo ErrRejected: %v", err)
 	}
 
 	// A refused cancellation must not leave an event file behind.
