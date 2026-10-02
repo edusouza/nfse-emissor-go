@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -301,6 +302,30 @@ func TestCache_GravacaoNaoDeixaTemporario(t *testing.T) {
 			nomes = append(nomes, e.Name())
 		}
 		t.Errorf("esperava so o cache no diretorio, vieram %q", nomes)
+	}
+}
+
+func TestCache_GravacaoSoParaODono(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("o Windows nao tem as permissoes de arquivo do Unix")
+	}
+	dir := filepath.Join(t.TempDir(), "nfse")
+	arquivo := filepath.Join(dir, "municipios.json")
+
+	cache := NovoCache(arquivo)
+	cache.Guardar(Municipio{Codigo: "4106902", Nome: "Curitiba", UF: "PR"})
+	if err := cache.Gravar(); err != nil {
+		t.Fatalf("Gravar devolveu erro: %v", err)
+	}
+
+	for caminho, esperado := range map[string]os.FileMode{dir: 0o700, arquivo: 0o600} {
+		info, err := os.Stat(caminho)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if obtido := info.Mode().Perm(); obtido != esperado {
+			t.Errorf("%s com permissao %#o, esperava %#o", filepath.Base(caminho), obtido, esperado)
+		}
 	}
 }
 

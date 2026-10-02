@@ -127,7 +127,7 @@ func (c *Cache) Gravar() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(c.caminho), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.caminho), 0o700); err != nil {
 		return err
 	}
 
@@ -171,23 +171,22 @@ func gravarAtomico(caminho string, conteudo []byte) error {
 	}
 	nome := temporario.Name()
 
+	// CreateTemp opens with 0600, which is kept. The cache holds only public
+	// data, but it sits in the user's own cache directory and no other user
+	// has a reason to read it, so it follows the rule of everything else the
+	// CLI writes. The removals below are best effort: the write already
+	// failed, and that is the error worth reporting.
 	if _, err := temporario.Write(conteudo); err != nil {
-		temporario.Close()
-		os.Remove(nome)
+		_ = temporario.Close()
+		_ = os.Remove(nome)
 		return err
 	}
 	if err := temporario.Close(); err != nil {
-		os.Remove(nome)
-		return err
-	}
-	// CreateTemp opens with 0600; the cache holds public data and used to be
-	// written 0644, which is kept.
-	if err := os.Chmod(nome, 0o644); err != nil {
-		os.Remove(nome)
+		_ = os.Remove(nome)
 		return err
 	}
 	if err := os.Rename(nome, caminho); err != nil {
-		os.Remove(nome)
+		_ = os.Remove(nome)
 		return err
 	}
 	return nil
