@@ -2,6 +2,8 @@ module github.com/edusouza/nfse-emissor-go
 
 go 1.26.0
 
+toolchain go1.26.8
+
 require (
 	github.com/beevik/etree v1.6.0
 	github.com/boombuler/barcode v1.1.0

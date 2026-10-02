@@ -1,0 +1,67 @@
+name: Seguranca
+
+# Two checks the compiler and the tests do not make (SECURITY.md).
+#
+# govulncheck reports known vulnerabilities in the Go standard library and in
+# the dependencies, and only those in code the binary actually calls. It runs
+# weekly as well, because a vulnerability is published without anyone changing
+# this repository.
+#
+# gosec looks for insecure patterns: file permissions, paths taken from
+# untrusted input, TLS settings, unhandled errors. Findings below medium
+# severity or confidence are left out: they are mostly noise. A finding that is
+# a false positive is suppressed where it happens, with the reason
+# (`// #nosec G304 -- ...`), never by turning the rule off.
+#
+# Both tools run at a fixed version: `go run` verifies the module against the
+# checksum database, and @latest would make a run depend on the day.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguranca-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  govulncheck:
+    name: Vulnerabilidades conhecidas (govulncheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  gosec:
+    name: Analise estatica (gosec)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -severity=medium -confidence=medium ./...

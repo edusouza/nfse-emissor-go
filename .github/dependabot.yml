@@ -1,0 +1,41 @@
+# Keeps dependencies current (SECURITY.md). Security updates arrive on their
+# own, as soon as an advisory is published; the weekly version updates are
+# grouped so they do not open one pull request per module. Every update goes
+# through CI and review like any other change, and only updates what is
+# already there: a new dependency still needs its justification (CLAUDE.md).
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      go:
+        applies-to: version-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"
+
+  # The workflows pin actions by commit SHA with the tag in a comment;
+  # Dependabot moves both together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(deps)"
+
+  # The documentation site's builder (ADR 0016).
+  - package-ecosystem: pip
+    directory: /site
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
