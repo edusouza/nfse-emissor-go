@@ -289,6 +289,7 @@ apontam para o código, para que você possa conferir.
 | Vulnerabilidade conhecida numa dependência ou no Go | O [`govulncheck`](https://go.dev/doc/security/vuln/) roda em todo PR, no `master` e toda semana, e falha a CI quando o código do `nfse` alcança uma função vulnerável (`.github/workflows/seguranca.yml`). |
 | Correção de segurança demorando a chegar | O Dependabot abre PRs para módulos Go, ações do GitHub e o construtor do site: os alertas de segurança assim que são publicados, as atualizações de versão toda semana, agrupadas (`.github/dependabot.yml`). |
 | Ação do GitHub adulterada | Toda ação é referenciada pelo **hash do commit**, com a tag num comentário (`actions/checkout@11d5960… # v4.4.0`). Uma tag movida num repositório comprometido não muda o que roda aqui. O Dependabot atualiza o hash e o comentário juntos. |
+| Binário adulterado na release | Os binários são construídos só pela CI, a partir de uma tag no `master`, sem `cgo` e com `-trimpath`. Cada um sai com o `SHA256SUMS`, um SBOM CycloneDX e a **proveniência SLSA assinada pelo Sigstore**, sem chave privada para vazar: `gh attestation verify` prova qual workflow, de qual repositório e commit, o construiu (`.github/workflows/release.yml`, [ADR 0020](docs/decisoes/0020-binarios-assinados.md)). |
 | Práticas do repositório se degradando | O [OpenSSF Scorecard](https://securityscorecards.dev) avalia o repositório toda semana — proteção de branch, permissões, dependências fixadas, revisão — e publica o resultado (`.github/workflows/scorecard.yml`). |
 | Workflow do GitHub com permissão demais | Os workflows declaram permissões mínimas (`contents: read`) e só elevam no job que precisa: `pages: write` no deploy do site, `security-events: write` para enviar os resultados do CodeQL e do Scorecard, `id-token: write` no workflow do assistente de código e no Scorecard. Os checkouts não deixam a credencial do Git gravada (`persist-credentials: false`), porque nenhum desses jobs faz push. Nenhum usa `pull_request_target`, então código de um fork nunca roda com segredos. |
 | Dados pessoais em log público de CI | O teste de contrato roda na CI **sem** o CNPJ de um MEI real, porque a razão social de um MEI traz nome e CPF de uma pessoa (`.github/workflows/contrato.yml`). |
@@ -399,6 +400,17 @@ Não desligue a verificação de checksums do Go para este módulo: nada de
 `GOSUMDB=off`, nem `GONOSUMDB`, `GOPRIVATE` ou `GOINSECURE` cobrindo
 `github.com/edusouza/*`.
 
+**Baixou um binário pronto? Confira antes de usar.** Ele vai receber o seu
+certificado:
+
+```bash
+gh attestation verify nfse_v1.0.0_linux_amd64 --repo edusouza/nfse-emissor-go
+```
+
+Sem o `gh`, confira ao menos o checksum contra o `SHA256SUMS` da mesma
+release. Um binário de outra origem — um site, um e-mail, um colega — não deve
+receber o seu certificado.
+
 **Se o certificado vazou** — o `.pfx` e a senha, ou a máquina onde estavam foi
 comprometida:
 
@@ -421,12 +433,8 @@ autentique.
 
 Transparência sobre o que falta faz parte da política. As lacunas abertas
 quando esta política foi escrita viraram as issues
-[#43](https://github.com/edusouza/nfse-emissor-go/issues/43) a [#48](https://github.com/edusouza/nfse-emissor-go/issues/48); as que já foram fechadas estão nas tabelas acima.
-Falta:
-
-| Lacuna | Risco enquanto não for corrigida | Issue |
-|---|---|---|
-| **Binários pré-compilados assinados**, com proveniência [SLSA](https://slsa.dev) | Só passa a valer se o projeto distribuir binários. Hoje a distribuição é só pelo código-fonte (`go install`), cuja integridade é garantida pelo checksum database do Go. | [#48](https://github.com/edusouza/nfse-emissor-go/issues/48) |
+[#43](https://github.com/edusouza/nfse-emissor-go/issues/43) a [#48](https://github.com/edusouza/nfse-emissor-go/issues/48), e todas foram fechadas — os controles estão nas
+tabelas acima. Quando surgir uma lacuna nova, ela entra aqui, com a sua issue.
 
 Algumas proteções dependem de configurações do repositório no GitHub, que o
 código não liga sozinho. Quem mantém o projeto confere:
@@ -436,7 +444,9 @@ código não liga sozinho. Quem mantém o projeto confere:
 - **Dependabot alerts** e **security updates** ativos;
 - **Code scanning** pela configuração avançada (o `codeql.yml`), com a
   configuração padrão do CodeQL desligada — as duas juntas conflitam;
-- **Proteção do `master`**: PR obrigatório, CI verde e sem push forçado.
+- **Proteção do `master`**: PR obrigatório, CI verde e sem push forçado;
+- **Proteção das tags `v*`** e **aprovação no environment `release`** —
+  quem envia uma tag publica uma versão ([ADR 0020](docs/decisoes/0020-binarios-assinados.md)).
 
 ## Histórico de avisos
 

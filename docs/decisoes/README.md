@@ -26,3 +26,4 @@ entenda *por que* o código é como é sem precisar arqueologia no `git log`.
 | [0015](0015-ibs-cbs-em-2027.md) | IBS/CBS: o grupo fica para quando for obrigatório e houver tabela | Aceita |
 | [0016](0016-site-de-documentacao.md) | Site de documentação no GitHub Pages, com as rejeições tiradas do ANEXO I | Aceita |
 | [0019](0019-rejeicoes-explicadas-no-terminal.md) | Rejeições explicadas no terminal, com uma tabela gerada do ANEXO I | Aceita |
+| [0020](0020-binarios-assinados.md) | Binários publicados com proveniência assinada | Aceita |

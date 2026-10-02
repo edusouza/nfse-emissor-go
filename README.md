@@ -36,6 +36,20 @@ Para fixar uma versão, troque `@latest` pela tag desejada; as versões estão n
 [CHANGELOG](CHANGELOG.md). O `nfse versao` mostra o que está instalado — e é o
 mesmo identificador que vai no `verAplic` de cada declaração.
 
+Sem o Go instalado, baixe o binário do seu sistema na
+[página de releases](https://github.com/edusouza/nfse-emissor-go/releases) e
+**confira que ele foi construído por este repositório antes de usá-lo** — ele
+vai receber o seu certificado digital:
+
+```bash
+gh attestation verify nfse_v1.0.0_linux_amd64 --repo edusouza/nfse-emissor-go
+```
+
+Sem o [`gh`](https://cli.github.com), confira ao menos o checksum contra o
+`SHA256SUMS` da mesma release (`sha256sum -c SHA256SUMS --ignore-missing`).
+Por que e como isso funciona:
+[ADR 0020](docs/decisoes/0020-binarios-assinados.md).
+
 Ou compilando a partir do código:
 
 ```bash

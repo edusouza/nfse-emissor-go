@@ -1,0 +1,114 @@
+name: Publicar versao
+
+# Builds the release binaries when a version tag is pushed, and publishes them
+# with what a user needs to trust them (ADR 0020):
+#
+#   - SHA256SUMS, the checksums of every binary;
+#   - a CycloneDX SBOM of the module;
+#   - SLSA build provenance and an SBOM attestation for each binary, signed
+#     with Sigstore through this workflow's OIDC identity. `gh attestation
+#     verify` proves a binary was built here, from this repository, at this
+#     tag — there is no signing key for anyone to keep or leak.
+#
+# `go install ...@vX.Y.Z` stays the primary way to install; these binaries are
+# for whoever has no Go toolchain.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Construir e publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The environment is where required reviewers can be added, so that a
+    # pushed tag still waits for a person before anything is published.
+    environment: release
+    permissions:
+      contents: write     # create the release and upload its assets
+      id-token: write     # Sigstore signing of the attestations
+      attestations: write # store the attestations
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release is built from a clean slate, not from a cache
+
+      # The tag name ends up in file names and inside the binary, so it is held
+      # to the semantic version shape before anything uses it. A tag on a
+      # commit that never reached master is not a release.
+      - name: Conferir a tag
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "A tag '$TAG' nao segue o formato vX.Y.Z." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "O commit da tag nao esta no master." >&2
+            exit 1
+          fi
+
+      - name: Testes
+        run: go test ./...
+
+      - name: Construir
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            ext=""
+            if [ "$goos" = windows ]; then ext=".exe"; fi
+            GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+              -ldflags "-s -w -X github.com/edusouza/nfse-emissor-go/internal/cli.version=${TAG}" \
+              -o "dist/nfse_${TAG}_${goos}_${goarch}${ext}" ./cmd/nfse
+          done
+          (cd dist && sha256sum nfse_* > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: SBOM
+        run: |
+          go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0 \
+            app -json -licenses -main cmd/nfse -output "dist/nfse_${TAG}.cdx.json" .
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/nfse_v*_*_*
+
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: dist/nfse_v*_*_*
+          sbom-path: dist/nfse_${{ github.ref_name }}.cdx.json
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="O que mudou esta no CHANGELOG.md.
+
+          Antes de usar um binario, confira que ele foi construido por este repositorio, a partir desta tag:
+
+              gh attestation verify nfse_${TAG}_<sistema>_<arquitetura> --repo ${GITHUB_REPOSITORY}
+
+          Sem o gh, confira ao menos o checksum contra o SHA256SUMS. Detalhes no SECURITY.md."
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes "$notes"
+          fi
+          gh release upload "$TAG" dist/* --clobber

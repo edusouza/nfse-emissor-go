@@ -38,6 +38,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - O `go.mod` pede o Go `1.26.8` (`toolchain`): a CI e quem instala com `go install` compilam com as correções de segurança mais recentes da biblioteca padrão.
 - A CI ganha o `govulncheck` (vulnerabilidades conhecidas no Go e nas dependências, também toda semana), o `gosec` e o CodeQL (análise estática) e o OpenSSF Scorecard ([#43](https://github.com/edusouza/nfse-emissor-go/issues/43), [#47](https://github.com/edusouza/nfse-emissor-go/issues/47)).
 - O Dependabot passa a atualizar os módulos Go, as ações do GitHub e o construtor do site ([#44](https://github.com/edusouza/nfse-emissor-go/issues/44)).
+- Binários prontos para Linux, macOS e Windows, publicados a cada versão pela CI com `SHA256SUMS`, SBOM e proveniência SLSA assinada pelo Sigstore, conferível com `gh attestation verify` ([#48](https://github.com/edusouza/nfse-emissor-go/issues/48), [ADR 0020](docs/decisoes/0020-binarios-assinados.md)).
 - Todas as ações do GitHub ficam fixadas pelo hash do commit, e os checkouts não deixam a credencial do Git gravada ([#45](https://github.com/edusouza/nfse-emissor-go/issues/45)).
 
 ## [0.9.0] - 2026-09-30
